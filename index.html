@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz (Werkzeug dynamisch, breite Bilderanzeige)</title>
   
-  <!-- Verweis auf dein Manifest -->
+  <!-- Manifest einbinden -->
   <link rel="manifest" href="manifest.json">
 
   <!-- jsPDF & html2canvas -->
@@ -128,6 +128,22 @@
     }
     .bild-item:hover img {
       transform: scale(1.05);
+    }
+
+    /* Volles Textfeld für Bemerkungen */
+    #bemerkung {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--content-bg);
+      color: var(--text-color);
+      transition: border 0.3s ease, box-shadow 0.3s ease;
+    }
+    #bemerkung:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 8px var(--accent-color);
+      outline: none;
     }
 
     #loading {
@@ -336,7 +352,7 @@
     </form>
   </div>
 
-  <!-- Nur noch ein Button (PDF generieren) -->
+  <!-- PDF generieren Button -->
   <div style="text-align:center;">
     <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
   </div>
@@ -396,7 +412,6 @@
     // Dynamische Werkzeug-Eingabe (Plus- und Löschen-Buttons)
     document.addEventListener('click', function(e) {
       if(e.target && e.target.classList.contains('addWerkzeugBtn')) {
-        // Neue Zeile erstellen
         const newRow = document.createElement('div');
         newRow.className = 'werkzeugRow';
         newRow.innerHTML = `
@@ -493,7 +508,6 @@
         boxShadow: 'none'
       });
 
-      // Canvas erstellen (Scale = 2 für gute Qualität, moderate Dateigröße)
       const canvas = await html2canvas(content, {
         scale: 2,
         useCORS: true,
@@ -516,7 +530,6 @@
 
       pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
 
-      // Ursprüngliche Styles wiederherstellen
       Object.assign(content.style, originalStyles);
       return pdf;
     }
