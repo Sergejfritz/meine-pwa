@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Technische Dokumentation S.Fritz (Werkzeug dynamisch, breite Bilderanzeige)</title>
+  
+  <!-- Verweis auf dein Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <!-- jsPDF & html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  
+  <style>
+    :root {
+      --a4-width: 210mm;
+      --a4-height: 297mm;
+      /* Oben/Unten 15mm, Links/Rechts 0 – damit der Bilderbereich die volle Breite nutzt */
+      --content-padding: 15mm 0;
+      /* Light Theme */
+      --bg-color: #f0f3f5;
+      --content-bg: #ffffff;
+      --text-color: #2c3e50;
+      --border-color: #ddd;
+      --accent-color: #2196F3;
+      --accent-dark: #1976D2;
+    }
+    [data-theme="dark"] {
+      --bg-color: #1e1e1e;
+      --content-bg: #2c2c2c;
+      --text-color: #f0f3f5;
+      --border-color: #555;
+      --accent-color: #BB86FC;
+      --accent-dark: #3700B3;
+    }
+
+    * {
+      transition: background 0.3s, color 0.3s;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: var(--bg-color);
+      margin: 0;
+      padding: 10px;
+      color: var(--text-color);
+    }
+
+    /* Dark Mode Toggle Button */
+    #darkModeToggle {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: var(--accent-color);
+      color: #fff;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      z-index: 1100;
+    }
+
+    /* A4-Container – volle Breite, Padding nur oben/unten */
+    #content {
+      width: var(--a4-width);
+      min-height: var(--a4-height);
+      margin: 20px auto;
+      padding: var(--content-padding);
+      background: var(--content-bg);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    /* Formularelemente erhalten links/rechts ein zusätzliches Padding */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+      padding: 0 15mm;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--content-bg);
+      color: var(--text-color);
+      transition: border 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 8px var(--accent-color);
+      outline: none;
+    }
+
+    /* Bilderbereich: volle Seitenbreite */
+    #bildvorschau {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      grid-template-rows: repeat(2, auto);
+      gap: 12px;
+      margin: 20px 0;
+      border: 2px dashed var(--border-color);
+      background: var(--bg-color);
+      min-height: 220px;
+      padding: 10px;
+    }
+
+    .bild-item {
+      position: relative;
+      overflow: hidden;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .bild-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      transition: transform 0.3s;
+    }
+    .bild-item:hover img {
+      transform: scale(1.05);
+    }
+
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.9);
+      color: white;
+      padding: 20px 40px;
+      border-radius: 10px;
+      font-size: 1.2em;
+      display: none;
+      z-index: 1000;
+    }
+    #loading::after {
+      content: "";
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 3px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      #content {
+        width: 100%;
+        margin: 5px auto;
+      }
+      .form-grid {
+        grid-template-columns: 1fr;
+        padding: 0 10px;
+      }
+      #bildvorschau {
+        grid-template-columns: repeat(2, 1fr);
+        grid-template-rows: repeat(4, auto);
+      }
+    }
+
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+
+    button.actionButton {
+      background: linear-gradient(135deg, var(--accent-color), var(--accent-dark));
+      color: white;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-block;
+      margin: 25px auto;
+      transition: transform 0.2s, box-shadow 0.2s;
+      font-size: 1.1em;
+    }
+    button.actionButton:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+
+    /* Dynamische Werkzeug-Eingabe */
+    #werkzeugeContainer {
+      border: 1px solid var(--border-color);
+      padding: 8px;
+      border-radius: 6px;
+    }
+    .werkzeugRow {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .werkzeugRow input {
+      flex: 1;
+    }
+    .werkzeugBtn {
+      background: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .werkzeugBtn:hover {
+      background: var(--accent-dark);
+    }
+  </style>
+</head>
+<body>
+  <button id="darkModeToggle">Dark Mode</button>
+
+  <div id="content">
+    <h1 style="margin:0 0 25px 0; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; padding: 0 15mm;">
+      Technische Dokumentation S.Fritz
+    </h1>
+
+    <form id="pdfForm">
+      <!-- 1. Zeile: Auftragstyp & Maschine -->
+      <div class="form-grid">
+        <div>
+          <label for="auftragstyp">Auftragstyp *</label>
+          <select id="auftragstyp" required>
+            <option value="">Bitte wählen</option>
+            <option value="Reklamation">Reklamation</option>
+            <option value="Fertigungsauftrag">Fertigungsauftrag</option>
+          </select>
+        </div>
+        <div>
+          <label for="maschine">Maschine *</label>
+          <input type="text" id="maschine" required>
+        </div>
+      </div>
+
+      <!-- 2. Zeile: AB‑Nr -->
+      <div class="form-grid">
+        <div>
+          <label for="abnr">AB‑Nr *</label>
+          <input type="text" id="abnr" required>
+        </div>
+      </div>
+
+      <!-- 3. Zeile: Zeichnungsnummer & Index -->
+      <div class="form-grid">
+        <div>
+          <label for="zeichnungsnummer">Zeichnungsnummer *</label>
+          <input type="text" id="zeichnungsnummer" required>
+        </div>
+        <div id="container_index">
+          <label for="index">Index *</label>
+          <input type="text" id="index" required>
+        </div>
+      </div>
+
+      <!-- 4. Zeile: Verantwortlich & Datum -->
+      <div class="form-grid">
+        <div>
+          <label for="verantwortlich">Verantwortlich *</label>
+          <input type="text" id="verantwortlich" required>
+        </div>
+        <div>
+          <label for="datum">Datum *</label>
+          <input type="date" id="datum" required>
+        </div>
+      </div>
+
+      <!-- 5. Zeile: Bedingte Felder -->
+      <!-- Für Reklamation: Version -->
+      <div id="container_version" class="form-grid" style="display:none;">
+        <div>
+          <label for="version">Version *</label>
+          <input type="text" id="version">
+        </div>
+      </div>
+
+      <!-- Für Fertigungsauftrag: Werkzeuge (dynamisch) & Spanndruck -->
+      <div id="container_fertigung" class="form-grid" style="display:none;">
+        <div>
+          <label>Werkzeuge</label>
+          <div id="werkzeugeContainer">
+            <div class="werkzeugRow">
+              <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
+              <button type="button" class="werkzeugBtn addWerkzeugBtn">+</button>
+              <button type="button" class="werkzeugBtn deleteWerkzeugBtn">–</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <label for="spanndruck">Spanndruck *</label>
+          <input type="text" id="spanndruck" required>
+        </div>
+      </div>
+
+      <!-- 6. Zeile: Benennung der Teile & Stückzahl -->
+      <div class="form-grid">
+        <div>
+          <label for="teilebenennung">Benennung der Teile *</label>
+          <input type="text" id="teilebenennung" required>
+        </div>
+        <div>
+          <label for="stueckzahl">Stückzahl *</label>
+          <input type="number" id="stueckzahl" required>
+        </div>
+      </div>
+
+      <!-- 7. Zeile: Bemerkungen – Textfeld in voller Breite -->
+      <div style="padding: 0 15mm;">
+        <label for="bemerkung">📝 Bemerkungen *</label>
+        <textarea id="bemerkung" rows="5" required style="width: 100%;"></textarea>
+      </div>
+
+      <!-- 8. Zeile: Bildanhang (max. 8) -->
+      <div style="padding: 0 15mm;">
+        <label for="bildanhang">🖼️ Bilder hinzufügen (max. 8) *</label>
+        <input type="file" id="bildanhang" accept="image/*" multiple required>
+      </div>
+
+      <!-- Bilderrahmen, der die volle Seitenbreite nutzt -->
+      <div id="bildvorschau"></div>
+    </form>
+  </div>
+
+  <!-- Nur noch ein Button (PDF generieren) -->
+  <div style="text-align:center;">
+    <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
+  </div>
+
+  <div id="loading">⏳ PDF wird erstellt...</div>
+
+  <script>
+    const { jsPDF } = window.jspdf;
+    let images = [];
+    const MAX_IMAGES = 8;
+
+    // Dark Mode Toggle
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    darkModeToggle.addEventListener('click', () => {
+      if(document.documentElement.getAttribute('data-theme') === 'dark') {
+        document.documentElement.removeAttribute('data-theme');
+        darkModeToggle.textContent = 'Dark Mode';
+        localStorage.removeItem('theme');
+      } else {
+        document.documentElement.setAttribute('data-theme', 'dark');
+        darkModeToggle.textContent = 'Light Mode';
+        localStorage.setItem('theme', 'dark');
+      }
+    });
+    if(localStorage.getItem('theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      darkModeToggle.textContent = 'Light Mode';
+    }
+
+    // Dynamische Anzeige: Reklamation vs. Fertigungsauftrag
+    const auftragstypSelect = document.getElementById('auftragstyp');
+    const containerVersion = document.getElementById('container_version');
+    const containerFertigung = document.getElementById('container_fertigung');
+    const versionInput = document.getElementById('version');
+    const spanndruckInput = document.getElementById('spanndruck');
+
+    auftragstypSelect.addEventListener('change', function() {
+      const type = this.value;
+      if(type === "Fertigungsauftrag") {
+        containerVersion.style.display = 'none';
+        containerFertigung.style.display = 'grid';
+        versionInput.required = false;
+        spanndruckInput.required = true;
+      } else if(type === "Reklamation") {
+        containerVersion.style.display = 'grid';
+        containerFertigung.style.display = 'none';
+        versionInput.required = true;
+        spanndruckInput.required = false;
+      } else {
+        containerVersion.style.display = 'none';
+        containerFertigung.style.display = 'none';
+        versionInput.required = false;
+        spanndruckInput.required = false;
+      }
+    });
+
+    // Dynamische Werkzeug-Eingabe (Plus- und Löschen-Buttons)
+    document.addEventListener('click', function(e) {
+      if(e.target && e.target.classList.contains('addWerkzeugBtn')) {
+        // Neue Zeile erstellen
+        const newRow = document.createElement('div');
+        newRow.className = 'werkzeugRow';
+        newRow.innerHTML = `
+          <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
+          <button type="button" class="werkzeugBtn addWerkzeugBtn">+</button>
+          <button type="button" class="werkzeugBtn deleteWerkzeugBtn">–</button>
+        `;
+        e.target.parentElement.parentElement.appendChild(newRow);
+      }
+      if(e.target && e.target.classList.contains('deleteWerkzeugBtn')) {
+        const row = e.target.closest('.werkzeugRow');
+        if(row) {
+          row.remove();
+        }
+      }
+    });
+
+    // Formularvalidierung
+    function validateForm() {
+      let valid = true;
+      const form = document.getElementById('pdfForm');
+      const requiredFields = form.querySelectorAll('[required]');
+      requiredFields.forEach(field => {
+        if (!field.value || (field.type === 'select-one' && field.value === '')) {
+          valid = false;
+          field.style.borderColor = 'red';
+        } else {
+          field.style.borderColor = '';
+        }
+      });
+      if (images.length === 0) {
+        valid = false;
+        const preview = document.getElementById('bildvorschau');
+        if (!preview.querySelector('.error')) {
+          const errorDiv = document.createElement('div');
+          errorDiv.classList.add('error');
+          errorDiv.textContent = 'Keine Bilder ausgewählt!';
+          preview.insertBefore(errorDiv, preview.firstChild);
+        }
+      }
+      return valid;
+    }
+
+    // Bilder verarbeiten und in 2×4-Galerie anzeigen
+    const bildanhangInput = document.getElementById('bildanhang');
+    const bildvorschau = document.getElementById('bildvorschau');
+
+    bildanhangInput.addEventListener('change', async (e) => {
+      if (e.target.files.length > MAX_IMAGES) {
+        alert(`Maximal ${MAX_IMAGES} Bilder erlaubt!`);
+        e.target.value = '';
+        return;
+      }
+      images = [];
+      bildvorschau.innerHTML = '';
+
+      await Promise.all(Array.from(e.target.files).slice(0, MAX_IMAGES).map(file =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) => {
+            const img = new Image();
+            img.src = ev.target.result;
+            img.onload = () => {
+              const container = document.createElement('div');
+              container.className = 'bild-item';
+              container.appendChild(img);
+              bildvorschau.appendChild(container);
+
+              images.push({
+                src: ev.target.result,
+                name: file.name,
+                width: img.naturalWidth,
+                height: img.naturalHeight
+              });
+              resolve();
+            };
+          };
+          reader.readAsDataURL(file);
+        })
+      ));
+    });
+
+    // Erzeugt ein PDF, indem der gesamte Inhalt proportional auf eine A4-Seite skaliert wird
+    async function createPDF() {
+      const content = document.getElementById('content');
+      const originalStyles = { ...content.style };
+
+      // A4-Stile erzwingen: volle Breite, Padding nur oben/unten
+      Object.assign(content.style, {
+        width: '210mm',
+        minHeight: '297mm',
+        margin: '0 auto',
+        padding: '15mm 0',
+        boxShadow: 'none'
+      });
+
+      // Canvas erstellen (Scale = 2 für gute Qualität, moderate Dateigröße)
+      const canvas = await html2canvas(content, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF'
+      });
+      const imgData = canvas.toDataURL('image/jpeg', 0.8);
+
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+
+      const canvasWidth = canvas.width;
+      const canvasHeight = canvas.height;
+      const scale = Math.min(pdfWidth / canvasWidth, pdfHeight / canvasHeight);
+      const imgWidth = canvasWidth * scale;
+      const imgHeight = canvasHeight * scale;
+
+      const marginX = (pdfWidth - imgWidth) / 2;
+      const marginY = (pdfHeight - imgHeight) / 2;
+
+      pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
+
+      // Ursprüngliche Styles wiederherstellen
+      Object.assign(content.style, originalStyles);
+      return pdf;
+    }
+
+    // PDF generieren und speichern
+    async function generatePDFFile() {
+      if (!validateForm()) {
+        alert('Bitte alle Pflichtfelder (*) ausfüllen und Bilder hinzufügen');
+        return;
+      }
+      const pdfButton = document.getElementById('pdfButtonGenerate');
+      pdfButton.disabled = true;
+      document.getElementById('loading').style.display = 'block';
+
+      try {
+        const pdf = await createPDF();
+        pdf.save(`Dokument_${new Date().toISOString().slice(0, 10)}.pdf`);
+      } catch (error) {
+        console.error('PDF-Fehler:', error);
+        alert('Fehler bei der PDF-Erstellung');
+      } finally {
+        pdfButton.disabled = false;
+        document.getElementById('loading').style.display = 'none';
+      }
+    }
+
+    document.getElementById('pdfButtonGenerate').addEventListener('click', generatePDFFile);
+  </script>
+</body>
+</html>
