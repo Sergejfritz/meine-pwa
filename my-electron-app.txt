@@ -1,0 +1,3 @@
+Schritt 5: Code in die Dateien einfügen
+main.js
+Kopiere den folgenden Code in die Datei main.js:
