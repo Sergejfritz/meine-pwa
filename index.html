@@ -2,20 +2,20 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <!-- Responsives Viewport für Smartphone -->
+  <!-- Wichtig für responsives Layout auf Smartphones -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Technische Dokumentation S.Fritz – A4 PDF Demo</title>
+  <title>Technische Dokumentation S.Fritz – A4 PDF mit Tabellen-Layout</title>
   
   <!-- jsPDF & html2canvas (CDNs) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  
+
   <style>
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --text-height: 25%;  /* Oberer Bereich: ~25% */
-      --image-height: 75%; /* Unterer Bereich: ~75% */
+      --text-height: 25%;   /* oberer Bereich: 25% */
+      --image-height: 75%;  /* unterer Bereich: 75% */
       --bg-color: #f0f3f5;
       --content-bg: #ffffff;
       --text-color: #2c3e50;
@@ -35,7 +35,7 @@
       margin-bottom: 20px;
       font-weight: 500;
     }
-    /* Container für den PDF-Inhalt – im Browser flexibel, aber für PDF fix auf A4 */
+    /* A4-Container: Browser=flexibel, PDF=exakt A4 */
     #pdfContent {
       width: 100%;
       max-width: var(--a4-width);
@@ -46,14 +46,14 @@
       display: flex;
       flex-direction: column;
     }
-    /* Oberer Bereich: Formulareingaben (25%) */
+    /* Oberer Bereich: ~25% */
     #textSection {
       flex: 0 0 var(--text-height);
       padding: 10px 15px;
       overflow-y: auto;
       border-bottom: 1px solid var(--border-color);
     }
-    /* Unterer Bereich: Bilder (75%) */
+    /* Unterer Bereich: ~75% für Bilder */
     #imageSection {
       flex: 0 0 var(--image-height);
       padding: 10px 15px;
@@ -64,38 +64,43 @@
       justify-content: center;
       align-content: flex-start;
     }
-    /* Formular-Grid */
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      margin-bottom: 8px;
+    /* Tabellenlayout für Felder: 4 Spalten = (Label,Input,Label,Input) pro Zeile */
+    #dataTable {
+      width: 100%;
+      border-collapse: collapse;
     }
-    .form-grid label {
-      margin-top: 8px;
+    #dataTable th {
+      text-align: left;
+      width: 25%;
+      padding: 6px;
       font-weight: bold;
+    }
+    #dataTable td {
+      width: 25%;
+      padding: 6px;
+      vertical-align: top;
     }
     input, select, textarea {
       width: 100%;
       padding: 6px;
-      margin-top: 4px;
       border: 1px solid var(--border-color);
       border-radius: 4px;
+      box-sizing: border-box;
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--accent-color);
       box-shadow: 0 0 8px rgba(33,150,243,0.3);
       outline: none;
     }
-    /* Dynamische Felder: Version & Fertigungsauftrag */
-    #versionContainer, #fertigungContainer {
-      margin-top: 8px;
+    /* Dynamische Bereiche (Version & Fertigungsauftrag) */
+    #versionRow, #fertigungRow {
+      display: none;
     }
     #werkzeugeContainer {
       border: 1px solid var(--border-color);
       padding: 8px;
       border-radius: 6px;
-      margin-top: 8px;
+      margin-top: 6px;
     }
     .werkzeugRow {
       display: flex;
@@ -113,7 +118,11 @@
     .werkzeugBtn:hover {
       background: var(--accent-dark);
     }
-    /* Bild-Container im PDF-Bereich */
+    /* Bemerkungen extra Zeile (span 3 columns) */
+    #bemerkungRow td {
+      padding-top: 6px;
+    }
+    /* Bild-Container */
     .imgContainer {
       width: 200px;
       height: 200px;
@@ -180,15 +189,22 @@
     }
     /* Responsive Anpassungen für Smartphones */
     @media (max-width: 600px) {
-      .form-grid {
-        grid-template-columns: 1fr;
-        gap: 6px;
-      }
-      #textSection, #imageSection {
-        padding: 8px 10px;
-      }
       #pdfContent {
         width: 100%;
+      }
+      #dataTable th, #dataTable td {
+        width: 50%;
+        display: block;
+      }
+      #dataTable tr {
+        display: flex;
+        flex-wrap: wrap;
+      }
+      #dataTable th {
+        flex: 0 0 100%;
+      }
+      #dataTable td {
+        flex: 0 0 100%;
       }
     }
   </style>
@@ -196,95 +212,92 @@
 <body>
   <h1>Technische Dokumentation S.Fritz</h1>
 
-  <!-- A4-Container (Browser: responsiv, PDF: fix A4) -->
+  <!-- A4-Bereich -->
   <div id="pdfContent">
-    <!-- Oberer Bereich: Formulareingaben (25%) -->
+    <!-- Oberer Bereich (25%): Tabellenlayout für Eingaben -->
     <div id="textSection">
-      <div class="form-grid">
-        <div>
-          <label for="kunde">Kunde (Firma) *</label>
-          <input type="text" id="kunde" placeholder="z.B. Mustermann GmbH">
-        </div>
-        <div>
-          <label for="auftragstyp">Auftragstyp *</label>
-          <select id="auftragstyp">
-            <option value="">Bitte wählen</option>
-            <option value="Reklamation">Reklamation</option>
-            <option value="Fertigungsauftrag">Fertigungsauftrag</option>
-          </select>
-        </div>
-      </div>
-      <!-- Dynamisch: Version (Reklamation) -->
-      <div id="versionContainer" style="display:none;">
-        <label for="version">Version *</label>
-        <input type="text" id="version">
-      </div>
-      <!-- Dynamisch: Fertigungsauftrag -->
-      <div id="fertigungContainer" style="display:none;">
-        <label for="spanndruck">Spanndruck *</label>
-        <input type="text" id="spanndruck">
-        <label>Werkzeuge</label>
-        <div id="werkzeugeContainer">
-          <div class="werkzeugRow">
-            <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
-            <button type="button" class="werkzeugBtn addWerkzeugBtn">+</button>
-            <button type="button" class="werkzeugBtn deleteWerkzeugBtn">–</button>
-          </div>
-        </div>
-      </div>
-      <div class="form-grid">
-        <div>
-          <label for="maschine">Maschine *</label>
-          <input type="text" id="maschine">
-        </div>
-        <div>
-          <label for="abnr">AB‑Nr *</label>
-          <input type="text" id="abnr">
-        </div>
-      </div>
-      <div class="form-grid">
-        <div>
-          <label for="zeichnungsnummer">Zeichnungsnummer *</label>
-          <input type="text" id="zeichnungsnummer">
-        </div>
-        <div>
-          <label for="index">Index *</label>
-          <input type="text" id="index">
-        </div>
-      </div>
-      <div class="form-grid">
-        <div>
-          <label for="verantwortlich">Verantwortlich *</label>
-          <input type="text" id="verantwortlich">
-        </div>
-        <div>
-          <label for="datum">Datum *</label>
-          <input type="date" id="datum">
-        </div>
-      </div>
-      <div class="form-grid">
-        <div>
-          <label for="teilebenennung">Benennung der Teile *</label>
-          <input type="text" id="teilebenennung">
-        </div>
-        <div>
-          <label for="stueckzahl">Stückzahl *</label>
-          <input type="number" id="stueckzahl">
-        </div>
-      </div>
-      <label for="bemerkung">Bemerkungen *</label>
-      <textarea id="bemerkung" rows="3"></textarea>
+      <table id="dataTable">
+        <tr>
+          <th>Kunde (Firma)*</th>
+          <td><input type="text" id="kunde" placeholder="z.B. Mustermann GmbH"></td>
+          <th>Auftragstyp*</th>
+          <td>
+            <select id="auftragstyp">
+              <option value="">Bitte wählen</option>
+              <option value="Reklamation">Reklamation</option>
+              <option value="Fertigungsauftrag">Fertigungsauftrag</option>
+            </select>
+          </td>
+        </tr>
+        <!-- Dynamisch: Version (nur bei Reklamation) -->
+        <tr id="versionRow">
+          <th>Version*</th>
+          <td colspan="3"><input type="text" id="version"></td>
+        </tr>
+        <!-- Dynamisch: Fertigungsauftrag (Spanndruck + Werkzeuge) -->
+        <tr id="fertigungRow">
+          <th>Spanndruck*</th>
+          <td>
+            <input type="text" id="spanndruck">
+          </td>
+          <th>Werkzeuge</th>
+          <td>
+            <div id="werkzeugeContainer">
+              <div class="werkzeugRow">
+                <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
+                <button type="button" class="werkzeugBtn addWerkzeugBtn">+</button>
+                <button type="button" class="werkzeugBtn deleteWerkzeugBtn">–</button>
+              </div>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <th>Maschine*</th>
+          <td><input type="text" id="maschine"></td>
+          <th>AB‑Nr*</th>
+          <td><input type="text" id="abnr"></td>
+        </tr>
+        <tr>
+          <th>Zeichnungsnr.*</th>
+          <td><input type="text" id="zeichnungsnummer"></td>
+          <th>Index*</th>
+          <td><input type="text" id="index"></td>
+        </tr>
+        <tr>
+          <th>Verantwortlich*</th>
+          <td><input type="text" id="verantwortlich"></td>
+          <th>Datum*</th>
+          <td><input type="date" id="datum"></td>
+        </tr>
+        <tr>
+          <th>Benennung d. Teile*</th>
+          <td><input type="text" id="teilebenennung"></td>
+          <th>Stückzahl*</th>
+          <td><input type="number" id="stueckzahl"></td>
+        </tr>
+        <!-- Bemerkungen in einer eigenen Zeile -->
+        <tr id="bemerkungRow">
+          <th>Bemerkungen*</th>
+          <td colspan="3">
+            <textarea id="bemerkung" rows="3" style="width: 100%;"></textarea>
+          </td>
+        </tr>
+      </table>
+      <!-- PDF-Button & Fehlermeldung -->
       <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
-      <div class="error" id="errorBox" style="display:none;">Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!</div>
+      <div class="error" id="errorBox" style="display:none;">
+        Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!
+      </div>
     </div>
-    <!-- Unterer Bereich: Bilder (75%) -->
+
+    <!-- Unterer Bereich (75%): Bilder -->
     <div id="imageSection">
       <!-- Dynamische Bildvorschau -->
     </div>
   </div>
 
-  <!-- Bild-Upload-Feld (nicht im PDF, sondern nur Web-App) -->
-  <div class="box" style="max-width:700px; margin:10px auto;">
+  <!-- Upload-Feld (nicht im PDF) -->
+  <div style="max-width:700px; margin:10px auto;">
     <label for="bildanhang">Bilder auswählen (max. 9) *</label>
     <input type="file" id="bildanhang" accept="image/*" multiple>
   </div>
@@ -294,34 +307,34 @@
 
   <script>
     const { jsPDF } = window.jspdf;
-    
-    // Auftragstyp: Reklamation vs. Fertigungsauftrag
+
+    // Dynamische Auftragstyp-Anzeige
     const auftragstypSelect = document.getElementById('auftragstyp');
-    const versionContainer = document.getElementById('versionContainer');
-    const fertigungContainer = document.getElementById('fertigungContainer');
+    const versionRow = document.getElementById('versionRow');
+    const fertigungRow = document.getElementById('fertigungRow');
     const versionInput = document.getElementById('version');
     const spanndruckInput = document.getElementById('spanndruck');
-    
+
     auftragstypSelect.addEventListener('change', () => {
       const val = auftragstypSelect.value;
       if(val === "Reklamation"){
-        versionContainer.style.display = 'block';
-        fertigungContainer.style.display = 'none';
+        versionRow.style.display = '';
+        fertigungRow.style.display = 'none';
         versionInput.required = true;
         spanndruckInput.required = false;
       } else if(val === "Fertigungsauftrag"){
-        versionContainer.style.display = 'none';
-        fertigungContainer.style.display = 'block';
+        versionRow.style.display = 'none';
+        fertigungRow.style.display = '';
         versionInput.required = false;
         spanndruckInput.required = true;
       } else {
-        versionContainer.style.display = 'none';
-        fertigungContainer.style.display = 'none';
+        versionRow.style.display = 'none';
+        fertigungRow.style.display = 'none';
         versionInput.required = false;
         spanndruckInput.required = false;
       }
     });
-    
+
     // Dynamische Werkzeug-Eingabe
     document.addEventListener('click', function(e){
       if(e.target.classList.contains('addWerkzeugBtn')){
@@ -339,12 +352,13 @@
         if(row) row.remove();
       }
     });
-    
-    // Bilder-Handling: Anzeige in #imageSection
+
+    // Bilder-Handling
     let images = [];
     const MAX_IMAGES = 9;
     const bildanhangInput = document.getElementById('bildanhang');
     const imageSection = document.getElementById('imageSection');
+
     bildanhangInput.addEventListener('change', async (e) => {
       if(e.target.files.length > MAX_IMAGES){
         alert(`Maximal ${MAX_IMAGES} Bilder erlaubt!`);
@@ -372,8 +386,8 @@
         })
       ));
     });
-    
-    // Formularvalidierung: Prüfe Pflichtfelder
+
+    // Formularvalidierung
     function validateForm(){
       const kunde = document.getElementById('kunde').value.trim();
       const abnr = document.getElementById('abnr').value.trim();
@@ -385,6 +399,7 @@
       const datum = document.getElementById('datum').value.trim();
       const bemerkung = document.getElementById('bemerkung').value.trim();
       const errorBox = document.getElementById('errorBox');
+
       if(!kunde || !abnr || !teile || !stueckzahl || !zeichnungsnummer ||
          !index || !verantwortlich || !datum || !bemerkung || images.length === 0){
         errorBox.style.display = 'block';
@@ -393,8 +408,8 @@
       errorBox.style.display = 'none';
       return true;
     }
-    
-    // Ersetze Formularelemente im Klon durch statischen Text
+
+    // Ersetze alle Formularelemente (Inputs, Textareas, Selects) durch statischen Text
     function replaceFormElements(clone) {
       // Inputs
       const inputs = clone.querySelectorAll('input');
@@ -418,22 +433,23 @@
       const selects = clone.querySelectorAll('select');
       selects.forEach(select => {
         const span = document.createElement('span');
-        span.textContent = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : "";
+        const selIndex = select.selectedIndex;
+        span.textContent = selIndex >= 0 ? select.options[selIndex].text : "";
         span.style.fontSize = getComputedStyle(select).fontSize;
         span.style.fontFamily = getComputedStyle(select).fontFamily;
         select.parentNode.replaceChild(span, select);
       });
     }
-    
+
     // PDF-Erstellung
     async function createPDF(){
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
+
       // Klone #pdfContent
       const content = document.getElementById('pdfContent');
       const clone = content.cloneNode(true);
-      
+
       // A4-Stile erzwingen
       clone.style.width = '210mm';
       clone.style.height = '297mm';
@@ -443,16 +459,16 @@
       clone.style.position = 'absolute';
       clone.style.top = '-10000px';
       document.body.appendChild(clone);
-      
-      // Formularelemente ersetzen (damit Werte im PDF erscheinen)
+
+      // Formularelemente durch statischen Text ersetzen
       replaceFormElements(clone);
-      
-      // Bildbereich im Klon anpassen
+
+      // Bildbereich anpassen
       const imageSectionClone = clone.querySelector('#imageSection');
       imageSectionClone.innerHTML = '';
       const n = images.length;
       if(n === 1){
-        // Nur ein Bild => füllt kompletten Bereich
+        // 1 Bild => füllt gesamten Bildbereich
         const container = document.createElement('div');
         container.style.width = "100%";
         container.style.height = "100%";
@@ -488,10 +504,10 @@
           imageSectionClone.appendChild(container);
         });
       }
-      
+
       // Warte kurz
       await new Promise(r => setTimeout(r, 200));
-      
+
       // html2canvas
       const canvas = await html2canvas(clone, {
         scale: 2,
@@ -499,31 +515,33 @@
         backgroundColor: '#FFFFFF'
       });
       document.body.removeChild(clone);
-      
-      // PDF
+
+      // PDF generieren
       const imgData = canvas.toDataURL('image/jpeg', 0.8);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const ratio = Math.min(pdfWidth / canvasWidth, pdfHeight / canvasHeight);
-      const imgWidth = canvasWidth * ratio;
-      const imgHeight = canvasHeight * ratio;
+      const cw = canvas.width;
+      const ch = canvas.height;
+      const ratio = Math.min(pdfWidth / cw, pdfHeight / ch);
+      const imgWidth = cw * ratio;
+      const imgHeight = ch * ratio;
       const marginX = (pdfWidth - imgWidth) / 2;
       const marginY = (pdfHeight - imgHeight) / 2;
       pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
+
       return pdf;
     }
-    
+
     // Klick auf "PDF generieren"
     document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
       if(!validateForm()){
-        alert('Bitte fülle alle Pflichtfelder (*) aus und lade mindestens ein Bild hoch.');
+        alert('Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!');
         return;
       }
       const pdfButton = document.getElementById('pdfButtonGenerate');
       pdfButton.disabled = true;
       document.getElementById('loading').style.display = 'block';
+
       try {
         const pdf = await createPDF();
         pdf.save(`Dokument_${new Date().toISOString().slice(0,10)}.pdf`);
