@@ -3,18 +3,42 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Technische Dokumentation S.Fritz – Demo</title>
+  <title>Technische Dokumentation S.Fritz – Komplettdemo</title>
   <style>
-    /* Grundlegende Styles */
+    /* Basis-Styles */
+    :root {
+      --a4-width: 210mm;
+      --a4-height: 297mm;
+      --content-padding: 15mm 0;
+      --bg-color: #f0f3f5;
+      --content-bg: #ffffff;
+      --text-color: #2c3e50;
+      --border-color: #ddd;
+      --accent-color: #2196F3;
+      --accent-dark: #1976D2;
+    }
+    [data-theme="dark"] {
+      --bg-color: #1e1e1e;
+      --content-bg: #2c2c2c;
+      --text-color: #f0f3f5;
+      --border-color: #555;
+      --accent-color: #BB86FC;
+      --accent-dark: #3700B3;
+    }
+    * {
+      box-sizing: border-box;
+      transition: background 0.3s, color 0.3s;
+    }
     body {
       font-family: Arial, sans-serif;
+      background: var(--bg-color);
       margin: 20px;
-      background: #f0f3f5;
-      color: #2c3e50;
+      color: var(--text-color);
     }
     h1, h2, h3 {
-      color: #2c3e50;
+      color: var(--text-color);
     }
+    /* Container-Boxen */
     .box {
       border: 1px solid #ccc;
       padding: 20px;
@@ -30,22 +54,20 @@
     input[type="text"], input[type="password"], input[type="date"], textarea, select {
       width: 100%;
       padding: 8px;
-      box-sizing: border-box;
       margin-bottom: 8px;
       border: 1px solid #ddd;
       border-radius: 4px;
     }
     button {
-      margin-top: 10px;
       padding: 10px 15px;
-      background: #2196F3;
+      background: var(--accent-color);
       color: #fff;
       border: none;
       border-radius: 4px;
       cursor: pointer;
     }
     button:hover {
-      background: #1976D2;
+      background: var(--accent-dark);
     }
     .hidden {
       display: none;
@@ -80,6 +102,14 @@
       color: #999;
       margin-bottom: 5px;
     }
+    /* Formular-Gitter */
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+      padding: 0 15px;
+    }
     /* Bilder-Vorschau */
     #bildvorschau {
       display: flex;
@@ -102,14 +132,6 @@
       max-width: 100%;
       max-height: 100%;
     }
-    /* Formular-Gitter */
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-      padding: 0 15px;
-    }
     /* PDF-Loading */
     #loading {
       position: fixed;
@@ -117,7 +139,7 @@
       left: 50%;
       transform: translate(-50%, -50%);
       background: rgba(0,0,0,0.9);
-      color: white;
+      color: #fff;
       padding: 20px 40px;
       border-radius: 10px;
       font-size: 1.2em;
@@ -143,7 +165,10 @@
 </head>
 <body>
 
-  <h1>Technische Dokumentation S.Fritz – Demo</h1>
+  <!-- Dark Mode Toggle -->
+  <button id="darkModeToggle">Dark Mode</button>
+
+  <h1 style="text-align:center;">Technische Dokumentation S.Fritz – Demo</h1>
 
   <!-- Login-Bereich -->
   <div class="box" id="loginBox">
@@ -153,13 +178,10 @@
       <option value="mitarbeiter">Mitarbeiter</option>
       <option value="admin">Admin</option>
     </select>
-
     <label for="loginUser">Benutzername</label>
     <input type="text" id="loginUser" placeholder="z.B. admin">
-
     <label for="loginPass">Passwort</label>
     <input type="password" id="loginPass" placeholder="z.B. 1234">
-
     <button id="loginBtn">Einloggen</button>
     <p style="font-size:0.9em; color:#666;">
       <strong>Admin:</strong> Benutzer=admin, Passwort=1234<br>
@@ -167,12 +189,12 @@
     </p>
   </div>
 
-  <!-- Haupt-Inhalt, der nach Login angezeigt wird -->
+  <!-- Hauptinhalt (wird nach Login sichtbar) -->
   <div id="pdfContent" class="hidden">
-    <!-- Firmennews-Bereich (immer sichtbar) -->
+    <!-- Firmennews-Anzeige (wird nicht ins PDF aufgenommen) -->
     <div class="box" id="firmennewsContainer">
       <h2>Aktuelle Firmennews</h2>
-      <div id="newsList">Lade News...</div>
+      <div id="newsList">Keine News vorhanden.</div>
     </div>
 
     <!-- Admin-Bereich: News erstellen (nur Admin sichtbar) -->
@@ -190,7 +212,7 @@
       <h2>Dokumentation</h2>
       <label for="kunde">Kunde (Firma) *</label>
       <input type="text" id="kunde" placeholder="z.B. Mustermann GmbH">
-
+      
       <div class="form-grid">
         <div>
           <label for="auftragstyp">Auftragstyp *</label>
@@ -243,11 +265,11 @@
       <div id="bildvorschau"></div>
 
       <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
-      <div class="error" id="errorBox" style="display:none;">Bitte alle Pflichtfelder (*) ausfüllen und mindestens ein Bild auswählen!</div>
+      <div class="error" id="errorBox" style="display:none;">Bitte fülle alle Pflichtfelder (*) aus und wähle mindestens ein Bild.</div>
     </div>
   </div>
 
-  <!-- PDF-Ladeanzeige -->
+  <!-- PDF-Loading -->
   <div id="loading">⏳ PDF wird erstellt...</div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -277,7 +299,7 @@
         } else {
           alert('Falsche Admin-Daten!');
         }
-      } else { // Mitarbeiter
+      } else {
         loginBox.classList.add('hidden');
         pdfContent.classList.remove('hidden');
         adminPanel.classList.add('hidden');
@@ -296,7 +318,7 @@
         newsListEl.innerHTML = 'Keine News vorhanden.';
         return;
       }
-      // Neueste News zuerst
+      // Neueste zuerst
       newsArray = newsArray.reverse();
       let html = '';
       newsArray.forEach(item => {
@@ -371,7 +393,7 @@
     });
 
     // ---------------------------
-    // Formularvalidierung
+    // Formularvalidierung (Mitarbeiter)
     // ---------------------------
     function validateForm() {
       const kunde = document.getElementById('kunde').value.trim();
@@ -386,26 +408,42 @@
     }
 
     // ---------------------------
-    // PDF-Erstellung mit html2canvas & jsPDF
+    // PDF-Erstellung (ohne Firmennews)
     // ---------------------------
     async function createPDF() {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
 
-      // Wir erfassen den gesamten Inhalt in #pdfContent
+      // Klone den Bereich, der ins PDF soll
       const content = document.getElementById('pdfContent');
+      const clone = content.cloneNode(true);
 
-      // Temporär Scrolltop auf 0, damit html2canvas alles sieht
-      const originalScroll = document.documentElement.scrollTop;
-      document.documentElement.scrollTop = 0;
+      // Im Klon den Firmennews-Bereich ausblenden, damit er nicht ins PDF kommt
+      const newsContainer = clone.querySelector('#firmennewsContainer');
+      if (newsContainer) {
+        newsContainer.style.display = 'none';
+      }
+
+      // Stelle sicher, dass der Klon exakt A4-Größe (210 x 297 mm) hat
+      clone.style.width = '210mm';
+      clone.style.height = '297mm';
+      clone.style.margin = '0';
+      clone.style.padding = '0';
+      clone.style.boxShadow = 'none';
+
+      // Füge den Klon temporär (versteckt) dem Body hinzu
+      clone.classList.add('hidden');
+      document.body.appendChild(clone);
+
+      // Kurz warten, damit das Layout sich aktualisiert
       await new Promise(r => setTimeout(r, 100));
 
-      const canvas = await html2canvas(content, {
+      const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#FFFFFF'
       });
-      document.documentElement.scrollTop = originalScroll;
+      document.body.removeChild(clone);
 
       const imgData = canvas.toDataURL('image/jpeg', 0.8);
       const pdfWidth = pdf.internal.pageSize.getWidth();
@@ -421,18 +459,20 @@
       return pdf;
     }
 
+    // ---------------------------
+    // PDF generieren und speichern
+    // ---------------------------
     document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
       if (!validateForm()) {
         alert('Bitte alle Pflichtfelder (*) ausfüllen und mindestens ein Bild auswählen');
         return;
       }
-      document.getElementById('errorBox').style.display = 'none';
       const pdfButton = document.getElementById('pdfButtonGenerate');
       pdfButton.disabled = true;
       document.getElementById('loading').style.display = 'block';
       try {
         const pdf = await createPDF();
-        pdf.save(`Dokument_${new Date().toISOString().slice(0, 10)}.pdf`);
+        pdf.save(`Dokument_${new Date().toISOString().slice(0,10)}.pdf`);
       } catch (error) {
         console.error('Fehler bei der PDF-Erstellung:', error);
         alert('Fehler bei der PDF-Erstellung. Siehe Konsole.');
