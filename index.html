@@ -2,6 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
+  <!-- Wichtig: responsive Viewport-Anpassung für Smartphones -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz – A4 PDF Demo</title>
   
@@ -13,8 +14,8 @@
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --text-height: 25%;
-      --image-height: 75%;
+      --text-height: 25%;   /* Oberer Bereich: 25% für Texteingabe */
+      --image-height: 75%;  /* Unterer Bereich: 75% für Bilder */
       --bg-color: #f0f3f5;
       --content-bg: #ffffff;
       --text-color: #2c3e50;
@@ -34,25 +35,26 @@
       margin-bottom: 20px;
       font-weight: 500;
     }
-    /* A4-Container – exakt 210mm x 297mm */
+    /* Container für den A4-Bereich – im Browser responsiv (auf großen Bildschirmen als A4 dargestellt) */
     #pdfContent {
-      width: var(--a4-width);
-      height: var(--a4-height);
-      margin: 0 auto;
+      width: 100%; /* Auf kleinen Bildschirmen 100% Breite */
+      max-width: var(--a4-width);
+      height: auto; /* Im Browser flexibel */
       background: var(--content-bg);
-      display: flex;
-      flex-direction: column;
       border: 1px solid var(--border-color);
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
     }
-    /* Oberer Bereich: Formulareingaben (25% Höhe) */
+    /* Oberer Bereich: Formulareingaben (25% des A4-Konzepts) */
     #textSection {
       flex: 0 0 var(--text-height);
       padding: 10px 15px;
       overflow-y: auto;
       border-bottom: 1px solid var(--border-color);
     }
-    /* Unterer Bereich: Bilder (75% Höhe) */
+    /* Unterer Bereich: Bildvorschau (75% des A4-Konzepts) */
     #imageSection {
       flex: 0 0 var(--image-height);
       padding: 10px 15px;
@@ -63,7 +65,7 @@
       justify-content: center;
       align-content: flex-start;
     }
-    /* Formularelemente */
+    /* Formularelemente im Textbereich */
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -86,7 +88,7 @@
       box-shadow: 0 0 8px rgba(33,150,243,0.3);
       outline: none;
     }
-    /* Dynamische Bereiche */
+    /* Dynamische Bereiche: Version und Fertigungsauftrag */
     #versionContainer,
     #fertigungContainer {
       margin-top: 8px;
@@ -114,7 +116,7 @@
     .werkzeugBtn:hover {
       background: var(--accent-dark);
     }
-    /* Bild-Container – größer für Details (im PDF-Bereich) */
+    /* Bild-Container im A4-Unterbereich (PDF) – für mobile Ansichten im Browser ähnlich */
     .imgContainer {
       width: 200px;
       height: 200px;
@@ -130,7 +132,7 @@
       max-width: 100%;
       max-height: 100%;
     }
-    /* PDF-Button & Fehlermeldung */
+    /* PDF-Button und Fehlermeldung */
     button.actionButton {
       background: var(--accent-color);
       color: #fff;
@@ -179,13 +181,14 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    @media (max-width: 768px) {
-      #pdfContent {
-        width: 100%;
-        height: auto;
+    /* Responsive Anpassung für Smartphone */
+    @media (max-width: 600px) {
+      .form-grid {
+        grid-template-columns: 1fr;
+        gap: 6px;
       }
-      #imageSection {
-        justify-content: center;
+      #textSection, #imageSection {
+        padding: 8px 10px;
       }
     }
   </style>
@@ -193,9 +196,9 @@
 <body>
   <h1>Technische Dokumentation S.Fritz</h1>
 
-  <!-- A4-Inhalt: Aufgeteilt in 25% Text / 75% Bilder -->
+  <!-- A4-Container (PDF-Inhalt) -->
   <div id="pdfContent">
-    <!-- Oberer Bereich: Formulareingaben -->
+    <!-- Oberer Bereich: Formular (25% Höhe) -->
     <div id="textSection">
       <div class="form-grid">
         <div>
@@ -270,9 +273,12 @@
       <label for="bemerkung">Bemerkungen *</label>
       <textarea id="bemerkung" rows="3"></textarea>
       <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
-      <div class="error" id="errorBox" style="display:none;">Bitte alle Pflichtfelder (*) ausfüllen und mindestens ein Bild hochladen!</div>
+      <div class="error" id="errorBox" style="display:none;">
+        Bitte alle Pflichtfelder (*) ausfüllen und mindestens ein Bild hochladen!
+      </div>
     </div>
-    <!-- Unterer Bereich: Bilder -->
+    
+    <!-- Unterer Bereich: Bilder (75% Höhe) -->
     <div id="imageSection">
       <!-- Hier werden die Bilder dynamisch eingefügt -->
     </div>
@@ -317,7 +323,7 @@
       }
     });
     
-    // Dynamische Werkzeug-Eingabe
+    // Dynamische Werkzeug-Eingabe (Plus & Löschen)
     document.addEventListener('click', function(e){
       if(e.target.classList.contains('addWerkzeugBtn')){
         const newRow = document.createElement('div');
@@ -369,7 +375,7 @@
       ));
     });
     
-    // Formularvalidierung
+    // Formularvalidierung: Prüfe alle Pflichtfelder
     function validateForm(){
       const kunde = document.getElementById('kunde').value.trim();
       const abnr = document.getElementById('abnr').value.trim();
@@ -381,6 +387,7 @@
       const datum = document.getElementById('datum').value.trim();
       const bemerkung = document.getElementById('bemerkung').value.trim();
       const errorBox = document.getElementById('errorBox');
+      
       if(!kunde || !abnr || !teile || !stueckzahl || !zeichnungsnummer ||
          !index || !verantwortlich || !datum || !bemerkung || images.length === 0){
         errorBox.style.display = 'block';
@@ -392,7 +399,7 @@
     
     // Vor dem Rendern in PDF: Ersetze alle Formularelemente im Klon durch statischen Text
     function replaceFormElements(clone) {
-      // Inputs ersetzen
+      // Ersetze Inputs
       const inputs = clone.querySelectorAll('input');
       inputs.forEach(input => {
         const span = document.createElement('span');
@@ -401,7 +408,7 @@
         span.style.fontFamily = getComputedStyle(input).fontFamily;
         input.parentNode.replaceChild(span, input);
       });
-      // Textareas ersetzen
+      // Ersetze Textareas
       const textareas = clone.querySelectorAll('textarea');
       textareas.forEach(textarea => {
         const span = document.createElement('span');
@@ -410,7 +417,7 @@
         span.style.fontFamily = getComputedStyle(textarea).fontFamily;
         textarea.parentNode.replaceChild(span, textarea);
       });
-      // Selects ersetzen
+      // Ersetze Selects
       const selects = clone.querySelectorAll('select');
       selects.forEach(select => {
         const span = document.createElement('span');
@@ -421,16 +428,16 @@
       });
     }
     
-    // PDF-Erstellung: Klone den A4-Bereich, ersetze Formularelemente und render als PDF
+    // PDF-Erstellung: Klone den A4-Bereich, ersetze Formularelemente und passe den Bildbereich an
     async function createPDF(){
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
       
-      // Klone den Inhalt, der ins PDF soll
+      // Klone den #pdfContent-Bereich
       const content = document.getElementById('pdfContent');
       const clone = content.cloneNode(true);
       
-      // Fixiere den Klon exakt auf A4-Größe
+      // Stelle den Klon exakt auf A4-Größe ein
       clone.style.width = '210mm';
       clone.style.height = '297mm';
       clone.style.margin = '0';
@@ -440,15 +447,15 @@
       clone.style.top = '-10000px';
       document.body.appendChild(clone);
       
-      // Ersetze Formularelemente im Klon mit statischem Text, damit deren Werte angezeigt werden
+      // Ersetze alle Formularelemente im Klon durch statischen Text, damit deren Werte im PDF erscheinen
       replaceFormElements(clone);
       
-      // Passe den Bildbereich im Klon an:
+      // Passe den Bildbereich im Klon an: Anordnung als Grid
       const imageSectionClone = clone.querySelector('#imageSection');
       imageSectionClone.innerHTML = "";
       const n = images.length;
       if(n === 1) {
-        // Wenn nur ein Bild vorhanden ist, fülle den gesamten Bildbereich
+        // Nur ein Bild: Dieses füllt den gesamten Bildbereich aus
         const container = document.createElement('div');
         container.style.width = "100%";
         container.style.height = "100%";
@@ -462,7 +469,7 @@
         container.appendChild(img);
         imageSectionClone.appendChild(container);
       } else if(n > 1) {
-        // Bei mehreren Bildern: Erstelle ein Grid (idealerweise 3x3, falls 9 Bilder)
+        // Mehrere Bilder: Grid anordnen, idealerweise 3x3 bei 9 Bildern
         const cols = Math.ceil(Math.sqrt(n));
         const rows = Math.ceil(n / cols);
         imageSectionClone.style.display = "grid";
@@ -485,10 +492,10 @@
         });
       }
       
-      // Warte kurz, damit sich das Layout des Klons aktualisiert
+      // Warte kurz, damit sich das Layout des Klons stabilisiert
       await new Promise(r => setTimeout(r, 200));
       
-      // Erzeuge das Canvas
+      // Erzeuge Canvas mittels html2canvas
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
@@ -496,7 +503,7 @@
       });
       document.body.removeChild(clone);
       
-      // PDF erstellen
+      // PDF generieren
       const imgData = canvas.toDataURL('image/jpeg', 0.8);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -513,7 +520,7 @@
     
     // Klick auf "PDF generieren"
     document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
-      if (!validateForm()) {
+      if(!validateForm()){
         alert('Bitte fülle alle Pflichtfelder (*) aus und lade mindestens ein Bild hoch.');
         return;
       }
