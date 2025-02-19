@@ -7,7 +7,7 @@
   "background_color": "#ffffff",
   "theme_color": "#2196F3",
   "orientation": "portrait",
-  "kunde": "Mustermann GmbH",  // Hier kannst du den Kundennamen eintragen
+  "kunde": "Mustermann GmbH",
   "icons": [
     {
       "src": "icon-192.png",
