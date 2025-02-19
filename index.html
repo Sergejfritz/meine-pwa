@@ -2,7 +2,7 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <!-- Für mobile Geräte -->
+  <!-- Optimale Darstellung auf mobilen Geräten -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz – PDF Export</title>
   
@@ -17,7 +17,7 @@
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --text-height: 25%;    /* Oberer Bereich: ca. 25% (etwa 74mm) */
+      --text-height: 25%;    /* Oberer Bereich: ca. 25% der A4-Höhe (etwa 74mm) */
       --image-height: 75%;   /* Unterer Bereich: ca. 75% */
       --bg-color: #eef2f7;
       --content-bg: #ffffff;
@@ -94,6 +94,21 @@
       text-align: center;
       margin-top: 10px;
     }
+    /* Zusätzlicher Button für WhatsApp Share */
+    button.shareButton {
+      background: #25D366;
+      color: #fff;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: block;
+      margin: 10px auto;
+      font-size: 16px;
+    }
+    button.shareButton:hover {
+      background: #1ebe57;
+    }
     /* UI: Bilder-Upload & Vorschau */
     #uploadContainer {
       max-width: 700px;
@@ -146,8 +161,8 @@
       vertical-align: top;
       width: calc(100% / 3);
       box-sizing: border-box;
-      color: #000;  /* Scharfes Schwarz */
-      font-size: 10px;  /* Etwas größere Schrift */
+      color: #000;
+      font-size: 10px;
     }
     .fullRow td {
       width: 100% !important;
@@ -276,9 +291,8 @@
       <textarea id="bemerkung" rows="3" style="width:100%;"></textarea>
     </div>
     <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
-    <div class="error" id="errorBox" style="display:none;">
-      Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!
-    </div>
+    <button id="whatsAppShareButton" class="shareButton">📤 PDF über WhatsApp teilen</button>
+    <div class="error" id="errorBox" style="display:none;">Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!</div>
   </div>
   
   <!-- UI: Bilder-Upload & Vorschau -->
@@ -321,7 +335,7 @@
       }
     });
     
-    // Dynamische Werkzeug-Eingabe entfernen (nicht benötigt)
+    // Dynamische Werkzeug-Eingabe entfällt (entfernt)
     
     // UI: Bilder-Vorschau
     let images = [];
@@ -398,7 +412,7 @@
       });
     }
     
-    // PDF-Erstellung: Erzeuge einen neuen PDF-Klon mit separatem Layout
+    // PDF-Erstellung: Erzeuge einen PDF-Klon mit separatem Layout
     async function createPDF(){
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
@@ -478,7 +492,7 @@
       for(let key in data){
         fields.push(`<strong>${key}:</strong> ${data[key]}`);
       }
-      // Füge Zeilen à 3 Zellen hinzu
+      // Füge Zeilen zu je 3 Zellen hinzu
       for(let i = 0; i < fields.length; i += 3){
         const cells = fields.slice(i, i+3);
         addRow(cells);
@@ -486,7 +500,7 @@
       
       textSection.appendChild(table);
       
-      // Füge Bemerkungen als eigenen Bereich ganz unten im Textbereich ein
+      // Füge den Bemerkungsbereich als eigenen Container am unteren Rand des Textbereichs ein
       const remarks = document.getElementById('bemerkung').value;
       const remarksContainer = document.createElement('div');
       remarksContainer.style.marginTop = '2mm';
@@ -495,7 +509,7 @@
       remarksContainer.innerHTML = `<strong>Bemerkungen:</strong><br>${remarks}`;
       textSection.appendChild(remarksContainer);
       
-      // Unterer Bereich: Bilder (75%)
+      // Unterer Bereich: Bildbereich (75%)
       const imageSection = document.createElement('div');
       imageSection.id = 'imageSection';
       imageSection.style.height = '75%';
@@ -535,7 +549,7 @@
         });
       }
       
-      // Baue den PDF-Klon zusammen
+      // Baue den kompletten PDF-Klon zusammen
       const pdfClone = document.createElement('div');
       pdfClone.id = 'pdfContent';
       pdfClone.style.width = '210mm';
@@ -556,10 +570,10 @@
       `;
       pdfClone.appendChild(styleEl);
       
-      // Ersetze Formularelemente im Klon durch statischen Text
+      // Ersetze alle Formularelemente im Klon durch statischen Text
       replaceFormElements(pdfClone);
       
-      // Warte kurz, damit sich das Layout stabilisiert
+      // Kurze Wartezeit, damit sich das Layout stabilisiert
       await new Promise(r => setTimeout(r, 200));
       
       // Erzeuge Canvas via html2canvas
@@ -585,6 +599,27 @@
       return pdf;
     }
     
+    // Funktion zum Teilen via WhatsApp über die Web Share API
+    async function sharePDFviaWhatsApp() {
+      try {
+        const pdf = await createPDF();
+        const pdfBlob = pdf.output('blob');
+        const file = new File([pdfBlob], "Dokument.pdf", { type: "application/pdf" });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: 'Technische Dokumentation S.Fritz',
+            text: 'Hier ist das generierte PDF:',
+            files: [file]
+          });
+        } else {
+          alert('Teilen über WhatsApp wird in diesem Browser nicht unterstützt.');
+        }
+      } catch (err) {
+        console.error('Fehler beim Teilen:', err);
+        alert('Fehler beim Teilen. Siehe Konsole.');
+      }
+    }
+    
     // Klick-Handler für "PDF generieren"
     document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
       if (!validateForm()){
@@ -603,6 +638,17 @@
       } finally {
         pdfButton.disabled = false;
         document.getElementById('loading').style.display = 'none';
+      }
+    });
+    
+    // Klick-Handler für "PDF über WhatsApp teilen"
+    document.getElementById('whatsAppShareButton').addEventListener('click', async () => {
+      if (!validateForm()){
+        alert('Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!');
+        return;
+      }
+      if (confirm('PDF erstellen und über WhatsApp teilen?')) {
+        await sharePDFviaWhatsApp();
       }
     });
   </script>
