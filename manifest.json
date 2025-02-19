@@ -1,23 +1,34 @@
 {
-  "name": "Technische Dokumentation S.Fritz",
-  "short_name": "Doku",
-  "description": "Eine Doku-App für technische Informationen",
-  "start_url": "./index.html",
+  "name": "Meine PWA",
+  "short_name": "PWA",
+  "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2196F3",
-  "orientation": "portrait",
-  "kunde": "Mustermann GmbH",
+  "theme_color": "#000000",
+  "description": "Eine großartige Progressive Web App",
   "icons": [
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
     }
-  ]
+  ],
+  "orientation": "portrait",
+  "screenshot": [
+    {
+      "src": "screenshot.png",
+      "sizes": "1080x1920",
+      "type": "image/png"
+    }
+  ],
+  "scope": "/",
+  "id": "/",
+  "launch_handler": {
+    "client_mode": "auto"
+  }
 }
