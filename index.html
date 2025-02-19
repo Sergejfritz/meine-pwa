@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz (Werkzeug dynamisch, breite Bilderanzeige)</title>
   
-  <!-- Manifest einbinden (optional, falls du PWABuilder etc. nutzt) -->
+  <!-- Optional: Manifest, falls du PWABuilder nutzen willst -->
   <link rel="manifest" href="manifest.json">
 
   <!-- jsPDF & html2canvas -->
@@ -33,12 +33,10 @@
       --accent-color: #BB86FC;
       --accent-dark: #3700B3;
     }
-
     * {
       transition: background 0.3s, color 0.3s;
       box-sizing: border-box;
     }
-
     body {
       font-family: 'Segoe UI', sans-serif;
       background: var(--bg-color);
@@ -46,8 +44,6 @@
       padding: 10px;
       color: var(--text-color);
     }
-
-    /* Dark Mode Toggle Button */
     #darkModeToggle {
       position: fixed;
       top: 10px;
@@ -60,8 +56,6 @@
       cursor: pointer;
       z-index: 1100;
     }
-
-    /* A4-Container – volle Breite, Padding nur oben/unten */
     #content {
       width: var(--a4-width);
       min-height: var(--a4-height);
@@ -70,8 +64,6 @@
       background: var(--content-bg);
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
-
-    /* Formular in 2-Spalten-Raster */
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -79,7 +71,6 @@
       margin-bottom: 20px;
       padding: 0 15mm;
     }
-
     input, textarea, select {
       width: 100%;
       padding: 10px;
@@ -89,14 +80,11 @@
       color: var(--text-color);
       transition: border 0.3s ease, box-shadow 0.3s ease;
     }
-
     input:focus, textarea:focus, select:focus {
       border-color: var(--accent-color);
       box-shadow: 0 0 8px var(--accent-color);
       outline: none;
     }
-
-    /* Bilderbereich: volle Seitenbreite */
     #bildvorschau {
       width: 100%;
       display: grid;
@@ -109,7 +97,6 @@
       min-height: 220px;
       padding: 10px;
     }
-
     .bild-item {
       position: relative;
       overflow: hidden;
@@ -128,8 +115,6 @@
     .bild-item:hover img {
       transform: scale(1.05);
     }
-
-    /* Volles Textfeld für Bemerkungen */
     #bemerkung {
       width: 100%;
       padding: 10px;
@@ -144,7 +129,6 @@
       box-shadow: 0 0 8px var(--accent-color);
       outline: none;
     }
-
     #loading {
       position: fixed;
       top: 50%;
@@ -173,7 +157,6 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-
     @media (max-width: 768px) {
       #content {
         width: 100%;
@@ -188,12 +171,10 @@
         grid-template-rows: repeat(4, auto);
       }
     }
-
     .error {
       color: red;
       font-weight: bold;
     }
-
     button.actionButton {
       background: linear-gradient(135deg, var(--accent-color), var(--accent-dark));
       color: white;
@@ -210,7 +191,6 @@
       transform: scale(1.05);
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
-
     /* Dynamische Werkzeug-Eingabe */
     #werkzeugeContainer {
       border: 1px solid var(--border-color);
@@ -236,17 +216,46 @@
     .werkzeugBtn:hover {
       background: var(--accent-dark);
     }
+
+    /* Firmennews-Bereich */
+    #firmennewsContainer {
+      width: 80%;
+      margin: 10px auto;
+      padding: 0 15mm;
+    }
+    .newsItem {
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      background: #fff;
+    }
+    .newsTitle {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+    .newsDate {
+      font-size: 0.8em;
+      color: #999;
+      margin-bottom: 5px;
+    }
   </style>
 </head>
 <body>
-  <!-- Dark Mode Toggle -->
   <button id="darkModeToggle">Dark Mode</button>
 
-  <!-- Haupt-Container -->
+  <!-- Container für alles -->
   <div id="content">
     <h1 style="margin:0 0 25px 0; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; padding: 0 15mm;">
       Technische Dokumentation S.Fritz
     </h1>
+
+    <!-- Firmennews-Anzeige -->
+    <div id="firmennewsContainer">
+      <h2>Aktuelle Firmennews</h2>
+      <div id="newsList">Lade News...</div>
+    </div>
+    <br>
 
     <!-- Kunde-Feld: Eingabe des Kundennamens -->
     <div style="padding: 0 15mm;">
@@ -286,7 +295,7 @@
           <label for="zeichnungsnummer">Zeichnungsnummer *</label>
           <input type="text" id="zeichnungsnummer" required>
         </div>
-        <div id="container_index">
+        <div>
           <label for="index">Index *</label>
           <input type="text" id="index" required>
         </div>
@@ -343,19 +352,18 @@
         </div>
       </div>
 
-      <!-- 7. Zeile: Bemerkungen – Textfeld in voller Breite -->
+      <!-- 7. Zeile: Bemerkungen -->
       <div style="padding: 0 15mm;">
         <label for="bemerkung">📝 Bemerkungen *</label>
         <textarea id="bemerkung" rows="5" required style="width: 100%;"></textarea>
       </div>
 
-      <!-- 8. Zeile: Bildanhang (max. 8) -->
+      <!-- 8. Zeile: Bilder -->
       <div style="padding: 0 15mm;">
         <label for="bildanhang">🖼️ Bilder hinzufügen (max. 8) *</label>
         <input type="file" id="bildanhang" accept="image/*" multiple required>
       </div>
 
-      <!-- Bilderrahmen, der die volle Seitenbreite nutzt -->
       <div id="bildvorschau"></div>
 
       <!-- PDF generieren Button -->
@@ -368,10 +376,6 @@
   <div id="loading">⏳ PDF wird erstellt...</div>
 
   <script>
-    const { jsPDF } = window.jspdf;
-    let images = [];
-    const MAX_IMAGES = 8;
-
     // Dark Mode Toggle
     const darkModeToggle = document.getElementById('darkModeToggle');
     darkModeToggle.addEventListener('click', () => {
@@ -390,7 +394,7 @@
       darkModeToggle.textContent = 'Light Mode';
     }
 
-    // Dynamische Anzeige: Reklamation vs. Fertigungsauftrag
+    // Auftragstyp-Logik
     const auftragstypSelect = document.getElementById('auftragstyp');
     const containerVersion = document.getElementById('container_version');
     const containerFertigung = document.getElementById('container_fertigung');
@@ -417,7 +421,7 @@
       }
     });
 
-    // Dynamische Werkzeug-Eingabe (Plus- und Löschen-Buttons)
+    // Werkzeug-Add/Remove
     document.addEventListener('click', function(e) {
       if(e.target && e.target.classList.contains('addWerkzeugBtn')) {
         const newRow = document.createElement('div');
@@ -437,34 +441,9 @@
       }
     });
 
-    // Formularvalidierung
-    function validateForm() {
-      let valid = true;
-      const form = document.getElementById('pdfForm');
-      const requiredFields = form.querySelectorAll('[required]');
-      requiredFields.forEach(field => {
-        if (!field.value || (field.type === 'select-one' && field.value === '')) {
-          valid = false;
-          field.style.borderColor = 'red';
-        } else {
-          field.style.borderColor = '';
-        }
-      });
-      // Prüfen, ob Bilder vorhanden sind
-      if (images.length === 0) {
-        valid = false;
-        const preview = document.getElementById('bildvorschau');
-        if (!preview.querySelector('.error')) {
-          const errorDiv = document.createElement('div');
-          errorDiv.classList.add('error');
-          errorDiv.textContent = 'Keine Bilder ausgewählt!';
-          preview.insertBefore(errorDiv, preview.firstChild);
-        }
-      }
-      return valid;
-    }
-
-    // Bilder verarbeiten und in 2×4-Galerie anzeigen
+    // Bilder-Handling
+    let images = [];
+    const MAX_IMAGES = 8;
     const bildanhangInput = document.getElementById('bildanhang');
     const bildvorschau = document.getElementById('bildvorschau');
 
@@ -477,7 +456,7 @@
       images = [];
       bildvorschau.innerHTML = '';
 
-      await Promise.all(Array.from(e.target.files).slice(0, MAX_IMAGES).map(file =>
+      await Promise.all(Array.from(e.target.files).map(file =>
         new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = (ev) => {
@@ -503,12 +482,36 @@
       ));
     });
 
-    // Erzeugt ein PDF, indem der gesamte Inhalt proportional auf eine A4-Seite skaliert wird
+    // Formularvalidierung
+    function validateForm() {
+      let valid = true;
+      const form = document.getElementById('pdfForm');
+      const requiredFields = form.querySelectorAll('[required]');
+      requiredFields.forEach(field => {
+        if (!field.value || (field.type === 'select-one' && field.value === '')) {
+          valid = false;
+          field.style.borderColor = 'red';
+        } else {
+          field.style.borderColor = '';
+        }
+      });
+      if (images.length === 0) {
+        valid = false;
+        const preview = document.getElementById('bildvorschau');
+        if (!preview.querySelector('.error')) {
+          const errorDiv = document.createElement('div');
+          errorDiv.classList.add('error');
+          errorDiv.textContent = 'Keine Bilder ausgewählt!';
+          preview.insertBefore(errorDiv, preview.firstChild);
+        }
+      }
+      return valid;
+    }
+
+    // PDF-Erzeugung per html2canvas + jsPDF
     async function createPDF() {
       const content = document.getElementById('content');
       const originalStyles = { ...content.style };
-
-      // A4-Stile erzwingen
       Object.assign(content.style, {
         width: '210mm',
         minHeight: '297mm',
@@ -534,15 +537,14 @@
       const imgHeight = canvasHeight * scale;
       const marginX = (pdfWidth - imgWidth) / 2;
       const marginY = (pdfHeight - imgHeight) / 2;
-
       pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
 
       Object.assign(content.style, originalStyles);
       return pdf;
     }
 
-    // PDF generieren und speichern
-    async function generatePDFFile() {
+    // PDF generieren
+    document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
       if (!validateForm()) {
         alert('Bitte alle Pflichtfelder (*) ausfüllen und Bilder hinzufügen');
         return;
@@ -561,9 +563,32 @@
         pdfButton.disabled = false;
         document.getElementById('loading').style.display = 'none';
       }
+    });
+
+    // Firmennews laden & anzeigen
+    function loadNews() {
+      const newsListEl = document.getElementById('newsList');
+      let newsArray = JSON.parse(localStorage.getItem('firmennews')) || [];
+      if (newsArray.length === 0) {
+        newsListEl.innerHTML = 'Keine News vorhanden.';
+        return;
+      }
+      // Neueste zuerst
+      newsArray = newsArray.reverse();
+      let html = '';
+      newsArray.forEach(item => {
+        html += `
+          <div class="newsItem">
+            <div class="newsTitle">${item.title}</div>
+            <div class="newsDate">Datum: ${item.date}</div>
+            <div class="newsText">${item.text}</div>
+          </div>
+        `;
+      });
+      newsListEl.innerHTML = html;
     }
 
-    document.getElementById('pdfButtonGenerate').addEventListener('click', generatePDFFile);
+    loadNews(); // Beim Laden der Seite News anzeigen
   </script>
 </body>
 </html>
