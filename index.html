@@ -2,11 +2,11 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <!-- Wichtig: responsive Viewport-Anpassung für Smartphones -->
+  <!-- Responsives Viewport für Smartphone -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz – A4 PDF Demo</title>
   
-  <!-- jsPDF & html2canvas (CDN) -->
+  <!-- jsPDF & html2canvas (CDNs) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   
@@ -14,8 +14,8 @@
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --text-height: 25%;   /* Oberer Bereich: 25% für Texteingabe */
-      --image-height: 75%;  /* Unterer Bereich: 75% für Bilder */
+      --text-height: 25%;  /* Oberer Bereich: ~25% */
+      --image-height: 75%; /* Unterer Bereich: ~75% */
       --bg-color: #f0f3f5;
       --content-bg: #ffffff;
       --text-color: #2c3e50;
@@ -35,26 +35,25 @@
       margin-bottom: 20px;
       font-weight: 500;
     }
-    /* Container für den A4-Bereich – im Browser responsiv (auf großen Bildschirmen als A4 dargestellt) */
+    /* Container für den PDF-Inhalt – im Browser flexibel, aber für PDF fix auf A4 */
     #pdfContent {
-      width: 100%; /* Auf kleinen Bildschirmen 100% Breite */
+      width: 100%;
       max-width: var(--a4-width);
-      height: auto; /* Im Browser flexibel */
+      margin: 0 auto;
       background: var(--content-bg);
       border: 1px solid var(--border-color);
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-      margin: 0 auto;
       display: flex;
       flex-direction: column;
     }
-    /* Oberer Bereich: Formulareingaben (25% des A4-Konzepts) */
+    /* Oberer Bereich: Formulareingaben (25%) */
     #textSection {
       flex: 0 0 var(--text-height);
       padding: 10px 15px;
       overflow-y: auto;
       border-bottom: 1px solid var(--border-color);
     }
-    /* Unterer Bereich: Bildvorschau (75% des A4-Konzepts) */
+    /* Unterer Bereich: Bilder (75%) */
     #imageSection {
       flex: 0 0 var(--image-height);
       padding: 10px 15px;
@@ -65,7 +64,7 @@
       justify-content: center;
       align-content: flex-start;
     }
-    /* Formularelemente im Textbereich */
+    /* Formular-Grid */
     .form-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -88,12 +87,10 @@
       box-shadow: 0 0 8px rgba(33,150,243,0.3);
       outline: none;
     }
-    /* Dynamische Bereiche: Version und Fertigungsauftrag */
-    #versionContainer,
-    #fertigungContainer {
+    /* Dynamische Felder: Version & Fertigungsauftrag */
+    #versionContainer, #fertigungContainer {
       margin-top: 8px;
     }
-    /* Dynamische Werkzeug-Eingabe */
     #werkzeugeContainer {
       border: 1px solid var(--border-color);
       padding: 8px;
@@ -116,7 +113,7 @@
     .werkzeugBtn:hover {
       background: var(--accent-dark);
     }
-    /* Bild-Container im A4-Unterbereich (PDF) – für mobile Ansichten im Browser ähnlich */
+    /* Bild-Container im PDF-Bereich */
     .imgContainer {
       width: 200px;
       height: 200px;
@@ -132,7 +129,7 @@
       max-width: 100%;
       max-height: 100%;
     }
-    /* PDF-Button und Fehlermeldung */
+    /* PDF-Button & Fehlermeldung */
     button.actionButton {
       background: var(--accent-color);
       color: #fff;
@@ -181,7 +178,7 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    /* Responsive Anpassung für Smartphone */
+    /* Responsive Anpassungen für Smartphones */
     @media (max-width: 600px) {
       .form-grid {
         grid-template-columns: 1fr;
@@ -190,15 +187,18 @@
       #textSection, #imageSection {
         padding: 8px 10px;
       }
+      #pdfContent {
+        width: 100%;
+      }
     }
   </style>
 </head>
 <body>
   <h1>Technische Dokumentation S.Fritz</h1>
 
-  <!-- A4-Container (PDF-Inhalt) -->
+  <!-- A4-Container (Browser: responsiv, PDF: fix A4) -->
   <div id="pdfContent">
-    <!-- Oberer Bereich: Formular (25% Höhe) -->
+    <!-- Oberer Bereich: Formulareingaben (25%) -->
     <div id="textSection">
       <div class="form-grid">
         <div>
@@ -214,10 +214,12 @@
           </select>
         </div>
       </div>
+      <!-- Dynamisch: Version (Reklamation) -->
       <div id="versionContainer" style="display:none;">
         <label for="version">Version *</label>
         <input type="text" id="version">
       </div>
+      <!-- Dynamisch: Fertigungsauftrag -->
       <div id="fertigungContainer" style="display:none;">
         <label for="spanndruck">Spanndruck *</label>
         <input type="text" id="spanndruck">
@@ -273,18 +275,15 @@
       <label for="bemerkung">Bemerkungen *</label>
       <textarea id="bemerkung" rows="3"></textarea>
       <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
-      <div class="error" id="errorBox" style="display:none;">
-        Bitte alle Pflichtfelder (*) ausfüllen und mindestens ein Bild hochladen!
-      </div>
+      <div class="error" id="errorBox" style="display:none;">Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!</div>
     </div>
-    
-    <!-- Unterer Bereich: Bilder (75% Höhe) -->
+    <!-- Unterer Bereich: Bilder (75%) -->
     <div id="imageSection">
-      <!-- Hier werden die Bilder dynamisch eingefügt -->
+      <!-- Dynamische Bildvorschau -->
     </div>
   </div>
 
-  <!-- Separates Upload-Feld für Bilder (nicht im PDF enthalten) -->
+  <!-- Bild-Upload-Feld (nicht im PDF, sondern nur Web-App) -->
   <div class="box" style="max-width:700px; margin:10px auto;">
     <label for="bildanhang">Bilder auswählen (max. 9) *</label>
     <input type="file" id="bildanhang" accept="image/*" multiple>
@@ -296,7 +295,7 @@
   <script>
     const { jsPDF } = window.jspdf;
     
-    // Dynamische Anzeige: Auftragstyp (Version vs. Fertigungsauftrag)
+    // Auftragstyp: Reklamation vs. Fertigungsauftrag
     const auftragstypSelect = document.getElementById('auftragstyp');
     const versionContainer = document.getElementById('versionContainer');
     const fertigungContainer = document.getElementById('fertigungContainer');
@@ -323,7 +322,7 @@
       }
     });
     
-    // Dynamische Werkzeug-Eingabe (Plus & Löschen)
+    // Dynamische Werkzeug-Eingabe
     document.addEventListener('click', function(e){
       if(e.target.classList.contains('addWerkzeugBtn')){
         const newRow = document.createElement('div');
@@ -342,11 +341,10 @@
     });
     
     // Bilder-Handling: Anzeige in #imageSection
-    const bildanhangInput = document.getElementById('bildanhang');
-    const imageSection = document.getElementById('imageSection');
     let images = [];
     const MAX_IMAGES = 9;
-    
+    const bildanhangInput = document.getElementById('bildanhang');
+    const imageSection = document.getElementById('imageSection');
     bildanhangInput.addEventListener('change', async (e) => {
       if(e.target.files.length > MAX_IMAGES){
         alert(`Maximal ${MAX_IMAGES} Bilder erlaubt!`);
@@ -375,7 +373,7 @@
       ));
     });
     
-    // Formularvalidierung: Prüfe alle Pflichtfelder
+    // Formularvalidierung: Prüfe Pflichtfelder
     function validateForm(){
       const kunde = document.getElementById('kunde').value.trim();
       const abnr = document.getElementById('abnr').value.trim();
@@ -387,7 +385,6 @@
       const datum = document.getElementById('datum').value.trim();
       const bemerkung = document.getElementById('bemerkung').value.trim();
       const errorBox = document.getElementById('errorBox');
-      
       if(!kunde || !abnr || !teile || !stueckzahl || !zeichnungsnummer ||
          !index || !verantwortlich || !datum || !bemerkung || images.length === 0){
         errorBox.style.display = 'block';
@@ -397,9 +394,9 @@
       return true;
     }
     
-    // Vor dem Rendern in PDF: Ersetze alle Formularelemente im Klon durch statischen Text
+    // Ersetze Formularelemente im Klon durch statischen Text
     function replaceFormElements(clone) {
-      // Ersetze Inputs
+      // Inputs
       const inputs = clone.querySelectorAll('input');
       inputs.forEach(input => {
         const span = document.createElement('span');
@@ -408,7 +405,7 @@
         span.style.fontFamily = getComputedStyle(input).fontFamily;
         input.parentNode.replaceChild(span, input);
       });
-      // Ersetze Textareas
+      // Textareas
       const textareas = clone.querySelectorAll('textarea');
       textareas.forEach(textarea => {
         const span = document.createElement('span');
@@ -417,7 +414,7 @@
         span.style.fontFamily = getComputedStyle(textarea).fontFamily;
         textarea.parentNode.replaceChild(span, textarea);
       });
-      // Ersetze Selects
+      // Selects
       const selects = clone.querySelectorAll('select');
       selects.forEach(select => {
         const span = document.createElement('span');
@@ -428,16 +425,16 @@
       });
     }
     
-    // PDF-Erstellung: Klone den A4-Bereich, ersetze Formularelemente und passe den Bildbereich an
+    // PDF-Erstellung
     async function createPDF(){
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
       
-      // Klone den #pdfContent-Bereich
+      // Klone #pdfContent
       const content = document.getElementById('pdfContent');
       const clone = content.cloneNode(true);
       
-      // Stelle den Klon exakt auf A4-Größe ein
+      // A4-Stile erzwingen
       clone.style.width = '210mm';
       clone.style.height = '297mm';
       clone.style.margin = '0';
@@ -447,15 +444,15 @@
       clone.style.top = '-10000px';
       document.body.appendChild(clone);
       
-      // Ersetze alle Formularelemente im Klon durch statischen Text, damit deren Werte im PDF erscheinen
+      // Formularelemente ersetzen (damit Werte im PDF erscheinen)
       replaceFormElements(clone);
       
-      // Passe den Bildbereich im Klon an: Anordnung als Grid
+      // Bildbereich im Klon anpassen
       const imageSectionClone = clone.querySelector('#imageSection');
-      imageSectionClone.innerHTML = "";
+      imageSectionClone.innerHTML = '';
       const n = images.length;
-      if(n === 1) {
-        // Nur ein Bild: Dieses füllt den gesamten Bildbereich aus
+      if(n === 1){
+        // Nur ein Bild => füllt kompletten Bereich
         const container = document.createElement('div');
         container.style.width = "100%";
         container.style.height = "100%";
@@ -468,8 +465,8 @@
         img.style.maxHeight = "100%";
         container.appendChild(img);
         imageSectionClone.appendChild(container);
-      } else if(n > 1) {
-        // Mehrere Bilder: Grid anordnen, idealerweise 3x3 bei 9 Bildern
+      } else if(n > 1){
+        // Mehrere Bilder => Grid
         const cols = Math.ceil(Math.sqrt(n));
         const rows = Math.ceil(n / cols);
         imageSectionClone.style.display = "grid";
@@ -492,10 +489,10 @@
         });
       }
       
-      // Warte kurz, damit sich das Layout des Klons stabilisiert
+      // Warte kurz
       await new Promise(r => setTimeout(r, 200));
       
-      // Erzeuge Canvas mittels html2canvas
+      // html2canvas
       const canvas = await html2canvas(clone, {
         scale: 2,
         useCORS: true,
@@ -503,7 +500,7 @@
       });
       document.body.removeChild(clone);
       
-      // PDF generieren
+      // PDF
       const imgData = canvas.toDataURL('image/jpeg', 0.8);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
@@ -536,18 +533,6 @@
       } finally {
         pdfButton.disabled = false;
         document.getElementById('loading').style.display = 'none';
-      }
-    });
-    
-    // Optional: Dark Mode Toggle
-    const darkModeToggle = document.getElementById('darkModeToggle');
-    darkModeToggle.addEventListener('click', () => {
-      if(document.documentElement.getAttribute('data-theme') === 'dark'){
-        document.documentElement.removeAttribute('data-theme');
-        darkModeToggle.textContent = 'Dark Mode';
-      } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
-        darkModeToggle.textContent = 'Light Mode';
       }
     });
   </script>
