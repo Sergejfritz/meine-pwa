@@ -2,9 +2,9 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <!-- Wichtig für responsives Layout auf Smartphones -->
+  <!-- Für Smartphone-Ansicht wichtig -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Technische Dokumentation S.Fritz – A4 PDF mit Tabellen-Layout</title>
+  <title>Technische Dokumentation S.Fritz – A4 PDF mit Tabellenlayout</title>
   
   <!-- jsPDF & html2canvas (CDNs) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -14,8 +14,8 @@
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --text-height: 25%;   /* oberer Bereich: 25% */
-      --image-height: 75%;  /* unterer Bereich: 75% */
+      --text-height: 25%;
+      --image-height: 75%;
       --bg-color: #f0f3f5;
       --content-bg: #ffffff;
       --text-color: #2c3e50;
@@ -35,7 +35,7 @@
       margin-bottom: 20px;
       font-weight: 500;
     }
-    /* A4-Container: Browser=flexibel, PDF=exakt A4 */
+    /* A4-Container: Im Browser responsive, beim PDF fix auf 210x297mm */
     #pdfContent {
       width: 100%;
       max-width: var(--a4-width);
@@ -46,14 +46,14 @@
       display: flex;
       flex-direction: column;
     }
-    /* Oberer Bereich: ~25% */
+    /* Oberer 25% Bereich: Tabelle */
     #textSection {
       flex: 0 0 var(--text-height);
       padding: 10px 15px;
       overflow-y: auto;
       border-bottom: 1px solid var(--border-color);
     }
-    /* Unterer Bereich: ~75% für Bilder */
+    /* Unterer 75% Bereich: Bilder */
     #imageSection {
       flex: 0 0 var(--image-height);
       padding: 10px 15px;
@@ -64,22 +64,28 @@
       justify-content: center;
       align-content: flex-start;
     }
-    /* Tabellenlayout für Felder: 4 Spalten = (Label,Input,Label,Input) pro Zeile */
+    /* Tabellenlayout: 2 Spalten, je (Label | Input) */
     #dataTable {
       width: 100%;
       border-collapse: collapse;
     }
     #dataTable th {
       text-align: left;
-      width: 25%;
       padding: 6px;
       font-weight: bold;
-    }
-    #dataTable td {
-      width: 25%;
-      padding: 6px;
+      width: 30%;
       vertical-align: top;
     }
+    #dataTable td {
+      padding: 6px;
+      vertical-align: top;
+      width: 70%;
+    }
+    /* Dynamische Felder als eigene TRs */
+    #versionRow, #fertigungRow {
+      display: none;
+    }
+    /* Input-Styles */
     input, select, textarea {
       width: 100%;
       padding: 6px;
@@ -89,23 +95,19 @@
     }
     input:focus, select:focus, textarea:focus {
       border-color: var(--accent-color);
-      box-shadow: 0 0 8px rgba(33,150,243,0.3);
       outline: none;
+      box-shadow: 0 0 8px rgba(33,150,243,0.3);
     }
-    /* Dynamische Bereiche (Version & Fertigungsauftrag) */
-    #versionRow, #fertigungRow {
-      display: none;
-    }
+    /* Werkzeug-Eingabe */
     #werkzeugeContainer {
       border: 1px solid var(--border-color);
-      padding: 8px;
+      padding: 6px;
       border-radius: 6px;
-      margin-top: 6px;
     }
     .werkzeugRow {
       display: flex;
       gap: 8px;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
     }
     .werkzeugBtn {
       background: var(--accent-color);
@@ -118,11 +120,7 @@
     .werkzeugBtn:hover {
       background: var(--accent-dark);
     }
-    /* Bemerkungen extra Zeile (span 3 columns) */
-    #bemerkungRow td {
-      padding-top: 6px;
-    }
-    /* Bild-Container */
+    /* Bild-Container im PDF-Bereich */
     .imgContainer {
       width: 200px;
       height: 200px;
@@ -187,24 +185,18 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
-    /* Responsive Anpassungen für Smartphones */
+    /* Responsive: Smartphone */
     @media (max-width: 600px) {
       #pdfContent {
         width: 100%;
       }
       #dataTable th, #dataTable td {
-        width: 50%;
         display: block;
+        width: 100%;
       }
       #dataTable tr {
         display: flex;
         flex-wrap: wrap;
-      }
-      #dataTable th {
-        flex: 0 0 100%;
-      }
-      #dataTable td {
-        flex: 0 0 100%;
       }
     }
   </style>
@@ -214,13 +206,15 @@
 
   <!-- A4-Bereich -->
   <div id="pdfContent">
-    <!-- Oberer Bereich (25%): Tabellenlayout für Eingaben -->
+    <!-- Oberer Bereich: Tabellen-Layout (25%) -->
     <div id="textSection">
       <table id="dataTable">
         <tr>
-          <th>Kunde (Firma)*</th>
+          <th>Kunde (Firma) *</th>
           <td><input type="text" id="kunde" placeholder="z.B. Mustermann GmbH"></td>
-          <th>Auftragstyp*</th>
+        </tr>
+        <tr>
+          <th>Auftragstyp *</th>
           <td>
             <select id="auftragstyp">
               <option value="">Bitte wählen</option>
@@ -231,17 +225,16 @@
         </tr>
         <!-- Dynamisch: Version (nur bei Reklamation) -->
         <tr id="versionRow">
-          <th>Version*</th>
-          <td colspan="3"><input type="text" id="version"></td>
+          <th>Version *</th>
+          <td><input type="text" id="version"></td>
         </tr>
-        <!-- Dynamisch: Fertigungsauftrag (Spanndruck + Werkzeuge) -->
+        <!-- Dynamisch: Fertigungsauftrag (Spanndruck & Werkzeuge) -->
         <tr id="fertigungRow">
-          <th>Spanndruck*</th>
+          <th>Spanndruck *</th>
           <td>
             <input type="text" id="spanndruck">
-          </td>
-          <th>Werkzeuge</th>
-          <td>
+            <br><br>
+            <label>Werkzeuge</label>
             <div id="werkzeugeContainer">
               <div class="werkzeugRow">
                 <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
@@ -252,38 +245,43 @@
           </td>
         </tr>
         <tr>
-          <th>Maschine*</th>
+          <th>Maschine *</th>
           <td><input type="text" id="maschine"></td>
-          <th>AB‑Nr*</th>
+        </tr>
+        <tr>
+          <th>AB‑Nr *</th>
           <td><input type="text" id="abnr"></td>
         </tr>
         <tr>
-          <th>Zeichnungsnr.*</th>
+          <th>Zeichnungsnr. *</th>
           <td><input type="text" id="zeichnungsnummer"></td>
-          <th>Index*</th>
+        </tr>
+        <tr>
+          <th>Index *</th>
           <td><input type="text" id="index"></td>
         </tr>
         <tr>
-          <th>Verantwortlich*</th>
+          <th>Verantwortlich *</th>
           <td><input type="text" id="verantwortlich"></td>
-          <th>Datum*</th>
+        </tr>
+        <tr>
+          <th>Datum *</th>
           <td><input type="date" id="datum"></td>
         </tr>
         <tr>
-          <th>Benennung d. Teile*</th>
+          <th>Benennung der Teile *</th>
           <td><input type="text" id="teilebenennung"></td>
-          <th>Stückzahl*</th>
+        </tr>
+        <tr>
+          <th>Stückzahl *</th>
           <td><input type="number" id="stueckzahl"></td>
         </tr>
-        <!-- Bemerkungen in einer eigenen Zeile -->
-        <tr id="bemerkungRow">
-          <th>Bemerkungen*</th>
-          <td colspan="3">
-            <textarea id="bemerkung" rows="3" style="width: 100%;"></textarea>
-          </td>
+        <tr>
+          <th>Bemerkungen *</th>
+          <td><textarea id="bemerkung" rows="3" style="width:100%;"></textarea></td>
         </tr>
       </table>
-      <!-- PDF-Button & Fehlermeldung -->
+      <!-- PDF generieren Button -->
       <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
       <div class="error" id="errorBox" style="display:none;">
         Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!
@@ -291,9 +289,7 @@
     </div>
 
     <!-- Unterer Bereich (75%): Bilder -->
-    <div id="imageSection">
-      <!-- Dynamische Bildvorschau -->
-    </div>
+    <div id="imageSection"></div>
   </div>
 
   <!-- Upload-Feld (nicht im PDF) -->
@@ -307,8 +303,8 @@
 
   <script>
     const { jsPDF } = window.jspdf;
-
-    // Dynamische Auftragstyp-Anzeige
+    
+    // Auftragstyp: Reklamation vs. Fertigungsauftrag
     const auftragstypSelect = document.getElementById('auftragstyp');
     const versionRow = document.getElementById('versionRow');
     const fertigungRow = document.getElementById('fertigungRow');
@@ -399,7 +395,7 @@
       const datum = document.getElementById('datum').value.trim();
       const bemerkung = document.getElementById('bemerkung').value.trim();
       const errorBox = document.getElementById('errorBox');
-
+      
       if(!kunde || !abnr || !teile || !stueckzahl || !zeichnungsnummer ||
          !index || !verantwortlich || !datum || !bemerkung || images.length === 0){
         errorBox.style.display = 'block';
@@ -409,34 +405,25 @@
       return true;
     }
 
-    // Ersetze alle Formularelemente (Inputs, Textareas, Selects) durch statischen Text
+    // Ersetze Formularelemente im Klon durch statischen Text
     function replaceFormElements(clone) {
-      // Inputs
       const inputs = clone.querySelectorAll('input');
       inputs.forEach(input => {
         const span = document.createElement('span');
         span.textContent = input.value;
-        span.style.fontSize = getComputedStyle(input).fontSize;
-        span.style.fontFamily = getComputedStyle(input).fontFamily;
         input.parentNode.replaceChild(span, input);
       });
-      // Textareas
       const textareas = clone.querySelectorAll('textarea');
       textareas.forEach(textarea => {
         const span = document.createElement('span');
         span.textContent = textarea.value;
-        span.style.fontSize = getComputedStyle(textarea).fontSize;
-        span.style.fontFamily = getComputedStyle(textarea).fontFamily;
         textarea.parentNode.replaceChild(span, textarea);
       });
-      // Selects
       const selects = clone.querySelectorAll('select');
       selects.forEach(select => {
         const span = document.createElement('span');
-        const selIndex = select.selectedIndex;
-        span.textContent = selIndex >= 0 ? select.options[selIndex].text : "";
-        span.style.fontSize = getComputedStyle(select).fontSize;
-        span.style.fontFamily = getComputedStyle(select).fontFamily;
+        const idx = select.selectedIndex;
+        span.textContent = idx >= 0 ? select.options[idx].text : "";
         select.parentNode.replaceChild(span, select);
       });
     }
@@ -445,12 +432,12 @@
     async function createPDF(){
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF('p', 'mm', 'a4');
-
+      
       // Klone #pdfContent
       const content = document.getElementById('pdfContent');
       const clone = content.cloneNode(true);
-
-      // A4-Stile erzwingen
+      
+      // Fixiere A4-Stile
       clone.style.width = '210mm';
       clone.style.height = '297mm';
       clone.style.margin = '0';
@@ -459,16 +446,16 @@
       clone.style.position = 'absolute';
       clone.style.top = '-10000px';
       document.body.appendChild(clone);
-
-      // Formularelemente durch statischen Text ersetzen
+      
+      // Ersetze Formularelemente
       replaceFormElements(clone);
-
-      // Bildbereich anpassen
+      
+      // Bildbereich im Klon anpassen
       const imageSectionClone = clone.querySelector('#imageSection');
       imageSectionClone.innerHTML = '';
       const n = images.length;
       if(n === 1){
-        // 1 Bild => füllt gesamten Bildbereich
+        // 1 Bild => füllt gesamten Bereich
         const container = document.createElement('div');
         container.style.width = "100%";
         container.style.height = "100%";
@@ -507,7 +494,7 @@
 
       // Warte kurz
       await new Promise(r => setTimeout(r, 200));
-
+      
       // html2canvas
       const canvas = await html2canvas(clone, {
         scale: 2,
@@ -528,7 +515,6 @@
       const marginX = (pdfWidth - imgWidth) / 2;
       const marginY = (pdfHeight - imgHeight) / 2;
       pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
-
       return pdf;
     }
 
@@ -541,7 +527,6 @@
       const pdfButton = document.getElementById('pdfButtonGenerate');
       pdfButton.disabled = true;
       document.getElementById('loading').style.display = 'block';
-
       try {
         const pdf = await createPDF();
         pdf.save(`Dokument_${new Date().toISOString().slice(0,10)}.pdf`);
