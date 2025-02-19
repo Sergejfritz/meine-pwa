@@ -4,21 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz (Werkzeug dynamisch, breite Bilderanzeige)</title>
-  
+
   <!-- Manifest einbinden -->
   <link rel="manifest" href="manifest.json">
 
   <!-- jsPDF & html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-  
+
   <style>
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      /* Oben/Unten 15mm, Links/Rechts 0 – damit der Bilderbereich die volle Breite nutzt */
       --content-padding: 15mm 0;
-      /* Light Theme */
       --bg-color: #f0f3f5;
       --content-bg: #ffffff;
       --text-color: #2c3e50;
@@ -48,7 +46,6 @@
       color: var(--text-color);
     }
 
-    /* Dark Mode Toggle Button */
     #darkModeToggle {
       position: fixed;
       top: 10px;
@@ -62,7 +59,6 @@
       z-index: 1100;
     }
 
-    /* A4-Container – volle Breite, Padding nur oben/unten */
     #content {
       width: var(--a4-width);
       min-height: var(--a4-height);
@@ -72,7 +68,6 @@
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
 
-    /* Formularelemente erhalten links/rechts ein zusätzliches Padding */
     .form-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
@@ -97,7 +92,6 @@
       outline: none;
     }
 
-    /* Bilderbereich: volle Seitenbreite */
     #bildvorschau {
       width: 100%;
       display: grid;
@@ -130,7 +124,6 @@
       transform: scale(1.05);
     }
 
-    /* Volles Textfeld für Bemerkungen */
     #bemerkung {
       width: 100%;
       padding: 10px;
@@ -212,7 +205,6 @@
       box-shadow: 0 4px 12px rgba(0,0,0,0.2);
     }
 
-    /* Dynamische Werkzeug-Eingabe */
     #werkzeugeContainer {
       border: 1px solid var(--border-color);
       padding: 8px;
@@ -240,19 +232,18 @@
   </style>
 </head>
 <body>
-  <button id="darkModeToggle">Dark Mode</button>
+  <button id="darkModeToggle" aria-label="Dark Mode Toggle">Dark Mode</button>
 
   <div id="content">
     <h1 style="margin:0 0 25px 0; border-bottom: 2px solid var(--border-color); padding-bottom: 15px; padding: 0 15mm;">
       Technische Dokumentation S.Fritz
     </h1>
 
-    <form id="pdfForm">
-      <!-- 1. Zeile: Auftragstyp & Maschine -->
+    <form id="pdfForm" aria-labelledby="formTitle">
       <div class="form-grid">
         <div>
           <label for="auftragstyp">Auftragstyp *</label>
-          <select id="auftragstyp" required>
+          <select id="auftragstyp" required aria-required="true">
             <option value="">Bitte wählen</option>
             <option value="Reklamation">Reklamation</option>
             <option value="Fertigungsauftrag">Fertigungsauftrag</option>
@@ -260,104 +251,101 @@
         </div>
         <div>
           <label for="maschine">Maschine *</label>
-          <input type="text" id="maschine" required>
+          <input type="text" id="maschine" required aria-required="true">
         </div>
       </div>
 
-      <!-- 2. Zeile: AB‑Nr -->
       <div class="form-grid">
         <div>
           <label for="abnr">AB‑Nr *</label>
-          <input type="text" id="abnr" required>
+          <input type="text" id="abnr" required aria-required="true">
         </div>
       </div>
 
-      <!-- 3. Zeile: Zeichnungsnummer & Index -->
       <div class="form-grid">
         <div>
           <label for="zeichnungsnummer">Zeichnungsnummer *</label>
-          <input type="text" id="zeichnungsnummer" required>
+          <input type="text" id="zeichnungsnummer" required aria-required="true">
         </div>
         <div id="container_index">
           <label for="index">Index *</label>
-          <input type="text" id="index" required>
+          <input type="text" id="index" required aria-required="true">
         </div>
       </div>
 
-      <!-- 4. Zeile: Verantwortlich & Datum -->
       <div class="form-grid">
         <div>
           <label for="verantwortlich">Verantwortlich *</label>
-          <input type="text" id="verantwortlich" required>
+          <input type="text" id="verantwortlich" required aria-required="true">
         </div>
         <div>
           <label for="datum">Datum *</label>
-          <input type="date" id="datum" required>
+          <input type="date" id="datum" required aria-required="true">
         </div>
       </div>
 
-      <!-- 5. Zeile: Bedingte Felder -->
-      <!-- Für Reklamation: Version -->
+      <!-- Neue Zeile: Kunde -->
+      <div class="form-grid">
+        <div>
+          <label for="kunde">Kunde *</label>
+          <input type="text" id="kunde" required aria-required="true">
+        </div>
+      </div>
+
       <div id="container_version" class="form-grid" style="display:none;">
         <div>
           <label for="version">Version *</label>
-          <input type="text" id="version">
+          <input type="text" id="version" aria-required="true">
         </div>
       </div>
 
-      <!-- Für Fertigungsauftrag: Werkzeuge (dynamisch) & Spanndruck -->
       <div id="container_fertigung" class="form-grid" style="display:none;">
         <div>
           <label>Werkzeuge</label>
           <div id="werkzeugeContainer">
             <div class="werkzeugRow">
-              <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
-              <button type="button" class="werkzeugBtn addWerkzeugBtn">+</button>
-              <button type="button" class="werkzeugBtn deleteWerkzeugBtn">–</button>
+              <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben" aria-label="Werkzeug eingeben">
+              <button type="button" class="werkzeugBtn addWerkzeugBtn" aria-label="Werkzeug hinzufügen">+</button>
+              <button type="button" class="werkzeugBtn deleteWerkzeugBtn" aria-label="Werkzeug löschen">–</button>
             </div>
           </div>
         </div>
         <div>
           <label for="spanndruck">Spanndruck *</label>
-          <input type="text" id="spanndruck" required>
+          <input type="text" id="spanndruck" required aria-required="true">
         </div>
       </div>
 
-      <!-- 6. Zeile: Benennung der Teile & Stückzahl -->
       <div class="form-grid">
         <div>
           <label for="teilebenennung">Benennung der Teile *</label>
-          <input type="text" id="teilebenennung" required>
+          <input type="text" id="teilebenennung" required aria-required="true">
         </div>
         <div>
           <label for="stueckzahl">Stückzahl *</label>
-          <input type="number" id="stueckzahl" required>
+          <input type="number" id="stueckzahl" required aria-required="true">
         </div>
       </div>
 
-      <!-- 7. Zeile: Bemerkungen – Textfeld in voller Breite -->
       <div style="padding: 0 15mm;">
         <label for="bemerkung">📝 Bemerkungen *</label>
-        <textarea id="bemerkung" rows="5" required style="width: 100%;"></textarea>
+        <textarea id="bemerkung" rows="5" required aria-required="true" style="width: 100%;"></textarea>
       </div>
 
-      <!-- 8. Zeile: Bildanhang (max. 8) -->
       <div style="padding: 0 15mm;">
         <label for="bildanhang">🖼️ Bilder hinzufügen (max. 8) *</label>
-        <input type="file" id="bildanhang" accept="image/*" multiple required>
+        <input type="file" id="bildanhang" accept="image/*" multiple required aria-required="true">
       </div>
 
-      <!-- Bilderrahmen, der die volle Seitenbreite nutzt -->
       <div id="bildvorschau"></div>
     </form>
   </div>
 
-  <!-- PDF generieren Button -->
   <div style="text-align:center;">
-    <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
+    <button id="pdfButtonGenerate" class="actionButton" aria-label="PDF generieren">📄 PDF generieren</button>
   </div>
 
-  <div id="loading">⏳ PDF wird erstellt...</div>
+  <div id="loading" aria-live="polite">⏳ PDF wird erstellt...</div>
 
   <script>
     const { jsPDF } = window.jspdf;
@@ -391,22 +379,10 @@
 
     auftragstypSelect.addEventListener('change', function() {
       const type = this.value;
-      if(type === "Fertigungsauftrag") {
-        containerVersion.style.display = 'none';
-        containerFertigung.style.display = 'grid';
-        versionInput.required = false;
-        spanndruckInput.required = true;
-      } else if(type === "Reklamation") {
-        containerVersion.style.display = 'grid';
-        containerFertigung.style.display = 'none';
-        versionInput.required = true;
-        spanndruckInput.required = false;
-      } else {
-        containerVersion.style.display = 'none';
-        containerFertigung.style.display = 'none';
-        versionInput.required = false;
-        spanndruckInput.required = false;
-      }
+      containerVersion.style.display = type === "Reklamation" ? 'grid' : 'none';
+      containerFertigung.style.display = type === "Fertigungsauftrag" ? 'grid' : 'none';
+      versionInput.required = type === "Reklamation";
+      spanndruckInput.required = type === "Fertigungsauftrag";
     });
 
     // Dynamische Werkzeug-Eingabe (Plus- und Löschen-Buttons)
@@ -415,9 +391,9 @@
         const newRow = document.createElement('div');
         newRow.className = 'werkzeugRow';
         newRow.innerHTML = `
-          <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben">
-          <button type="button" class="werkzeugBtn addWerkzeugBtn">+</button>
-          <button type="button" class="werkzeugBtn deleteWerkzeugBtn">–</button>
+          <input type="text" name="werkzeuge[]" placeholder="Werkzeug eingeben" aria-label="Werkzeug eingeben">
+          <button type="button" class="werkzeugBtn addWerkzeugBtn" aria-label="Werkzeug hinzufügen">+</button>
+          <button type="button" class="werkzeugBtn deleteWerkzeugBtn" aria-label="Werkzeug löschen">–</button>
         `;
         e.target.parentElement.parentElement.appendChild(newRow);
       }
