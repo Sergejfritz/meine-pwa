@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <title>Werkzeugverwaltung</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+    }
+    form {
+      background: #fff;
+      padding: 15px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      max-width: 500px;
+      margin: 0 auto 20px auto;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      margin-top: 4px;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border: none;
+      background: #2196F3;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1976D2;
+    }
+    #inventoryList .item {
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .itemImg {
+      max-width: 150px;
+      max-height: 150px;
+      display: block;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Werkzeugverwaltung</h1>
+  <p><a href="index.html">Zurück zur Dokumentation</a></p>
+  <form id="toolForm">
+    <label>Kategorie*
+      <select id="category" required>
+        <option value="">Bitte wählen</option>
+        <option value="Werkzeug">Werkzeug</option>
+        <option value="Platte">Platte</option>
+        <option value="Bohrer">Bohrer</option>
+        <option value="Sonstiges">Sonstiges</option>
+      </select>
+    </label>
+    <label>Name*<input type="text" id="name" required></label>
+    <label>Menge*<input type="number" id="qty" required></label>
+    <label>Beschreibung<textarea id="desc" rows="3"></textarea></label>
+    <label>Bild<input type="file" id="image" accept="image/*"></label>
+    <button type="submit">Hinzufügen</button>
+  </form>
+  <div id="inventoryList"></div>
+  <script>
+    let inventory = JSON.parse(localStorage.getItem('inventory')) || [];
+    const inventoryList = document.getElementById('inventoryList');
+    function render(){
+      inventoryList.innerHTML = '';
+      inventory.forEach((item, index) => {
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.innerHTML = `<h3>${item.name}</h3>
+        <p>Kategorie: ${item.category}</p>
+        <p>Menge: ${item.qty}</p>
+        <p>${item.desc || ''}</p>`;
+        if(item.image){
+          const img = document.createElement('img');
+          img.src = item.image;
+          img.alt = item.name;
+          img.className = 'itemImg';
+          div.appendChild(img);
+        }
+        const btn = document.createElement('button');
+        btn.textContent = 'Löschen';
+        btn.dataset.idx = index;
+        div.appendChild(btn);
+        inventoryList.appendChild(div);
+      });
+    }
+    render();
+    document.getElementById('toolForm').addEventListener('submit', function(e){
+      e.preventDefault();
+      const category = document.getElementById('category').value.trim();
+      const name = document.getElementById('name').value.trim();
+      const qty = document.getElementById('qty').value.trim();
+      const desc = document.getElementById('desc').value.trim();
+      const fileInput = document.getElementById('image');
+      if(!category || !name || !qty){
+        alert('Bitte Kategorie, Name und Menge angeben.');
+        return;
+      }
+      const addItem = (imgData) => {
+        inventory.push({category, name, qty, desc, image: imgData});
+        localStorage.setItem('inventory', JSON.stringify(inventory));
+        render();
+        this.reset();
+      };
+      if(fileInput.files && fileInput.files[0]){
+        const reader = new FileReader();
+        reader.onload = () => addItem(reader.result);
+        reader.readAsDataURL(fileInput.files[0]);
+      } else {
+        addItem('');
+      }
+    });
+    inventoryList.addEventListener('click', function(e){
+      if(e.target.tagName.toLowerCase() === 'button'){
+        const idx = parseInt(e.target.dataset.idx, 10);
+        inventory.splice(idx, 1);
+        localStorage.setItem('inventory', JSON.stringify(inventory));
+        render();
+      }
+    });
+  </script>
+</body>
+</html>
