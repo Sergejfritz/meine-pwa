@@ -2,124 +2,657 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <title>Admin-Bereich (Firmennews)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Technische Dokumentation S.Fritz – PDF Export</title>
+
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
   <style>
+    :root {
+      --a4-width: 210mm;
+      --a4-height: 297mm;
+      --bg-color: #eef2f7;
+      --content-bg: #ffffff;
+      --text-color: #333;
+      --border-color: #ccc;
+      --accent-color: #005288;
+      --accent-dark: #003d5b;
+      --font-family: 'Roboto', sans-serif;
+    }
     body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      background: #f0f3f5;
+      margin: 0;
+      padding: 10px;
+      background: var(--bg-color);
+      font-family: var(--font-family);
+      color: var(--text-color);
     }
-    h1, h2 {
-      color: #2c3e50;
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 500;
+      color: var(--accent-color);
     }
-    .login, .admin-panel {
-      border: 1px solid #ccc;
-      padding: 20px;
+
+    #uiContainer {
+      max-width: 700px;
+      margin: 0 auto 20px auto;
+      background: var(--content-bg);
+      padding: 15px;
+      border: 1px solid var(--border-color);
       border-radius: 6px;
-      max-width: 400px;
-      margin: 0 auto 20px;
-      background: #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-    label {
+    #uiContainer .field { margin-bottom: 12px; }
+    #uiContainer label {
       display: block;
-      margin: 10px 0 5px;
-      color: #333;
+      font-weight: bold;
+      margin-bottom: 4px;
     }
-    input[type="text"], input[type="password"], textarea {
+    #uiContainer input,
+    #uiContainer select,
+    #uiContainer textarea {
       width: 100%;
       padding: 8px;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
       box-sizing: border-box;
-      margin-bottom: 8px;
     }
-    button {
-      margin-top: 10px;
-      padding: 10px 15px;
-      background: #2196F3;
+    #uiContainer input:focus,
+    #uiContainer select:focus,
+    #uiContainer textarea:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 8px rgba(33,150,243,0.3);
+      outline: none;
+    }
+    button.actionButton {
+      background: var(--accent-color);
       color: #fff;
       border: none;
+      padding: 10px 15px;
       border-radius: 4px;
       cursor: pointer;
+      display: block;
+      margin: 15px auto;
+      font-size: 16px;
     }
-    button:hover {
-      background: #1976D2;
+    button.actionButton:hover { background: var(--accent-dark); }
+
+    button.shareButton {
+      background: #25D366;
+      color: #fff;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: block;
+      margin: 10px auto;
+      font-size: 16px;
     }
-    .info {
-      color: #666;
-      font-size: 0.9em;
+    button.shareButton:hover { background: #1ebe57; }
+
+    .error {
+      color: #b00020;
+      font-weight: 700;
+      text-align: center;
+      margin-top: 10px;
+      line-height: 1.2;
     }
-    .hidden {
+
+    #uploadContainer {
+      max-width: 700px;
+      margin: 0 auto 20px auto;
+      text-align: center;
+    }
+    #uiImagePreview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+      justify-content: center;
+    }
+    .previewImg {
+      width: 100px;
+      height: 100px;
+      object-fit: cover;
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+    }
+
+    #loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.85);
+      color: #fff;
+      padding: 18px 28px;
+      border-radius: 10px;
+      font-size: 1.1em;
       display: none;
+      z-index: 9999;
+    }
+    #loading::after {
+      content: "";
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 600px) {
+      #uiContainer { width: 100%; }
     }
   </style>
 </head>
+
 <body>
+  <h1>Technische Dokumentation S.Fritz</h1>
 
-  <h1>Admin-Bereich: Firmennews verwalten</h1>
+  <div id="uiContainer">
+    <div class="field">
+      <label for="auftragstyp">Auftragstyp *</label>
+      <select id="auftragstyp">
+        <option value="">Bitte wählen</option>
+        <option value="Reklamation">Reklamation</option>
+        <option value="Fertigungsauftrag">Fertigungsauftrag</option>
+      </select>
+    </div>
 
-  <!-- Fake-Login-Bereich -->
-  <div class="login" id="loginBox">
-    <h2>Admin-Login</h2>
-    <label for="adminUser">Benutzername</label>
-    <input type="text" id="adminUser" placeholder="z.B. admin">
-    <label for="adminPass">Passwort</label>
-    <input type="password" id="adminPass" placeholder="z.B. 123">
-    <button id="loginBtn">Login</button>
-    <p class="info">
-      Achtung: Dies ist kein echtes sicheres Login, sondern nur eine Demo!
-      <br>Benutzer: <code>admin</code> / Passwort: <code>8468</code>
-    </p>
+    <div class="field">
+      <label for="kunde">Kunde (Firma) *</label>
+      <input type="text" id="kunde" placeholder="z.B. Mustermann GmbH">
+    </div>
+
+    <div class="field">
+      <label for="maschine">Maschine *</label>
+      <input type="text" id="maschine">
+    </div>
+
+    <div class="field">
+      <label for="abnr">AB-Nr *</label>
+      <input type="text" id="abnr">
+    </div>
+
+    <div class="field">
+      <label for="zeichnungsnummer">Zeichnungsnr. *</label>
+      <input type="text" id="zeichnungsnummer">
+    </div>
+
+    <div class="field">
+      <label for="index">Index *</label>
+      <input type="text" id="index">
+    </div>
+
+    <div class="field">
+      <label for="verantwortlich">Verantwortlich *</label>
+      <input type="text" id="verantwortlich">
+    </div>
+
+    <div class="field">
+      <label for="datum">Datum *</label>
+      <input type="date" id="datum">
+    </div>
+
+    <div class="field">
+      <label for="teilebenennung">Benennung der Teile *</label>
+      <input type="text" id="teilebenennung">
+    </div>
+
+    <div class="field">
+      <label for="stueckzahl">Stückzahl *</label>
+      <input type="number" id="stueckzahl" min="1" step="1">
+    </div>
+
+    <div class="field" id="versionField" style="display:none;">
+      <label for="version">Version *</label>
+      <input type="text" id="version">
+    </div>
+
+    <div class="field" id="fertigungField" style="display:none;">
+      <label for="spanndruck">Spanndruck *</label>
+      <input type="text" id="spanndruck">
+    </div>
+
+    <div class="field">
+      <label for="bemerkung">Bemerkungen *</label>
+      <textarea id="bemerkung" rows="3"></textarea>
+    </div>
+
+    <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
+    <button id="whatsAppShareButton" class="shareButton">📤 PDF teilen</button>
+
+    <div class="error" id="errorBox" style="display:none;"></div>
   </div>
 
-  <!-- Admin-Panel: nur sichtbar nach "Login" -->
-  <div class="admin-panel hidden" id="adminPanel">
-    <h2>Neue News eintragen</h2>
-    <label for="newsTitle">Titel *</label>
-    <input type="text" id="newsTitle">
-    <label for="newsText">Text *</label>
-    <textarea id="newsText" rows="5"></textarea>
-    <button id="saveNewsBtn">News speichern</button>
+  <div id="uploadContainer">
+    <label for="bildanhang">Bilder auswählen (max. 9) *</label>
+    <input type="file" id="bildanhang" accept="image/*" multiple>
+    <div id="uiImagePreview"></div>
   </div>
+
+  <div id="loading">⏳ PDF wird erstellt...</div>
 
   <script>
-    const loginBox = document.getElementById('loginBox');
-    const adminPanel = document.getElementById('adminPanel');
+    const { jsPDF } = window.jspdf;
 
-    // Fake-Login
-    document.getElementById('loginBtn').addEventListener('click', () => {
-      const user = document.getElementById('adminUser').value.trim();
-      const pass = document.getElementById('adminPass').value.trim();
-      // Beispiel: user=admin, pass=123
-      if (user === 'admin' && pass === '8468') {
-        loginBox.classList.add('hidden');
-        adminPanel.classList.remove('hidden');
+    const auftragstypSelect = document.getElementById('auftragstyp');
+    const versionField = document.getElementById('versionField');
+    const fertigungField = document.getElementById('fertigungField');
+    const versionInput = document.getElementById('version');
+    const spanndruckInput = document.getElementById('spanndruck');
+
+    // Datum: default heute
+    (function setTodayDefault() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      document.getElementById('datum').value = `${yyyy}-${mm}-${dd}`;
+    })();
+
+    auftragstypSelect.addEventListener('change', () => {
+      const val = auftragstypSelect.value;
+      if (val === "Reklamation") {
+        versionField.style.display = 'block';
+        fertigungField.style.display = 'none';
+        versionInput.required = true;
+        spanndruckInput.required = false;
+        spanndruckInput.value = "";
+      } else if (val === "Fertigungsauftrag") {
+        versionField.style.display = 'none';
+        fertigungField.style.display = 'block';
+        versionInput.required = false;
+        spanndruckInput.required = true;
+        versionInput.value = "";
       } else {
-        alert('Falsche Admin-Daten!');
+        versionField.style.display = 'none';
+        fertigungField.style.display = 'none';
+        versionInput.required = false;
+        spanndruckInput.required = false;
+        versionInput.value = "";
+        spanndruckInput.value = "";
       }
     });
 
-    // News speichern in localStorage
-    document.getElementById('saveNewsBtn').addEventListener('click', () => {
-      const title = document.getElementById('newsTitle').value.trim();
-      const text = document.getElementById('newsText').value.trim();
-      if (!title || !text) {
-        alert('Bitte Titel und Text eingeben!');
+    // Bilder handling + Kompression
+    let images = [];
+    const MAX_IMAGES = 9;
+    const bildanhangInput = document.getElementById('bildanhang');
+    const uiImagePreview = document.getElementById('uiImagePreview');
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.style.display = 'block';
+    }
+
+    function clearError() {
+      const box = document.getElementById('errorBox');
+      box.textContent = "";
+      box.style.display = 'none';
+    }
+
+    function isEmpty(val) {
+      return !val || !String(val).trim();
+    }
+
+    async function compressImageToJpeg(dataUrl, maxW = 2200, quality = 0.75) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const ratio = img.width / img.height;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > maxW) {
+            w = maxW;
+            h = Math.round(w / ratio);
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          const out = canvas.toDataURL('image/jpeg', quality);
+          resolve(out);
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+    }
+
+    bildanhangInput.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length > MAX_IMAGES) {
+        alert(`Maximal ${MAX_IMAGES} Bilder erlaubt!`);
+        e.target.value = '';
         return;
       }
-      // Bisherige News aus localStorage holen (oder [] wenn keine)
-      let newsArray = JSON.parse(localStorage.getItem('firmennews')) || [];
-      // Neue News anfügen
-      newsArray.push({
-        title: title,
-        text: text,
-        date: new Date().toLocaleString()
-      });
-      // Zurück in localStorage speichern
-      localStorage.setItem('firmennews', JSON.stringify(newsArray));
-      alert('News gespeichert!');
 
-      // Felder leeren
-      document.getElementById('newsTitle').value = '';
-      document.getElementById('newsText').value = '';
+      images = [];
+      uiImagePreview.innerHTML = '';
+
+      for (const file of files) {
+        const dataUrl = await new Promise((resolve) => {
+          const r = new FileReader();
+          r.onload = (ev) => resolve(ev.target.result);
+          r.readAsDataURL(file);
+        });
+
+        // Komprimieren (macht PDF schnell und klein)
+        const compressed = await compressImageToJpeg(dataUrl, 2200, 0.75);
+
+        const prev = new Image();
+        prev.src = compressed;
+        prev.className = 'previewImg';
+        uiImagePreview.appendChild(prev);
+
+        images.push({ src: compressed, name: file.name });
+      }
+
+      clearError();
+    });
+
+    function validateForm() {
+      clearError();
+
+      const baseFields = ['auftragstyp','kunde','maschine','abnr','zeichnungsnummer','index','verantwortlich','datum','teilebenennung','stueckzahl','bemerkung'];
+      for (const id of baseFields) {
+        const el = document.getElementById(id);
+        const v = (el.type === 'number') ? el.value : el.value;
+        if (isEmpty(v)) {
+          showError("Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!");
+          return false;
+        }
+      }
+
+      const typ = document.getElementById('auftragstyp').value;
+      if (typ === "Reklamation" && isEmpty(versionInput.value)) {
+        showError("Bitte Version (*) ausfüllen (Reklamation).");
+        return false;
+      }
+      if (typ === "Fertigungsauftrag" && isEmpty(spanndruckInput.value)) {
+        showError("Bitte Spanndruck (*) ausfüllen (Fertigungsauftrag).");
+        return false;
+      }
+
+      const qty = Number(document.getElementById('stueckzahl').value);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        showError("Stückzahl muss > 0 sein.");
+        return false;
+      }
+
+      if (images.length === 0) {
+        showError("Bitte mindestens ein Bild hochladen!");
+        return false;
+      }
+
+      return true;
+    }
+
+    function safeFilePart(s) {
+      return String(s || "")
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, "_")
+        .replace(/\s+/g, "_")
+        .slice(0, 40);
+    }
+
+    function buildPdfFilename() {
+      const ab = safeFilePart(document.getElementById('abnr').value);
+      const zn = safeFilePart(document.getElementById('zeichnungsnummer').value);
+      const idx = safeFilePart(document.getElementById('index').value);
+      const date = document.getElementById('datum').value || new Date().toISOString().slice(0,10);
+      return `AB${ab}_Z${zn}_I${idx}_${date}.pdf`;
+    }
+
+    function wrapTextToHtml(text) {
+      const escaped = String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return escaped.replace(/\n/g, "<br>");
+    }
+
+    async function createPDF() {
+      const pdf = new jsPDF('p', 'mm', 'a4');
+
+      // A4-Clone
+      const pdfClone = document.createElement('div');
+      pdfClone.style.width = '210mm';
+      pdfClone.style.height = '297mm';
+      pdfClone.style.background = '#fff';
+      pdfClone.style.boxSizing = 'border-box';
+      pdfClone.style.display = 'flex';
+      pdfClone.style.flexDirection = 'column';
+      pdfClone.style.position = 'absolute';
+      pdfClone.style.top = '-10000px';
+      pdfClone.style.left = '0';
+      pdfClone.style.border = '1px solid #ccc';
+      pdfClone.style.fontFamily = "'Roboto', sans-serif";
+      document.body.appendChild(pdfClone);
+
+      // Text-Section (25%)
+      const textSection = document.createElement('div');
+      textSection.style.height = '25%';
+      textSection.style.padding = '5mm';
+      textSection.style.boxSizing = 'border-box';
+      textSection.style.borderBottom = '1px solid #ccc';
+      textSection.style.overflow = 'hidden';
+      pdfClone.appendChild(textSection);
+
+      // Table
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.style.fontSize = '10px';
+      table.style.color = '#000';
+      textSection.appendChild(table);
+
+      function tdHtml(html) {
+        const td = document.createElement('td');
+        td.style.border = '1px solid #ccc';
+        td.style.padding = '3px';
+        td.style.verticalAlign = 'top';
+        td.style.width = '33.33%';
+        td.innerHTML = html;
+        return td;
+      }
+
+      function addRow3(a, b, c) {
+        const tr = document.createElement('tr');
+        tr.appendChild(tdHtml(a || ""));
+        tr.appendChild(tdHtml(b || ""));
+        tr.appendChild(tdHtml(c || ""));
+        table.appendChild(tr);
+      }
+
+      function addFullRow(html) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.style.border = '1px solid #ccc';
+        td.style.padding = '3px';
+        td.style.verticalAlign = 'top';
+        td.innerHTML = html;
+        tr.appendChild(td);
+        table.appendChild(tr);
+      }
+
+      const typ = document.getElementById('auftragstyp').value;
+
+      const dataPairs = [];
+      dataPairs.push([`<strong>Auftragstyp:</strong> ${typ}`, null, null]);
+
+      const pushField = (k, v) => dataPairs.push([`<strong>${k}:</strong> ${v}`, null, null]);
+
+      pushField("Kunde", document.getElementById('kunde').value);
+      pushField("Maschine", document.getElementById('maschine').value);
+      pushField("AB-Nr", document.getElementById('abnr').value);
+      pushField("Zeichnungsnr", document.getElementById('zeichnungsnummer').value);
+      pushField("Index", document.getElementById('index').value);
+      pushField("Verantwortlich", document.getElementById('verantwortlich').value);
+      pushField("Datum", document.getElementById('datum').value);
+      pushField("Benennung", document.getElementById('teilebenennung').value);
+      pushField("Stückzahl", document.getElementById('stueckzahl').value);
+
+      if (typ === "Reklamation") pushField("Version", versionInput.value);
+      if (typ === "Fertigungsauftrag") pushField("Spanndruck", spanndruckInput.value);
+
+      // Auftragstyp full row
+      addFullRow(dataPairs[0][0]);
+
+      // Rest in 3er-Zeilen
+      const flat = dataPairs.slice(1).map(x => x[0]);
+      for (let i = 0; i < flat.length; i += 3) {
+        addRow3(flat[i], flat[i + 1], flat[i + 2]);
+      }
+
+      // Bemerkungen (fix: sauberer Umbruch + begrenzte Höhe)
+      const remarks = document.getElementById('bemerkung').value;
+      const remarksBox = document.createElement('div');
+      remarksBox.style.marginTop = '2mm';
+      remarksBox.style.borderTop = '1px solid #ccc';
+      remarksBox.style.paddingTop = '2mm';
+      remarksBox.style.fontSize = '10px';
+      remarksBox.style.lineHeight = '1.2';
+      remarksBox.style.maxHeight = '32mm';      // verhindert Overflow
+      remarksBox.style.overflow = 'hidden';     // kein Layout-Crash
+      remarksBox.innerHTML = `<strong>Bemerkungen:</strong><br>${wrapTextToHtml(remarks)}`;
+      textSection.appendChild(remarksBox);
+
+      // Image-Section (75%)
+      const imageSection = document.createElement('div');
+      imageSection.style.height = '75%';
+      imageSection.style.padding = '5mm';
+      imageSection.style.boxSizing = 'border-box';
+      imageSection.style.overflow = 'hidden';
+      pdfClone.appendChild(imageSection);
+
+      if (images.length === 1) {
+        imageSection.style.display = 'flex';
+        imageSection.style.alignItems = 'center';
+        imageSection.style.justifyContent = 'center';
+        const img = new Image();
+        img.src = images[0].src;
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        imageSection.appendChild(img);
+      } else {
+        let cols, rows;
+        if (images.length === 9) {
+          cols = 3; rows = 3;
+        } else {
+          cols = Math.ceil(Math.sqrt(images.length));
+          rows = Math.ceil(images.length / cols);
+        }
+        imageSection.style.display = 'grid';
+        imageSection.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        imageSection.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+        imageSection.style.gap = '5px';
+
+        for (const item of images) {
+          const cell = document.createElement('div');
+          cell.style.display = 'flex';
+          cell.style.alignItems = 'center';
+          cell.style.justifyContent = 'center';
+          cell.style.border = '1px solid #eee';
+          cell.style.overflow = 'hidden';
+
+          const img = new Image();
+          img.src = item.src;
+          img.style.maxWidth = '100%';
+          img.style.maxHeight = '100%';
+          cell.appendChild(img);
+          imageSection.appendChild(cell);
+        }
+      }
+
+      await new Promise(r => setTimeout(r, 150));
+
+      const canvas = await html2canvas(pdfClone, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#FFFFFF'
+      });
+
+      document.body.removeChild(pdfClone);
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+      const imgWidth = canvas.width * ratio;
+      const imgHeight = canvas.height * ratio;
+      const marginX = (pdfWidth - imgWidth) / 2;
+      const marginY = (pdfHeight - imgHeight) / 2;
+
+      pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
+      return pdf;
+    }
+
+    async function sharePDF() {
+      const pdf = await createPDF();
+      const blob = pdf.output('blob');
+      const file = new File([blob], buildPdfFilename(), { type: "application/pdf" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: 'Technische Dokumentation S.Fritz',
+          text: 'Technische Dokumentation (PDF)',
+          files: [file]
+        });
+        return;
+      }
+      alert("Teilen wird auf diesem Browser nicht unterstützt. Tipp: Chrome Android / iOS Safari nutzen.");
+    }
+
+    document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
+      if (!validateForm()) return;
+
+      const btn = document.getElementById('pdfButtonGenerate');
+      btn.disabled = true;
+      document.getElementById('loading').style.display = 'block';
+
+      try {
+        const pdf = await createPDF();
+        pdf.save(buildPdfFilename());
+      } catch (e) {
+        console.error(e);
+        alert("Fehler bei der PDF-Erstellung. Siehe Konsole.");
+      } finally {
+        btn.disabled = false;
+        document.getElementById('loading').style.display = 'none';
+      }
+    });
+
+    document.getElementById('whatsAppShareButton').addEventListener('click', async () => {
+      if (!validateForm()) return;
+
+      const btn = document.getElementById('whatsAppShareButton');
+      btn.disabled = true;
+      document.getElementById('loading').style.display = 'block';
+
+      try {
+        await sharePDF();
+      } catch (e) {
+        console.error(e);
+        alert("Fehler beim Teilen. Siehe Konsole.");
+      } finally {
+        btn.disabled = false;
+        document.getElementById('loading').style.display = 'none';
+      }
     });
   </script>
 </body>
