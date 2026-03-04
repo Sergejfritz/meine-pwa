@@ -2,23 +2,18 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <!-- Optimale Darstellung auf mobilen Geräten -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Technische Dokumentation S.Fritz – PDF Export</title>
-  
-  <!-- Google Fonts -->
+
   <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
-  
-  <!-- jsPDF & html2canvas (CDNs) -->
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  
+
   <style>
     :root {
       --a4-width: 210mm;
       --a4-height: 297mm;
-      --text-height: 25%;    /* Oberer Bereich: ca. 25% der A4-Höhe (etwa 74mm) */
-      --image-height: 75%;   /* Unterer Bereich: ca. 75% */
       --bg-color: #eef2f7;
       --content-bg: #ffffff;
       --text-color: #333;
@@ -40,7 +35,7 @@
       font-weight: 500;
       color: var(--accent-color);
     }
-    /* UI – Eingabemaske (unverändert) */
+
     #uiContainer {
       max-width: 700px;
       margin: 0 auto 20px auto;
@@ -50,16 +45,14 @@
       border-radius: 6px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.15);
     }
-    #uiContainer .field {
-      margin-bottom: 12px;
-    }
+    #uiContainer .field { margin-bottom: 12px; }
     #uiContainer label {
       display: block;
       font-weight: bold;
       margin-bottom: 4px;
     }
-    #uiContainer input, 
-    #uiContainer select, 
+    #uiContainer input,
+    #uiContainer select,
     #uiContainer textarea {
       width: 100%;
       padding: 8px;
@@ -67,8 +60,8 @@
       border-radius: 4px;
       box-sizing: border-box;
     }
-    #uiContainer input:focus, 
-    #uiContainer select:focus, 
+    #uiContainer input:focus,
+    #uiContainer select:focus,
     #uiContainer textarea:focus {
       border-color: var(--accent-color);
       box-shadow: 0 0 8px rgba(33,150,243,0.3);
@@ -85,16 +78,8 @@
       margin: 15px auto;
       font-size: 16px;
     }
-    button.actionButton:hover {
-      background: var(--accent-dark);
-    }
-    .error {
-      color: red;
-      font-weight: bold;
-      text-align: center;
-      margin-top: 10px;
-    }
-    /* Zusätzlicher Button für WhatsApp Share */
+    button.actionButton:hover { background: var(--accent-dark); }
+
     button.shareButton {
       background: #25D366;
       color: #fff;
@@ -106,10 +91,16 @@
       margin: 10px auto;
       font-size: 16px;
     }
-    button.shareButton:hover {
-      background: #1ebe57;
+    button.shareButton:hover { background: #1ebe57; }
+
+    .error {
+      color: #b00020;
+      font-weight: 700;
+      text-align: center;
+      margin-top: 10px;
+      line-height: 1.2;
     }
-    /* UI: Bilder-Upload & Vorschau */
+
     #uploadContainer {
       max-width: 700px;
       margin: 0 auto 20px auto;
@@ -129,86 +120,25 @@
       border: 1px solid var(--border-color);
       border-radius: 4px;
     }
-    /* --- PDF-Klon Styles (nur im PDF) --- */
-    /* PDF-Container: Exakt DIN A4 */
-    #pdfContent {
-      width: 210mm;
-      height: 297mm;
-      background: var(--content-bg);
-      border: 1px solid var(--border-color);
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-    }
-    /* Oberer Bereich (Text): 25% */
-    #textSection {
-      height: 25%;
-      padding: 5mm;
-      overflow: hidden;
-      box-sizing: border-box;
-      border-bottom: 1px solid var(--border-color);
-    }
-    /* Tabelle für Daten (3 Spalten) */
-    #pdfDataTable {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 8px;
-    }
-    #pdfDataTable th, 
-    #pdfDataTable td {
-      border: 1px solid var(--border-color);
-      padding: 3px;
-      vertical-align: top;
-      width: calc(100% / 3);
-      box-sizing: border-box;
-      color: #000;
-      font-size: 10px;
-    }
-    .fullRow td {
-      width: 100% !important;
-    }
-    /* Unterer Bereich (Bilder): 75% */
-    #imageSection {
-      height: 75%;
-      padding: 5mm;
-      overflow: hidden;
-      box-sizing: border-box;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
-      justify-content: center;
-      align-content: flex-start;
-    }
-    .pdfImgContainer {
-      width: 100%;
-      height: 100%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .pdfImgContainer img {
-      max-width: 100%;
-      max-height: 100%;
-    }
-    /* Ladeoverlay */
+
     #loading {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      background: rgba(0,0,0,0.8);
+      background: rgba(0,0,0,0.85);
       color: #fff;
-      padding: 20px 40px;
+      padding: 18px 28px;
       border-radius: 10px;
-      font-size: 1.2em;
+      font-size: 1.1em;
       display: none;
       z-index: 9999;
     }
     #loading::after {
       content: "";
       display: inline-block;
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       border: 3px solid #fff;
       border-top-color: transparent;
       border-radius: 50%;
@@ -216,23 +146,18 @@
       margin-left: 10px;
       vertical-align: middle;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    /* Responsive (UI) */
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     @media (max-width: 600px) {
-      #uiContainer {
-        width: 100%;
-      }
+      #uiContainer { width: 100%; }
     }
   </style>
 </head>
+
 <body>
   <h1>Technische Dokumentation S.Fritz</h1>
-  
-  <!-- UI: Eingabemaske -->
+
   <div id="uiContainer">
-    <!-- Auftragstyp ganz oben -->
     <div class="field">
       <label for="auftragstyp">Auftragstyp *</label>
       <select id="auftragstyp">
@@ -241,414 +166,492 @@
         <option value="Fertigungsauftrag">Fertigungsauftrag</option>
       </select>
     </div>
+
     <div class="field">
       <label for="kunde">Kunde (Firma) *</label>
       <input type="text" id="kunde" placeholder="z.B. Mustermann GmbH">
     </div>
+
     <div class="field">
       <label for="maschine">Maschine *</label>
       <input type="text" id="maschine">
     </div>
+
     <div class="field">
-      <label for="abnr">AB‑Nr *</label>
+      <label for="abnr">AB-Nr *</label>
       <input type="text" id="abnr">
     </div>
+
     <div class="field">
       <label for="zeichnungsnummer">Zeichnungsnr. *</label>
       <input type="text" id="zeichnungsnummer">
     </div>
+
     <div class="field">
       <label for="index">Index *</label>
       <input type="text" id="index">
     </div>
+
     <div class="field">
       <label for="verantwortlich">Verantwortlich *</label>
       <input type="text" id="verantwortlich">
     </div>
+
     <div class="field">
       <label for="datum">Datum *</label>
       <input type="date" id="datum">
     </div>
+
     <div class="field">
       <label for="teilebenennung">Benennung der Teile *</label>
       <input type="text" id="teilebenennung">
     </div>
+
     <div class="field">
       <label for="stueckzahl">Stückzahl *</label>
-      <input type="number" id="stueckzahl">
+      <input type="number" id="stueckzahl" min="1" step="1">
     </div>
-    <!-- Dynamische Felder -->
+
     <div class="field" id="versionField" style="display:none;">
       <label for="version">Version *</label>
       <input type="text" id="version">
     </div>
+
     <div class="field" id="fertigungField" style="display:none;">
       <label for="spanndruck">Spanndruck *</label>
       <input type="text" id="spanndruck">
     </div>
+
     <div class="field">
       <label for="bemerkung">Bemerkungen *</label>
-      <textarea id="bemerkung" rows="3" style="width:100%;"></textarea>
+      <textarea id="bemerkung" rows="3"></textarea>
     </div>
+
     <button id="pdfButtonGenerate" class="actionButton">📄 PDF generieren</button>
-    <button id="whatsAppShareButton" class="shareButton">📤 PDF über WhatsApp teilen</button>
-    <div class="error" id="errorBox" style="display:none;">Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!</div>
+    <button id="whatsAppShareButton" class="shareButton">📤 PDF teilen</button>
+
+    <div class="error" id="errorBox" style="display:none;"></div>
   </div>
-  
-  <!-- UI: Bilder-Upload & Vorschau -->
+
   <div id="uploadContainer">
     <label for="bildanhang">Bilder auswählen (max. 9) *</label>
     <input type="file" id="bildanhang" accept="image/*" multiple>
     <div id="uiImagePreview"></div>
   </div>
-  
-  <!-- Ladeoverlay -->
+
   <div id="loading">⏳ PDF wird erstellt...</div>
-  
+
   <script>
     const { jsPDF } = window.jspdf;
-    
-    // Auftragstyp-Dynamik (UI)
+
     const auftragstypSelect = document.getElementById('auftragstyp');
     const versionField = document.getElementById('versionField');
     const fertigungField = document.getElementById('fertigungField');
     const versionInput = document.getElementById('version');
     const spanndruckInput = document.getElementById('spanndruck');
-    
+
+    // Datum: default heute
+    (function setTodayDefault() {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      document.getElementById('datum').value = `${yyyy}-${mm}-${dd}`;
+    })();
+
     auftragstypSelect.addEventListener('change', () => {
       const val = auftragstypSelect.value;
-      if(val === "Reklamation"){
+      if (val === "Reklamation") {
         versionField.style.display = 'block';
         fertigungField.style.display = 'none';
         versionInput.required = true;
         spanndruckInput.required = false;
-      } else if(val === "Fertigungsauftrag"){
+        spanndruckInput.value = "";
+      } else if (val === "Fertigungsauftrag") {
         versionField.style.display = 'none';
         fertigungField.style.display = 'block';
         versionInput.required = false;
         spanndruckInput.required = true;
+        versionInput.value = "";
       } else {
         versionField.style.display = 'none';
         fertigungField.style.display = 'none';
         versionInput.required = false;
         spanndruckInput.required = false;
+        versionInput.value = "";
+        spanndruckInput.value = "";
       }
     });
-    
-    // Dynamische Werkzeug-Eingabe entfällt (entfernt)
-    
-    // UI: Bilder-Vorschau
+
+    // Bilder handling + Kompression
     let images = [];
     const MAX_IMAGES = 9;
     const bildanhangInput = document.getElementById('bildanhang');
     const uiImagePreview = document.getElementById('uiImagePreview');
-    
+
+    function showError(msg) {
+      const box = document.getElementById('errorBox');
+      box.textContent = msg;
+      box.style.display = 'block';
+    }
+
+    function clearError() {
+      const box = document.getElementById('errorBox');
+      box.textContent = "";
+      box.style.display = 'none';
+    }
+
+    function isEmpty(val) {
+      return !val || !String(val).trim();
+    }
+
+    async function compressImageToJpeg(dataUrl, maxW = 2200, quality = 0.75) {
+      return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const ratio = img.width / img.height;
+          let w = img.width;
+          let h = img.height;
+
+          if (w > maxW) {
+            w = maxW;
+            h = Math.round(w / ratio);
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+
+          const out = canvas.toDataURL('image/jpeg', quality);
+          resolve(out);
+        };
+        img.onerror = reject;
+        img.src = dataUrl;
+      });
+    }
+
     bildanhangInput.addEventListener('change', async (e) => {
-      if(e.target.files.length > MAX_IMAGES){
+      const files = Array.from(e.target.files || []);
+      if (files.length > MAX_IMAGES) {
         alert(`Maximal ${MAX_IMAGES} Bilder erlaubt!`);
         e.target.value = '';
         return;
       }
+
       images = [];
       uiImagePreview.innerHTML = '';
-      await Promise.all(Array.from(e.target.files).map(file =>
-        new Promise(resolve => {
-          const reader = new FileReader();
-          reader.onload = (ev) => {
-            const img = new Image();
-            img.src = ev.target.result;
-            img.className = 'previewImg';
-            uiImagePreview.appendChild(img);
-            images.push({ src: ev.target.result, name: file.name });
-            resolve();
-          };
-          reader.readAsDataURL(file);
-        })
-      ));
+
+      for (const file of files) {
+        const dataUrl = await new Promise((resolve) => {
+          const r = new FileReader();
+          r.onload = (ev) => resolve(ev.target.result);
+          r.readAsDataURL(file);
+        });
+
+        // Komprimieren (macht PDF schnell und klein)
+        const compressed = await compressImageToJpeg(dataUrl, 2200, 0.75);
+
+        const prev = new Image();
+        prev.src = compressed;
+        prev.className = 'previewImg';
+        uiImagePreview.appendChild(prev);
+
+        images.push({ src: compressed, name: file.name });
+      }
+
+      clearError();
     });
-    
-    // Formularvalidierung (UI)
-    function validateForm(){
-      const fields = ['auftragstyp','kunde','maschine','abnr','zeichnungsnummer','index','verantwortlich','datum','teilebenennung','stueckzahl','bemerkung'];
-      let valid = true;
-      fields.forEach(id => {
+
+    function validateForm() {
+      clearError();
+
+      const baseFields = ['auftragstyp','kunde','maschine','abnr','zeichnungsnummer','index','verantwortlich','datum','teilebenennung','stueckzahl','bemerkung'];
+      for (const id of baseFields) {
         const el = document.getElementById(id);
-        if(!el.value.trim()){
-          valid = false;
+        const v = (el.type === 'number') ? el.value : el.value;
+        if (isEmpty(v)) {
+          showError("Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!");
+          return false;
         }
-      });
-      if(images.length === 0) valid = false;
-      const errorBox = document.getElementById('errorBox');
-      errorBox.style.display = valid ? 'none' : 'block';
-      return valid;
+      }
+
+      const typ = document.getElementById('auftragstyp').value;
+      if (typ === "Reklamation" && isEmpty(versionInput.value)) {
+        showError("Bitte Version (*) ausfüllen (Reklamation).");
+        return false;
+      }
+      if (typ === "Fertigungsauftrag" && isEmpty(spanndruckInput.value)) {
+        showError("Bitte Spanndruck (*) ausfüllen (Fertigungsauftrag).");
+        return false;
+      }
+
+      const qty = Number(document.getElementById('stueckzahl').value);
+      if (!Number.isFinite(qty) || qty <= 0) {
+        showError("Stückzahl muss > 0 sein.");
+        return false;
+      }
+
+      if (images.length === 0) {
+        showError("Bitte mindestens ein Bild hochladen!");
+        return false;
+      }
+
+      return true;
     }
-    
-    // Ersetze Formularelemente im Klon durch statischen Text
-    function replaceFormElements(clone) {
-      const inputs = clone.querySelectorAll('input');
-      inputs.forEach(input => {
-        const span = document.createElement('span');
-        span.textContent = input.value;
-        span.style.fontSize = getComputedStyle(input).fontSize;
-        span.style.fontFamily = getComputedStyle(input).fontFamily;
-        input.parentNode.replaceChild(span, input);
-      });
-      const textareas = clone.querySelectorAll('textarea');
-      textareas.forEach(textarea => {
-        const span = document.createElement('span');
-        span.textContent = textarea.value;
-        span.style.fontSize = getComputedStyle(textarea).fontSize;
-        span.style.fontFamily = getComputedStyle(textarea).fontFamily;
-        textarea.parentNode.replaceChild(span, textarea);
-      });
-      const selects = clone.querySelectorAll('select');
-      selects.forEach(select => {
-        const span = document.createElement('span');
-        const idx = select.selectedIndex;
-        span.textContent = idx >= 0 ? select.options[idx].text : "";
-        span.style.fontSize = getComputedStyle(select).fontSize;
-        span.style.fontFamily = getComputedStyle(select).fontFamily;
-        select.parentNode.replaceChild(span, select);
-      });
+
+    function safeFilePart(s) {
+      return String(s || "")
+        .trim()
+        .replace(/[\\/:*?"<>|]+/g, "_")
+        .replace(/\s+/g, "_")
+        .slice(0, 40);
     }
-    
-    // PDF-Erstellung: Erzeuge einen PDF-Klon mit separatem Layout
-    async function createPDF(){
-      const { jsPDF } = window.jspdf;
+
+    function buildPdfFilename() {
+      const ab = safeFilePart(document.getElementById('abnr').value);
+      const zn = safeFilePart(document.getElementById('zeichnungsnummer').value);
+      const idx = safeFilePart(document.getElementById('index').value);
+      const date = document.getElementById('datum').value || new Date().toISOString().slice(0,10);
+      return `AB${ab}_Z${zn}_I${idx}_${date}.pdf`;
+    }
+
+    function wrapTextToHtml(text) {
+      const escaped = String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return escaped.replace(/\n/g, "<br>");
+    }
+
+    async function createPDF() {
       const pdf = new jsPDF('p', 'mm', 'a4');
-      
-      // Erstelle einen Container für den PDF-Klon
-      const pdfContent = document.createElement('div');
-      pdfContent.style.width = '210mm';
-      pdfContent.style.height = '297mm';
-      pdfContent.style.boxSizing = 'border-box';
-      pdfContent.style.background = '#ffffff';
-      pdfContent.style.display = 'flex';
-      pdfContent.style.flexDirection = 'column';
-      
-      // Oberer Bereich: Textbereich (25%)
+
+      // A4-Clone
+      const pdfClone = document.createElement('div');
+      pdfClone.style.width = '210mm';
+      pdfClone.style.height = '297mm';
+      pdfClone.style.background = '#fff';
+      pdfClone.style.boxSizing = 'border-box';
+      pdfClone.style.display = 'flex';
+      pdfClone.style.flexDirection = 'column';
+      pdfClone.style.position = 'absolute';
+      pdfClone.style.top = '-10000px';
+      pdfClone.style.left = '0';
+      pdfClone.style.border = '1px solid #ccc';
+      pdfClone.style.fontFamily = "'Roboto', sans-serif";
+      document.body.appendChild(pdfClone);
+
+      // Text-Section (25%)
       const textSection = document.createElement('div');
-      textSection.id = 'textSection';
       textSection.style.height = '25%';
       textSection.style.padding = '5mm';
       textSection.style.boxSizing = 'border-box';
-      textSection.style.borderBottom = '1px solid var(--border-color)';
-      
-      // Erstelle eine Tabelle (3 Spalten) für die Felder (ohne Bemerkungen)
+      textSection.style.borderBottom = '1px solid #ccc';
+      textSection.style.overflow = 'hidden';
+      pdfClone.appendChild(textSection);
+
+      // Table
       const table = document.createElement('table');
-      table.id = 'pdfDataTable';
       table.style.width = '100%';
       table.style.borderCollapse = 'collapse';
-      table.style.fontSize = '8px';
-      
-      function addRow(cells, fullRow = false) {
+      table.style.fontSize = '10px';
+      table.style.color = '#000';
+      textSection.appendChild(table);
+
+      function tdHtml(html) {
+        const td = document.createElement('td');
+        td.style.border = '1px solid #ccc';
+        td.style.padding = '3px';
+        td.style.verticalAlign = 'top';
+        td.style.width = '33.33%';
+        td.innerHTML = html;
+        return td;
+      }
+
+      function addRow3(a, b, c) {
         const tr = document.createElement('tr');
-        if(fullRow){
-          tr.className = 'fullRow';
-          const td = document.createElement('td');
-          td.colSpan = 3;
-          td.style.border = '1px solid var(--border-color)';
-          td.style.padding = '3px';
-          td.innerHTML = cells;
-          tr.appendChild(td);
-        } else {
-          cells.forEach(cell => {
-            const td = document.createElement('td');
-            td.style.border = '1px solid var(--border-color)';
-            td.style.padding = '3px';
-            td.style.width = '33.33%';
-            td.innerHTML = cell;
-            tr.appendChild(td);
-          });
-        }
+        tr.appendChild(tdHtml(a || ""));
+        tr.appendChild(tdHtml(b || ""));
+        tr.appendChild(tdHtml(c || ""));
         table.appendChild(tr);
       }
-      
-      // Sammle Daten aus der UI
-      const data = {
-        "Auftragstyp": document.getElementById('auftragstyp').value,
-        "Kunde": document.getElementById('kunde').value,
-        "Maschine": document.getElementById('maschine').value,
-        "AB‑Nr": document.getElementById('abnr').value,
-        "Zeichnungsnr": document.getElementById('zeichnungsnummer').value,
-        "Index": document.getElementById('index').value,
-        "Verantwortlich": document.getElementById('verantwortlich').value,
-        "Datum": document.getElementById('datum').value,
-        "Benennung der Teile": document.getElementById('teilebenennung').value,
-        "Stückzahl": document.getElementById('stueckzahl').value
-      };
-      if(data["Auftragstyp"] === "Reklamation"){
-        data["Version"] = document.getElementById('version').value;
-      } else if(data["Auftragstyp"] === "Fertigungsauftrag"){
-        data["Spanndruck"] = document.getElementById('spanndruck').value;
+
+      function addFullRow(html) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.style.border = '1px solid #ccc';
+        td.style.padding = '3px';
+        td.style.verticalAlign = 'top';
+        td.innerHTML = html;
+        tr.appendChild(td);
+        table.appendChild(tr);
       }
-      
-      // Auftragstyp als erste Zeile (volle Breite)
-      addRow(`<strong>Auftragstyp:</strong> ${data["Auftragstyp"]}`, true);
-      delete data["Auftragstyp"];
-      
-      // Erstelle ein Array mit den übrigen Feldern
-      const fields = [];
-      for(let key in data){
-        fields.push(`<strong>${key}:</strong> ${data[key]}`);
+
+      const typ = document.getElementById('auftragstyp').value;
+
+      const dataPairs = [];
+      dataPairs.push([`<strong>Auftragstyp:</strong> ${typ}`, null, null]);
+
+      const pushField = (k, v) => dataPairs.push([`<strong>${k}:</strong> ${v}`, null, null]);
+
+      pushField("Kunde", document.getElementById('kunde').value);
+      pushField("Maschine", document.getElementById('maschine').value);
+      pushField("AB-Nr", document.getElementById('abnr').value);
+      pushField("Zeichnungsnr", document.getElementById('zeichnungsnummer').value);
+      pushField("Index", document.getElementById('index').value);
+      pushField("Verantwortlich", document.getElementById('verantwortlich').value);
+      pushField("Datum", document.getElementById('datum').value);
+      pushField("Benennung", document.getElementById('teilebenennung').value);
+      pushField("Stückzahl", document.getElementById('stueckzahl').value);
+
+      if (typ === "Reklamation") pushField("Version", versionInput.value);
+      if (typ === "Fertigungsauftrag") pushField("Spanndruck", spanndruckInput.value);
+
+      // Auftragstyp full row
+      addFullRow(dataPairs[0][0]);
+
+      // Rest in 3er-Zeilen
+      const flat = dataPairs.slice(1).map(x => x[0]);
+      for (let i = 0; i < flat.length; i += 3) {
+        addRow3(flat[i], flat[i + 1], flat[i + 2]);
       }
-      // Füge Zeilen zu je 3 Zellen hinzu
-      for(let i = 0; i < fields.length; i += 3){
-        const cells = fields.slice(i, i+3);
-        addRow(cells);
-      }
-      
-      textSection.appendChild(table);
-      
-      // Füge den Bemerkungsbereich als eigenen Container am unteren Rand des Textbereichs ein
+
+      // Bemerkungen (fix: sauberer Umbruch + begrenzte Höhe)
       const remarks = document.getElementById('bemerkung').value;
-      const remarksContainer = document.createElement('div');
-      remarksContainer.style.marginTop = '2mm';
-      remarksContainer.style.borderTop = '1px solid var(--border-color)';
-      remarksContainer.style.paddingTop = '2mm';
-      remarksContainer.innerHTML = `<strong>Bemerkungen:</strong><br>${remarks}`;
-      textSection.appendChild(remarksContainer);
-      
-      // Unterer Bereich: Bildbereich (75%)
+      const remarksBox = document.createElement('div');
+      remarksBox.style.marginTop = '2mm';
+      remarksBox.style.borderTop = '1px solid #ccc';
+      remarksBox.style.paddingTop = '2mm';
+      remarksBox.style.fontSize = '10px';
+      remarksBox.style.lineHeight = '1.2';
+      remarksBox.style.maxHeight = '32mm';      // verhindert Overflow
+      remarksBox.style.overflow = 'hidden';     // kein Layout-Crash
+      remarksBox.innerHTML = `<strong>Bemerkungen:</strong><br>${wrapTextToHtml(remarks)}`;
+      textSection.appendChild(remarksBox);
+
+      // Image-Section (75%)
       const imageSection = document.createElement('div');
-      imageSection.id = 'imageSection';
       imageSection.style.height = '75%';
       imageSection.style.padding = '5mm';
       imageSection.style.boxSizing = 'border-box';
-      
-      // Falls genau 9 Bilder, erzwinge ein 3x3-Grid
-      if(images.length === 1){
-        const cont = document.createElement('div');
-        cont.className = 'pdfImgContainer';
-        cont.style.width = "100%";
-        cont.style.height = "100%";
+      imageSection.style.overflow = 'hidden';
+      pdfClone.appendChild(imageSection);
+
+      if (images.length === 1) {
+        imageSection.style.display = 'flex';
+        imageSection.style.alignItems = 'center';
+        imageSection.style.justifyContent = 'center';
         const img = new Image();
         img.src = images[0].src;
-        cont.appendChild(img);
-        imageSection.appendChild(cont);
-      } else if(images.length > 1){
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '100%';
+        imageSection.appendChild(img);
+      } else {
         let cols, rows;
-        if(images.length === 9){
-          cols = 3;
-          rows = 3;
+        if (images.length === 9) {
+          cols = 3; rows = 3;
         } else {
           cols = Math.ceil(Math.sqrt(images.length));
           rows = Math.ceil(images.length / cols);
         }
-        imageSection.style.display = "grid";
+        imageSection.style.display = 'grid';
         imageSection.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
         imageSection.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
-        imageSection.style.gap = "5px";
-        images.forEach(item => {
-          const cont = document.createElement('div');
-          cont.className = 'pdfImgContainer';
+        imageSection.style.gap = '5px';
+
+        for (const item of images) {
+          const cell = document.createElement('div');
+          cell.style.display = 'flex';
+          cell.style.alignItems = 'center';
+          cell.style.justifyContent = 'center';
+          cell.style.border = '1px solid #eee';
+          cell.style.overflow = 'hidden';
+
           const img = new Image();
           img.src = item.src;
-          cont.appendChild(img);
-          imageSection.appendChild(cont);
-        });
+          img.style.maxWidth = '100%';
+          img.style.maxHeight = '100%';
+          cell.appendChild(img);
+          imageSection.appendChild(cell);
+        }
       }
-      
-      // Baue den kompletten PDF-Klon zusammen
-      const pdfClone = document.createElement('div');
-      pdfClone.id = 'pdfContent';
-      pdfClone.style.width = '210mm';
-      pdfClone.style.height = '297mm';
-      pdfClone.style.display = 'flex';
-      pdfClone.style.flexDirection = 'column';
-      pdfClone.appendChild(textSection);
-      pdfClone.appendChild(imageSection);
-      pdfClone.style.position = 'absolute';
-      pdfClone.style.top = '-10000px';
-      document.body.appendChild(pdfClone);
-      
-      // Füge im Klon zusätzliche CSS-Overrides hinzu (nur für PDF)
-      const styleEl = document.createElement('style');
-      styleEl.innerHTML = `
-        #pdfDataTable th, #pdfDataTable td { padding: 3px !important; color: #000 !important; font-size: 10px !important; }
-        #pdfDataTable tr:not(.fullRow) > * { width: calc(100% / 3) !important; }
-      `;
-      pdfClone.appendChild(styleEl);
-      
-      // Ersetze alle Formularelemente im Klon durch statischen Text
-      replaceFormElements(pdfClone);
-      
-      // Kurze Wartezeit, damit sich das Layout stabilisiert
-      await new Promise(r => setTimeout(r, 200));
-      
-      // Erzeuge Canvas via html2canvas
+
+      await new Promise(r => setTimeout(r, 150));
+
       const canvas = await html2canvas(pdfClone, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#FFFFFF'
       });
+
       document.body.removeChild(pdfClone);
-      
-      // PDF generieren
-      const imgData = canvas.toDataURL('image/jpeg', 0.8);
+
+      const imgData = canvas.toDataURL('image/jpeg', 0.85);
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const cw = canvas.width;
-      const ch = canvas.height;
-      const ratio = Math.min(pdfWidth / cw, pdfHeight / ch);
-      const imgWidth = cw * ratio;
-      const imgHeight = ch * ratio;
+      const ratio = Math.min(pdfWidth / canvas.width, pdfHeight / canvas.height);
+      const imgWidth = canvas.width * ratio;
+      const imgHeight = canvas.height * ratio;
       const marginX = (pdfWidth - imgWidth) / 2;
       const marginY = (pdfHeight - imgHeight) / 2;
+
       pdf.addImage(imgData, 'JPEG', marginX, marginY, imgWidth, imgHeight);
       return pdf;
     }
-    
-    // Funktion zum Teilen via WhatsApp über die Web Share API
-    async function sharePDFviaWhatsApp() {
-      try {
-        const pdf = await createPDF();
-        const pdfBlob = pdf.output('blob');
-        const file = new File([pdfBlob], "Dokument.pdf", { type: "application/pdf" });
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: 'Technische Dokumentation S.Fritz',
-            text: 'Hier ist das generierte PDF:',
-            files: [file]
-          });
-        } else {
-          alert('Teilen über WhatsApp wird in diesem Browser nicht unterstützt.');
-        }
-      } catch (err) {
-        console.error('Fehler beim Teilen:', err);
-        alert('Fehler beim Teilen. Siehe Konsole.');
-      }
-    }
-    
-    // Klick-Handler für "PDF generieren"
-    document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
-      if (!validateForm()){
-        alert('Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!');
+
+    async function sharePDF() {
+      const pdf = await createPDF();
+      const blob = pdf.output('blob');
+      const file = new File([blob], buildPdfFilename(), { type: "application/pdf" });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: 'Technische Dokumentation S.Fritz',
+          text: 'Technische Dokumentation (PDF)',
+          files: [file]
+        });
         return;
       }
-      const pdfButton = document.getElementById('pdfButtonGenerate');
-      pdfButton.disabled = true;
+      alert("Teilen wird auf diesem Browser nicht unterstützt. Tipp: Chrome Android / iOS Safari nutzen.");
+    }
+
+    document.getElementById('pdfButtonGenerate').addEventListener('click', async () => {
+      if (!validateForm()) return;
+
+      const btn = document.getElementById('pdfButtonGenerate');
+      btn.disabled = true;
       document.getElementById('loading').style.display = 'block';
+
       try {
         const pdf = await createPDF();
-        pdf.save(`Dokument_${new Date().toISOString().slice(0,10)}.pdf`);
-      } catch (error) {
-        console.error('Fehler bei der PDF-Erstellung:', error);
-        alert('Fehler bei der PDF-Erstellung. Siehe Konsole.');
+        pdf.save(buildPdfFilename());
+      } catch (e) {
+        console.error(e);
+        alert("Fehler bei der PDF-Erstellung. Siehe Konsole.");
       } finally {
-        pdfButton.disabled = false;
+        btn.disabled = false;
         document.getElementById('loading').style.display = 'none';
       }
     });
-    
-    // Klick-Handler für "PDF über WhatsApp teilen"
+
     document.getElementById('whatsAppShareButton').addEventListener('click', async () => {
-      if (!validateForm()){
-        alert('Bitte alle Felder (*) ausfüllen und mindestens ein Bild hochladen!');
-        return;
-      }
-      if (confirm('PDF erstellen und über WhatsApp teilen?')) {
-        await sharePDFviaWhatsApp();
+      if (!validateForm()) return;
+
+      const btn = document.getElementById('whatsAppShareButton');
+      btn.disabled = true;
+      document.getElementById('loading').style.display = 'block';
+
+      try {
+        await sharePDF();
+      } catch (e) {
+        console.error(e);
+        alert("Fehler beim Teilen. Siehe Konsole.");
+      } finally {
+        btn.disabled = false;
+        document.getElementById('loading').style.display = 'none';
       }
     });
   </script>
