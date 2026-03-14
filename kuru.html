@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Kuru Kuru!</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a2e; overflow: hidden; touch-action: none; font-family: 'Segoe UI', sans-serif; }
+canvas { display: block; }
+#ui {
+  position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  pointer-events: none; z-index: 10;
+}
+#hud {
+  position: absolute; top: 10px; left: 0; width: 100%;
+  display: flex; justify-content: space-between; padding: 0 20px;
+  color: #fff; font-size: 18px; font-weight: bold;
+  text-shadow: 0 0 10px rgba(0,200,255,0.8);
+}
+#menu, #gameover, #levelclear {
+  pointer-events: auto; text-align: center; color: #fff;
+  background: rgba(0,0,0,0.85); border-radius: 20px; padding: 40px;
+  border: 2px solid #0ff; box-shadow: 0 0 30px rgba(0,255,255,0.3);
+}
+#menu h1, #gameover h1, #levelclear h1 {
+  font-size: 42px; margin-bottom: 10px;
+  background: linear-gradient(90deg, #0ff, #f0f, #0ff);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  animation: shimmer 2s infinite;
+}
+@keyframes shimmer {
+  0%,100% { filter: hue-rotate(0deg); }
+  50% { filter: hue-rotate(60deg); }
+}
+#menu p, #gameover p, #levelclear p { color: #aaa; margin-bottom: 20px; font-size: 14px; }
+button {
+  background: linear-gradient(135deg, #0ff, #08f);
+  border: none; color: #000; font-size: 20px; font-weight: bold;
+  padding: 15px 40px; border-radius: 50px; cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
+  margin: 5px;
+}
+button:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(0,255,255,0.5); }
+button:active { transform: scale(0.95); }
+.hidden { display: none !important; }
+#lives { color: #f55; }
+#levelInfo { color: #0ff; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="ui">
+  <div id="hud" class="hidden">
+    <span id="levelInfo">Level 1</span>
+    <span id="lives">❤❤❤</span>
+    <span id="score">0</span>
+  </div>
+  <div id="menu">
+    <h1>KURU KURU!</h1>
+    <p>Navigiere den rotierenden Stab durch die Hindernisse!<br>Tippe/Klicke um die Rotation umzukehren.</p>
+    <button onclick="startGame()">START</button>
+  </div>
+  <div id="gameover" class="hidden">
+    <h1>GAME OVER</h1>
+    <p id="finalScore"></p>
+    <button onclick="startGame()">NOCHMAL</button>
+    <button onclick="showMenu()">MENÜ</button>
+  </div>
+  <div id="levelclear" class="hidden">
+    <h1>LEVEL GESCHAFFT!</h1>
+    <p id="levelScoreText"></p>
+    <button onclick="nextLevel()">WEITER</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Game state
+let state = 'menu'; // menu, playing, gameover, levelclear
+let stick = { x: 0, y: 0, angle: 0, length: 60, rotSpeed: 2.5, dir: 1, speed: 0 };
+let walls = [];
+let particles = [];
+let lives = 3;
+let score = 0;
+let level = 1;
+let cameraY = 0;
+let goalY = 0;
+let hitCooldown = 0;
+let flash = 0;
+let time = 0;
+
+// Levels
+function generateLevel(lvl) {
+  walls = [];
+  const gapMin = Math.max(80, 140 - lvl * 8);
+  const gapMax = Math.max(100, 180 - lvl * 6);
+  const segments = 8 + lvl * 3;
+  const corridorWidth = Math.max(90, 160 - lvl * 10);
+
+  // Side walls
+  const startY = H - 100;
+  const totalHeight = segments * 150;
+  goalY = startY - totalHeight;
+
+  // Generate corridor
+  let cx = W / 2;
+  for (let i = 0; i < segments; i++) {
+    const sy = startY - i * 150;
+    const ey = sy - 150;
+
+    // Shift corridor
+    const shift = (Math.random() - 0.5) * (60 + lvl * 10);
+    const ncx = Math.max(corridorWidth, Math.min(W - corridorWidth, cx + shift));
+
+    // Left wall
+    walls.push({ x1: 0, y1: sy, x2: ncx - corridorWidth/2, y2: ey, type: 'rect' });
+    // Right wall
+    walls.push({ x1: ncx + corridorWidth/2, y1: sy, x2: W, y2: ey, type: 'rect' });
+
+    // Obstacles inside corridor
+    if (i > 0 && Math.random() < 0.3 + lvl * 0.05) {
+      const ox = ncx + (Math.random() - 0.5) * (corridorWidth * 0.4);
+      const oy = (sy + ey) / 2;
+      walls.push({ x1: ox - 15, y1: oy - 15, x2: ox + 15, y2: oy + 15, type: 'obstacle' });
+    }
+
+    cx = ncx;
+  }
+
+  // Goal
+  walls.push({ x1: cx - corridorWidth/2, y1: goalY, x2: cx + corridorWidth/2, y2: goalY - 30, type: 'goal' });
+
+  return { startX: W/2, startY: startY + 50 };
+}
+
+function startGame() {
+  state = 'playing';
+  lives = 3;
+  score = 0;
+  level = 1;
+  loadLevel();
+  document.getElementById('menu').classList.add('hidden');
+  document.getElementById('gameover').classList.add('hidden');
+  document.getElementById('levelclear').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+}
+
+function loadLevel() {
+  const start = generateLevel(level);
+  stick.x = start.startX;
+  stick.y = start.startY;
+  stick.angle = 0;
+  stick.dir = 1;
+  stick.speed = 1.5 + level * 0.3;
+  stick.length = 50 + level * 3;
+  stick.rotSpeed = 2 + level * 0.2;
+  cameraY = 0;
+  hitCooldown = 0;
+  particles = [];
+  updateHUD();
+}
+
+function showMenu() {
+  state = 'menu';
+  document.getElementById('menu').classList.remove('hidden');
+  document.getElementById('gameover').classList.add('hidden');
+  document.getElementById('hud').classList.add('hidden');
+}
+
+function nextLevel() {
+  level++;
+  loadLevel();
+  state = 'playing';
+  document.getElementById('levelclear').classList.add('hidden');
+}
+
+function updateHUD() {
+  document.getElementById('levelInfo').textContent = `Level ${level}`;
+  document.getElementById('lives').textContent = '❤'.repeat(Math.max(0, lives));
+  document.getElementById('score').textContent = score;
+}
+
+// Input
+let inputActive = false;
+function onInput() {
+  if (state === 'playing') {
+    stick.dir *= -1;
+    spawnParticles(stick.x, stick.y, '#0ff', 5);
+  }
+}
+canvas.addEventListener('pointerdown', onInput);
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Space' || e.code === 'ArrowLeft' || e.code === 'ArrowRight') {
+    e.preventDefault();
+    onInput();
+  }
+});
+
+// Particles
+function spawnParticles(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      life: 1,
+      color,
+      size: 2 + Math.random() * 3
+    });
+  }
+}
+
+// Collision
+function stickEnds() {
+  const hw = stick.length / 2;
+  return [
+    { x: stick.x + Math.cos(stick.angle) * hw, y: stick.y + Math.sin(stick.angle) * hw },
+    { x: stick.x - Math.cos(stick.angle) * hw, y: stick.y - Math.sin(stick.angle) * hw }
+  ];
+}
+
+function pointInRect(px, py, r) {
+  return px >= r.x1 && px <= r.x2 && py >= r.y1 && py <= r.y2;
+}
+
+function lineRectIntersect(x1, y1, x2, y2, r) {
+  // Check multiple points along the line
+  for (let t = 0; t <= 1; t += 0.1) {
+    const px = x1 + (x2 - x1) * t;
+    const py = y1 + (y2 - y1) * t;
+    if (pointInRect(px, py, r)) return true;
+  }
+  return false;
+}
+
+function checkCollisions() {
+  const ends = stickEnds();
+  const e1 = ends[0], e2 = ends[1];
+
+  for (const wall of walls) {
+    if (wall.type === 'goal') {
+      // Check if stick center reaches goal
+      const wy = wall.y1 - cameraY;
+      if (stick.y <= wall.y1 && stick.x >= wall.x1 && stick.x <= wall.x2) {
+        return 'goal';
+      }
+      continue;
+    }
+
+    const r = { x1: wall.x1, y1: wall.y1 - cameraY, x2: wall.x2, y2: wall.y2 - cameraY };
+
+    if (r.y1 < -H || r.y1 > H * 2) continue; // Skip off-screen
+
+    if (lineRectIntersect(e1.x, e1.y, e2.x, e2.y, r)) {
+      return 'hit';
+    }
+  }
+  return null;
+}
+
+// Game loop
+function update() {
+  time += 0.016;
+
+  if (state === 'playing') {
+    // Rotate stick
+    stick.angle += stick.rotSpeed * stick.dir * 0.016 * Math.PI;
+
+    // Move up
+    stick.y -= stick.speed;
+    cameraY -= stick.speed;
+
+    // Keep stick centered vertically
+    const targetCamY = -(stick.y - H * 0.65);
+    cameraY += (targetCamY - cameraY) * 0.05;
+
+    // Hit cooldown
+    if (hitCooldown > 0) hitCooldown -= 0.016;
+    if (flash > 0) flash -= 0.016;
+
+    // Horizontal movement with tilt/keys
+    // Auto-correct towards center corridor
+
+    // Check collisions
+    const collision = checkCollisions();
+    if (collision === 'hit' && hitCooldown <= 0) {
+      lives--;
+      hitCooldown = 1.5;
+      flash = 0.3;
+      spawnParticles(stick.x, stick.y, '#f55', 15);
+      updateHUD();
+
+      if (lives <= 0) {
+        state = 'gameover';
+        document.getElementById('gameover').classList.remove('hidden');
+        document.getElementById('finalScore').textContent = `Score: ${score} | Level ${level}`;
+        document.getElementById('hud').classList.add('hidden');
+      }
+    } else if (collision === 'goal') {
+      score += level * 100 + lives * 50;
+      state = 'levelclear';
+      document.getElementById('levelclear').classList.remove('hidden');
+      document.getElementById('levelScoreText').textContent = `+${level * 100 + lives * 50} Punkte! Gesamt: ${score}`;
+      spawnParticles(stick.x, stick.y, '#0f0', 30);
+    }
+
+    // Side bounds
+    if (stick.x < 30) stick.x = 30;
+    if (stick.x > W - 30) stick.x = W - 30;
+  }
+
+  // Update particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= 0.02;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+}
+
+// Touch steering
+let touchX = null;
+canvas.addEventListener('pointermove', (e) => {
+  if (state === 'playing') {
+    if (touchX !== null) {
+      const dx = e.clientX - touchX;
+      stick.x += dx * 0.5;
+    }
+    touchX = e.clientX;
+  }
+});
+canvas.addEventListener('pointerup', () => { touchX = null; });
+
+// Keyboard steering
+const keys = {};
+document.addEventListener('keydown', (e) => { keys[e.code] = true; });
+document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+function handleKeys() {
+  if (state !== 'playing') return;
+  const moveSpeed = 3;
+  if (keys['ArrowLeft'] || keys['KeyA']) stick.x -= moveSpeed;
+  if (keys['ArrowRight'] || keys['KeyD']) stick.x += moveSpeed;
+}
+
+function draw() {
+  ctx.fillStyle = '#0a0a2e';
+  ctx.fillRect(0, 0, W, H);
+
+  // Stars background
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  for (let i = 0; i < 50; i++) {
+    const sx = (i * 137.5 + time * 10) % W;
+    const sy = (i * 97.3 + cameraY * 0.1) % H;
+    ctx.fillRect(sx, sy, 1.5, 1.5);
+  }
+
+  // Draw walls
+  for (const wall of walls) {
+    const ry1 = wall.y1 + cameraY;
+    const ry2 = wall.y2 + cameraY;
+
+    if (ry1 < -100 || ry2 > H + 100) continue;
+
+    if (wall.type === 'goal') {
+      // Goal - glowing green zone
+      const grd = ctx.createLinearGradient(wall.x1, ry1, wall.x2, ry2);
+      grd.addColorStop(0, 'rgba(0,255,100,0.8)');
+      grd.addColorStop(1, 'rgba(0,255,100,0.2)');
+      ctx.fillStyle = grd;
+      ctx.fillRect(wall.x1, ry2, wall.x2 - wall.x1, ry1 - ry2);
+
+      // Goal text
+      ctx.fillStyle = '#0f0';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('ZIEL', (wall.x1 + wall.x2) / 2, (ry1 + ry2) / 2 + 5);
+    } else if (wall.type === 'obstacle') {
+      // Floating obstacle
+      ctx.fillStyle = `hsl(${time * 60 % 360}, 80%, 50%)`;
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 10;
+      ctx.beginPath();
+      ctx.arc((wall.x1 + wall.x2) / 2, (ry1 + ry2) / 2, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      // Corridor walls
+      const grd = ctx.createLinearGradient(wall.x1, 0, wall.x2, 0);
+      grd.addColorStop(0, '#1a1a4e');
+      grd.addColorStop(1, '#2a2a6e');
+      ctx.fillStyle = grd;
+      ctx.fillRect(wall.x1, ry2, wall.x2 - wall.x1, ry1 - ry2);
+
+      // Wall edge glow
+      ctx.strokeStyle = 'rgba(0,200,255,0.4)';
+      ctx.lineWidth = 2;
+      if (wall.x1 === 0) {
+        // Left wall - glow on right edge
+        ctx.beginPath();
+        ctx.moveTo(wall.x2, ry1);
+        ctx.lineTo(wall.x2, ry2);
+        ctx.stroke();
+      } else {
+        // Right wall - glow on left edge
+        ctx.beginPath();
+        ctx.moveTo(wall.x1, ry1);
+        ctx.lineTo(wall.x1, ry2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // Draw particles
+  for (const p of particles) {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+
+  // Draw stick
+  if (state === 'playing' || state === 'levelclear') {
+    const ends = stickEnds();
+
+    // Stick glow
+    ctx.shadowColor = hitCooldown > 0 ? '#f55' : '#0ff';
+    ctx.shadowBlur = 15;
+
+    // Stick body
+    ctx.strokeStyle = hitCooldown > 0 ? '#f88' : '#fff';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(ends[0].x, ends[0].y);
+    ctx.lineTo(ends[1].x, ends[1].y);
+    ctx.stroke();
+
+    // Stick ends
+    ctx.fillStyle = hitCooldown > 0 ? '#f55' : '#0ff';
+    ctx.beginPath();
+    ctx.arc(ends[0].x, ends[0].y, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(ends[1].x, ends[1].y, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Center dot
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(stick.x, stick.y, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+  }
+
+  // Flash effect on hit
+  if (flash > 0) {
+    ctx.fillStyle = `rgba(255,50,50,${flash})`;
+    ctx.fillRect(0, 0, W, H);
+  }
+}
+
+function gameLoop() {
+  handleKeys();
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
