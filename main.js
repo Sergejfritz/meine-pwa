@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const fs = require('fs');
+const path = require('path');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -19,7 +20,8 @@ app.whenReady().then(createWindow);
 ipcMain.on('save-pdf', (event, pdfDataUri) => {
   // Entferne den Data-URI-Header
   const base64Data = pdfDataUri.replace(/^data:application\/pdf;base64,/, '');
-  const filePath = 'C:\\Users\\Sergej\\Desktop\\app\\Dokument_' + new Date().toISOString().slice(0,10) + '.pdf';
+  const date = new Date().toISOString().slice(0, 10);
+  const filePath = path.join(app.getPath('desktop'), 'Dokument_' + date + '.pdf');
   fs.writeFile(filePath, base64Data, 'base64', (err) => {
     if (err) {
       event.sender.send('save-pdf-response', { success: false, error: err.message });
