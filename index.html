@@ -4,49 +4,73 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#005288">
-  <title>TechDoku – S. Fritz</title>
+  <meta name="description" content="Technische Dokumentation für Reklamationen & Fertigungsaufträge – Fotos dokumentieren, als PDF erstellen und per WhatsApp teilen. Offline nutzbar.">
+  <title>TechDoku · S. Fritz – Technische Dokumentation</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" href="icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="TechDoku">
   <link rel="stylesheet" href="css/styles.css">
   <script src="vendor/jspdf.umd.min.js"></script>
-  <script src="vendor/html2canvas.min.js"></script>
 </head>
 <body>
 
   <header class="app-header">
-    <span class="logo">🛠️</span>
-    <h1>Technische Dokumentation<small>S. Fritz · TechDoku 2026</small></h1>
-    <button class="icon-btn" id="themeToggle" title="Hell/Dunkel">🌙</button>
+    <div class="brand">
+      <span class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 5.5A1.5 1.5 0 0 1 4.5 4H13l5 5v9.5A1.5 1.5 0 0 1 16.5 20h-12A1.5 1.5 0 0 1 3 18.5v-13Z" fill="#005288"/>
+          <path d="M13 4v5h5" fill="#0a6cb0"/>
+          <circle cx="10.5" cy="13.5" r="3.1" fill="none" stroke="#fff" stroke-width="1.5"/>
+          <path d="M10.5 11.1v-1M10.5 16.9v-1M8.1 13.5h-1M13.9 13.5h-1M8.8 11.8l-.7-.7M12.9 15.9l-.7-.7M12.2 11.8l.7-.7M8.1 15.9l.7-.7" stroke="#fff" stroke-width="1.1" stroke-linecap="round"/>
+          <circle cx="10.5" cy="13.5" r="1" fill="#fff"/>
+        </svg>
+      </span>
+      <div class="brand-text">
+        <h1>Technische Dokumentation</h1>
+        <span class="sub">S. Fritz · Qualitätssicherung</span>
+      </div>
+    </div>
+    <button class="icon-btn" id="themeToggle" aria-label="Hell- oder Dunkelmodus umschalten" title="Hell/Dunkel">🌙</button>
   </header>
 
   <main>
-    <!-- ============ FORMULAR ============ -->
-    <section class="view active" id="formView">
-      <div class="error-box hidden" id="errorBox"></div>
+    <!-- Entwurf-Wiederherstellung -->
+    <div class="banner hidden" id="draftBanner" role="status">
+      <span id="draftText">Entwurf wiederhergestellt.</span>
+      <button id="draftDiscard">Verwerfen</button>
+    </div>
+
+    <section id="formView">
+      <div class="error-box hidden" id="errorBox" role="alert"></div>
 
       <div class="card">
         <div class="card-title"><span class="num">1</span> Auftrag</div>
-        <div class="field">
-          <label>Auftragstyp <span class="req">*</span></label>
-          <div class="seg">
+        <div class="field" data-for="auftragstyp">
+          <label id="lblTyp">Auftragstyp <span class="req">*</span></label>
+          <div class="seg" role="radiogroup" aria-labelledby="lblTyp">
             <input type="radio" name="auftragstyp" id="typRekl" value="Reklamation">
             <label for="typRekl">⚠️ Reklamation</label>
             <input type="radio" name="auftragstyp" id="typFert" value="Fertigungsauftrag">
             <label for="typFert">🏭 Fertigungsauftrag</label>
           </div>
+          <div class="field-msg">Bitte auswählen.</div>
         </div>
         <div class="grid-2">
           <div class="field">
-            <label>Kunde (Firma) <span class="req">*</span></label>
-            <input id="kunde" list="sg_kunde" placeholder="z.B. Mustermann GmbH">
+            <label for="kunde">Kunde (Firma) <span class="req">*</span></label>
+            <input id="kunde" list="sg_kunde" placeholder="z.B. Mustermann GmbH" autocomplete="off">
             <datalist id="sg_kunde"></datalist>
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field">
-            <label>Maschine <span class="req">*</span></label>
-            <input id="maschine" list="sg_maschine">
+            <label for="maschine">Maschine <span class="req">*</span></label>
+            <input id="maschine" list="sg_maschine" autocomplete="off">
             <datalist id="sg_maschine"></datalist>
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
         </div>
       </div>
@@ -55,42 +79,51 @@
         <div class="card-title"><span class="num">2</span> Teil &amp; Details</div>
         <div class="grid-2">
           <div class="field">
-            <label>AB-Nr. <span class="req">*</span></label>
-            <input id="abnr" inputmode="numeric">
+            <label for="abnr">AB-Nr. <span class="req">*</span></label>
+            <input id="abnr" inputmode="numeric" autocomplete="off">
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field">
-            <label>Zeichnungsnr. <span class="req">*</span></label>
-            <input id="zeichnungsnummer">
+            <label for="zeichnungsnummer">Zeichnungsnr. <span class="req">*</span></label>
+            <input id="zeichnungsnummer" autocomplete="off">
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field">
-            <label>Index <span class="req">*</span></label>
-            <input id="index">
+            <label for="index">Index <span class="req">*</span></label>
+            <input id="index" autocomplete="off">
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field">
-            <label>Verantwortlich <span class="req">*</span></label>
-            <input id="verantwortlich" list="sg_verantwortlich">
+            <label for="verantwortlich">Verantwortlich <span class="req">*</span></label>
+            <input id="verantwortlich" list="sg_verantwortlich" autocomplete="off">
             <datalist id="sg_verantwortlich"></datalist>
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field">
-            <label>Datum <span class="req">*</span></label>
+            <label for="datum">Datum <span class="req">*</span></label>
             <input type="date" id="datum">
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field">
-            <label>Stückzahl <span class="req">*</span></label>
+            <label for="stueckzahl">Stückzahl <span class="req">*</span></label>
             <input type="number" id="stueckzahl" min="1" step="1" inputmode="numeric">
+            <div class="field-msg">Muss größer als 0 sein.</div>
           </div>
           <div class="field" style="grid-column:1/-1">
-            <label>Benennung der Teile <span class="req">*</span></label>
-            <input id="teilebenennung" list="sg_teilebenennung">
+            <label for="teilebenennung">Benennung der Teile <span class="req">*</span></label>
+            <input id="teilebenennung" list="sg_teilebenennung" autocomplete="off">
             <datalist id="sg_teilebenennung"></datalist>
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field hidden" id="versionField">
-            <label>Version <span class="req">*</span></label>
-            <input id="version">
+            <label for="version">Version <span class="req">*</span></label>
+            <input id="version" autocomplete="off">
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
           <div class="field hidden" id="spanndruckField">
-            <label>Spanndruck <span class="req">*</span></label>
-            <input id="spanndruck">
+            <label for="spanndruck">Spanndruck <span class="req">*</span></label>
+            <input id="spanndruck" autocomplete="off">
+            <div class="field-msg">Pflichtfeld.</div>
           </div>
         </div>
       </div>
@@ -98,55 +131,65 @@
       <div class="card">
         <div class="card-title"><span class="num">3</span> Bemerkungen</div>
         <div class="field">
-          <label>Bemerkungen <span class="req">*</span></label>
+          <label for="bemerkung">Bemerkungen <span class="req">*</span></label>
           <div class="input-with-btn">
             <textarea id="bemerkung" rows="3" placeholder="Beschreibung / Mangel / Hinweise…"></textarea>
-            <button class="mic-btn" id="micBtn" title="Diktieren">🎤</button>
+            <button class="mic-btn" id="micBtn" type="button" aria-label="Bemerkung diktieren" title="Diktieren">🎤</button>
           </div>
+          <div class="field-msg">Pflichtfeld.</div>
         </div>
       </div>
 
       <div class="card">
-        <div class="card-title"><span class="num">4</span> Fotos</div>
-        <div class="photo-add" id="photoAdd">
-          <span class="big">📷</span>
+        <div class="card-title"><span class="num">4</span> Fotos <span class="count" id="photoCount">0 / 9</span></div>
+        <button type="button" class="photo-add" id="photoAdd">
+          <span class="big" aria-hidden="true">📷</span>
           <strong>Fotos hinzufügen</strong><br>
           <small>Kamera oder Galerie · max. 9</small>
-        </div>
-        <input type="file" id="photoInput" accept="image/*" multiple class="hidden">
+        </button>
+        <input type="file" id="photoInput" accept="image/*" multiple class="hidden" aria-label="Fotos auswählen">
         <div class="photo-grid" id="photoGrid"></div>
+        <div class="field-msg" id="photoMsg" style="margin-top:10px">Bitte mindestens ein Foto hinzufügen.</div>
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" id="btnPdf">📄 PDF erstellen</button>
-        <button class="btn btn-share" id="btnShare">📤 Teilen (WhatsApp)</button>
+        <button class="btn btn-primary" id="btnPdf" type="button">📄 PDF erstellen</button>
+        <button class="btn btn-share" id="btnShare" type="button">📤 Teilen (WhatsApp)</button>
       </div>
       <div style="height:10px"></div>
-      <button class="btn btn-ghost" id="btnNew">✨ Neues Formular / Leeren</button>
+      <button class="btn btn-ghost" id="btnNew" type="button">✨ Neues Formular / Leeren</button>
+
+      <footer class="app-foot">TechDoku · funktioniert auch offline · v2026</footer>
     </section>
   </main>
 
-  <!-- ============ Foto-Editor ============ -->
-  <div class="modal" id="annoModal">
+  <!-- Foto-Editor -->
+  <div class="modal" id="annoModal" role="dialog" aria-modal="true" aria-label="Foto markieren">
     <div class="modal-head">
-      <button id="annoCancel">✕</button>
+      <button id="annoCancel" type="button">✕ Abbrechen</button>
       <h2>Foto markieren</h2>
-      <button id="annoSave" style="background:#16a34a">✓ Fertig</button>
+      <button id="annoSave" type="button" style="background:#16a34a">✓ Fertig</button>
     </div>
     <div class="canvas-wrap"><canvas id="annoCanvas"></canvas></div>
     <div class="tool-bar">
-      <button class="tool active" data-tool="arrow" title="Pfeil">↗</button>
-      <button class="tool" data-tool="ellipse" title="Kreis">◯</button>
-      <button class="tool" data-tool="pen" title="Stift">✎</button>
-      <span style="width:1px;background:#334155;align-self:stretch;margin:0 2px"></span>
+      <button class="tool active" data-tool="arrow" type="button" title="Pfeil" aria-label="Pfeil">↗</button>
+      <button class="tool" data-tool="ellipse" type="button" title="Kreis" aria-label="Kreis">◯</button>
+      <button class="tool" data-tool="pen" type="button" title="Stift" aria-label="Stift">✎</button>
+      <span class="sep"></span>
       <div id="annoColors" style="display:flex;gap:6px;align-items:center"></div>
-      <span style="width:1px;background:#334155;align-self:stretch;margin:0 2px"></span>
-      <button class="tool" id="annoUndo" title="Rückgängig">↶</button>
-      <button class="tool" id="annoClear" title="Alles löschen">🗑</button>
+      <span class="sep"></span>
+      <button class="tool" id="annoUndo" type="button" title="Rückgängig" aria-label="Rückgängig">↶</button>
+      <button class="tool" id="annoClear" type="button" title="Alles löschen" aria-label="Alles löschen">🗑</button>
     </div>
   </div>
 
-  <div class="toast" id="toast"></div>
+  <!-- Vollbild-Vorschau -->
+  <div class="lightbox" id="lightbox">
+    <button class="close" id="lightboxClose" type="button" aria-label="Schließen">✕</button>
+    <img id="lightboxImg" alt="Foto-Vorschau">
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
   <div class="loading" id="loading"><div class="spinner"></div><span id="loadingText">PDF wird erstellt…</span></div>
 
   <script type="module" src="js/app.js"></script>

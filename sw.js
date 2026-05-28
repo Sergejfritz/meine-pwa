@@ -1,5 +1,5 @@
 // Service Worker – macht die App offline-fähig (Werkstatt ohne WLAN)
-const CACHE = 'techdoku-v2026-3';
+const CACHE = 'techdoku-v2026-4';
 
 // Alles, was die App zum Laufen braucht – wird beim ersten Besuch gecacht
 const ASSETS = [
@@ -11,7 +11,6 @@ const ASSETS = [
   './js/annotate.js',
   './js/store.js',
   './vendor/jspdf.umd.min.js',
-  './vendor/html2canvas.min.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',

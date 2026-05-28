@@ -1,37 +1,40 @@
-// localStorage – Einstellungen (Theme) + Vorschläge für Auto-Vervollständigung
+// localStorage – Einstellungen, Eingabe-Vorschläge (Tipphilfe) und Entwurf-Sicherung.
+// Es wird KEIN Archiv abgelegter Dokumente gespeichert – nur Komfort-/Sicherungsdaten.
 const KEY_SETTINGS = 'techdoku_settings';
 const KEY_SUGGEST = 'techdoku_suggest';
+const KEY_DRAFT = 'techdoku_draft';
+
+function read(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
+function write(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
 
 export const Settings = {
-  get() {
-    try { return JSON.parse(localStorage.getItem(KEY_SETTINGS)) || {}; }
-    catch { return {}; }
-  },
-  set(patch) {
-    const s = { ...this.get(), ...patch };
-    localStorage.setItem(KEY_SETTINGS, JSON.stringify(s));
-    return s;
-  }
+  get() { return read(KEY_SETTINGS) || {}; },
+  set(patch) { const s = { ...this.get(), ...patch }; write(KEY_SETTINGS, s); return s; }
 };
 
 // Merkt sich frühere Eingaben pro Feld (z.B. Kunden, Maschinen, Verantwortliche)
 export const Suggest = {
-  _all() {
-    try { return JSON.parse(localStorage.getItem(KEY_SUGGEST)) || {}; }
-    catch { return {}; }
-  },
-  get(field) {
-    return (this._all()[field] || []);
-  },
+  _all() { return read(KEY_SUGGEST) || {}; },
+  get(field) { return this._all()[field] || []; },
   remember(field, value) {
     value = (value || '').trim();
     if (!value) return;
     const all = this._all();
-    const list = all[field] || [];
-    const idx = list.findIndex((v) => v.toLowerCase() === value.toLowerCase());
-    if (idx > -1) list.splice(idx, 1);
+    const list = (all[field] || []).filter((v) => v.toLowerCase() !== value.toLowerCase());
     list.unshift(value);
-    all[field] = list.slice(0, 25); // nur die letzten 25 behalten
-    localStorage.setItem(KEY_SUGGEST, JSON.stringify(all));
+    all[field] = list.slice(0, 25);
+    write(KEY_SUGGEST, all);
   }
+};
+
+// Entwurf der AKTUELLEN, noch nicht geteilten Eingabe (nur Textfelder, keine Fotos).
+// Schützt vor Datenverlust, wenn die App versehentlich geschlossen wird.
+export const Draft = {
+  save(fields) {
+    const hasContent = Object.entries(fields).some(([k, v]) => k !== 'datum' && String(v || '').trim());
+    if (!hasContent) { this.clear(); return; }
+    write(KEY_DRAFT, { fields, savedAt: Date.now() });
+  },
+  load() { return read(KEY_DRAFT); },
+  clear() { try { localStorage.removeItem(KEY_DRAFT); } catch {} }
 };
