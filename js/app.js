@@ -1,4 +1,3 @@
-import { DB } from './db.js';
 import { Settings, Suggest } from './store.js';
 import { createPDF, buildFilename } from './pdf.js';
 import { annotate } from './annotate.js';
@@ -8,29 +7,24 @@ const MAX_IMAGES = 9;
 const SUGGEST_FIELDS = ['kunde', 'maschine', 'verantwortlich', 'teilebenennung'];
 const BASE_FIELDS = ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'stueckzahl', 'bemerkung'];
 
-let images = [];      // [{ id, src, name, caption }]
-let editingId = null; // gesetzt, wenn ein Archiv-Eintrag bearbeitet wird
+let images = []; // [{ id, src, name, caption }]
 
 /* ===================== Init ===================== */
 function init() {
   registerSW();
   initTheme();
-  initNav();
   initType();
   initPhotos();
   initVoice();
   initActions();
   refreshSuggestions();
   setToday();
-  // Verantwortlichen vom letzten Mal vorausfüllen
   const last = Settings.get().lastVerantwortlich;
   if (last) $('verantwortlich').value = last;
 }
 
 function registerSW() {
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 /* ===================== Theme ===================== */
@@ -50,19 +44,6 @@ function applyTheme(t) {
   document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#0b1220' : '#005288';
 }
 
-/* ===================== Navigation ===================== */
-function initNav() {
-  document.querySelectorAll('.bottom-nav button').forEach((b) => {
-    b.onclick = () => switchView(b.dataset.view);
-  });
-}
-function switchView(id) {
-  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === id));
-  document.querySelectorAll('.bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.view === id));
-  if (id === 'archiveView') renderArchive();
-  window.scrollTo(0, 0);
-}
-
 /* ===================== Auftragstyp ===================== */
 function initType() {
   document.querySelectorAll('input[name=auftragstyp]').forEach((r) => {
@@ -79,7 +60,7 @@ function setToday() {
   if (!$('datum').value) $('datum').value = new Date().toISOString().slice(0, 10);
 }
 
-/* ===================== Auto-Vervollständigung ===================== */
+/* ===================== Auto-Vervollständigung (nur Tipphilfe) ===================== */
 function refreshSuggestions() {
   SUGGEST_FIELDS.forEach((f) => {
     const dl = $('sg_' + f);
@@ -95,15 +76,11 @@ function initPhotos() {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     if (!files.length) return;
-    if (images.length + files.length > MAX_IMAGES) {
-      toast(`Maximal ${MAX_IMAGES} Bilder`);
-      return;
-    }
+    if (images.length + files.length > MAX_IMAGES) { toast(`Maximal ${MAX_IMAGES} Bilder`); return; }
     showLoading('Bilder werden verarbeitet…');
     for (const f of files) {
       try {
-        const raw = await readFile(f);
-        const src = await compress(raw);
+        const src = await compress(await readFile(f));
         images.push({ id: 'img_' + Date.now() + Math.random().toString(36).slice(2, 6), src, name: f.name, caption: '' });
       } catch {}
     }
@@ -153,14 +130,8 @@ function renderPhotos() {
         <button data-act="del" title="Löschen">🗑</button>
       </div>`;
     el.querySelector('[data-act=left]').onclick = () => { if (i > 0) { [images[i - 1], images[i]] = [images[i], images[i - 1]]; renderPhotos(); } };
-    el.querySelector('[data-act=edit]').onclick = async () => {
-      const out = await annotate(im.src);
-      if (out) { im.src = out; renderPhotos(); }
-    };
-    el.querySelector('[data-act=caption]').onclick = () => {
-      const c = prompt('Bildunterschrift:', im.caption || '');
-      if (c !== null) { im.caption = c.trim(); renderPhotos(); }
-    };
+    el.querySelector('[data-act=edit]').onclick = async () => { const out = await annotate(im.src); if (out) { im.src = out; renderPhotos(); } };
+    el.querySelector('[data-act=caption]').onclick = () => { const c = prompt('Bildunterschrift:', im.caption || ''); if (c !== null) { im.caption = c.trim(); renderPhotos(); } };
     el.querySelector('[data-act=del]').onclick = () => { images.splice(i, 1); renderPhotos(); };
     grid.appendChild(el);
   });
@@ -172,16 +143,10 @@ function initVoice() {
   const btn = $('micBtn');
   if (!SR) { btn.style.display = 'none'; return; }
   const rec = new SR();
-  rec.lang = 'de-DE';
-  rec.interimResults = false;
-  rec.continuous = false;
+  rec.lang = 'de-DE'; rec.interimResults = false; rec.continuous = false;
   let active = false;
   const ta = $('bemerkung');
-
-  btn.onclick = () => {
-    if (active) { rec.stop(); return; }
-    try { rec.start(); } catch {}
-  };
+  btn.onclick = () => { if (active) { rec.stop(); return; } try { rec.start(); } catch {} };
   rec.onstart = () => { active = true; btn.classList.add('recording'); };
   rec.onend = () => { active = false; btn.classList.remove('recording'); };
   rec.onerror = () => { active = false; btn.classList.remove('recording'); };
@@ -195,7 +160,6 @@ function initVoice() {
 function readForm() {
   const typ = document.querySelector('input[name=auftragstyp]:checked')?.value || '';
   return {
-    id: editingId,
     auftragstyp: typ,
     kunde: $('kunde').value, maschine: $('maschine').value,
     abnr: $('abnr').value, zeichnungsnummer: $('zeichnungsnummer').value,
@@ -207,22 +171,7 @@ function readForm() {
   };
 }
 
-function loadForm(doc) {
-  editingId = doc.id || null;
-  if (doc.auftragstyp === 'Reklamation') $('typRekl').checked = true;
-  else if (doc.auftragstyp === 'Fertigungsauftrag') $('typFert').checked = true;
-  else { $('typRekl').checked = false; $('typFert').checked = false; }
-  updateTypeFields(doc.auftragstyp);
-  ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum',
-    'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung']
-    .forEach((f) => { $(f).value = doc[f] || ''; });
-  images = (doc.images || []).map((i) => ({ ...i, id: 'img_' + Math.random().toString(36).slice(2, 8) }));
-  renderPhotos();
-  clearError();
-}
-
 function clearForm() {
-  editingId = null;
   document.querySelectorAll('input[name=auftragstyp]').forEach((r) => r.checked = false);
   updateTypeFields('');
   ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'teilebenennung',
@@ -259,7 +208,7 @@ function initActions() {
     try {
       const pdf = await createPDF(doc);
       pdf.save(buildFilename(doc));
-      rememberAndSave(doc, true);
+      remember(doc);
       toast('PDF erstellt ✓');
     } finally { hideLoading(); }
   });
@@ -268,16 +217,15 @@ function initActions() {
     showLoading('PDF wird vorbereitet…');
     try {
       const pdf = await createPDF(doc);
-      const blob = pdf.output('blob');
-      const file = new File([blob], buildFilename(doc), { type: 'application/pdf' });
+      const file = new File([pdf.output('blob')], buildFilename(doc), { type: 'application/pdf' });
       hideLoading();
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ title: 'Technische Dokumentation S. Fritz', files: [file] });
-        rememberAndSave(doc, true);
+        await navigator.share({ title: 'Technische Dokumentation S. Fritz', text: 'Technische Dokumentation (PDF)', files: [file] });
+        remember(doc);
       } else {
         toast('Teilen hier nicht unterstützt – PDF wird gespeichert');
         pdf.save(buildFilename(doc));
-        rememberAndSave(doc, true);
+        remember(doc);
       }
     } catch (e) {
       hideLoading();
@@ -285,99 +233,28 @@ function initActions() {
     }
   });
 
-  $('btnSave').onclick = withDoc(async (doc) => {
-    await rememberAndSave(doc, false);
-    toast('Im Archiv gespeichert 💾');
-  });
-
   $('btnNew').onclick = () => {
     if (images.length || $('kunde').value) {
-      if (!confirm('Formular leeren? Nicht gespeicherte Eingaben gehen verloren.')) return;
+      if (!confirm('Formular leeren? Nicht geteilte Eingaben gehen verloren.')) return;
     }
     clearForm();
     toast('Neues Formular');
   };
-
-  $('searchInput').oninput = () => renderArchive($('searchInput').value);
 }
 
-// Wrapper: validiert zuerst, führt dann die Aktion mit dem Doc aus
+// Validiert zuerst, führt dann die Aktion mit dem Doc aus
 function withDoc(fn) {
-  return async () => {
-    const doc = validate();
-    if (doc) await fn(doc);
-  };
+  return async () => { const doc = validate(); if (doc) await fn(doc); };
 }
 
-async function rememberAndSave(doc, silent) {
-  // Vorschläge & "letzter Verantwortlicher" merken
+// Merkt sich nur Eingabe-Vorschläge (Tipphilfe) – es wird KEIN Archiv gespeichert
+function remember(doc) {
   SUGGEST_FIELDS.forEach((f) => Suggest.remember(f, doc[f]));
   if (doc.verantwortlich) Settings.set({ lastVerantwortlich: doc.verantwortlich.trim() });
   refreshSuggestions();
-  // Ins Archiv speichern (legt an oder aktualisiert)
-  const saved = await DB.save({ ...doc, id: editingId || undefined });
-  editingId = saved.id;
-  return saved;
-}
-
-/* ===================== Archiv ===================== */
-async function renderArchive(query = '') {
-  const list = $('archiveList');
-  const docs = await DB.all();
-  const q = query.trim().toLowerCase();
-  const filtered = q
-    ? docs.filter((d) => [d.kunde, d.abnr, d.maschine, d.zeichnungsnummer, d.teilebenennung, d.verantwortlich]
-        .some((v) => String(v || '').toLowerCase().includes(q)))
-    : docs;
-
-  if (!filtered.length) {
-    list.innerHTML = `<div class="empty"><span class="big">📭</span>${q ? 'Nichts gefunden.' : 'Noch keine Dokumentationen.<br>Erfasse deine erste über „Erfassen".'}</div>`;
-    return;
-  }
-
-  list.innerHTML = '';
-  filtered.forEach((d) => {
-    const el = document.createElement('div');
-    el.className = 'archive-item';
-    const tagClass = d.auftragstyp === 'Reklamation' ? 'rekl' : 'fert';
-    const date = d.datum ? d.datum.split('-').reverse().join('.') : '';
-    el.innerHTML = `
-      <div class="top">
-        <span class="title">${esc(d.kunde) || '—'}</span>
-        <span class="tag ${tagClass}">${esc(d.auftragstyp) || ''}</span>
-      </div>
-      <div class="meta">AB ${esc(d.abnr) || '—'} · Z ${esc(d.zeichnungsnummer) || '—'} · ${esc(d.maschine) || ''}</div>
-      <div class="meta">${date} · ${(d.images || []).length} Foto(s) · ${esc(d.teilebenennung) || ''}</div>
-      <div class="actions">
-        <button data-act="open">✏️ Öffnen</button>
-        <button data-act="pdf">📄 PDF</button>
-        <button data-act="share">📤 Teilen</button>
-        <button data-act="del">🗑️</button>
-      </div>`;
-    el.querySelector('[data-act=open]').onclick = () => { loadForm(d); switchView('formView'); toast('Zum Bearbeiten geladen'); };
-    el.querySelector('[data-act=pdf]').onclick = async () => { showLoading('PDF…'); try { const p = await createPDF(d); p.save(buildFilename(d)); } finally { hideLoading(); } };
-    el.querySelector('[data-act=share]').onclick = () => archiveShare(d);
-    el.querySelector('[data-act=del]').onclick = async () => {
-      if (confirm('Diese Dokumentation löschen?')) { await DB.remove(d.id); renderArchive($('searchInput').value); toast('Gelöscht'); }
-    };
-    list.appendChild(el);
-  });
-}
-
-async function archiveShare(d) {
-  showLoading('PDF…');
-  try {
-    const pdf = await createPDF(d);
-    const file = new File([pdf.output('blob')], buildFilename(d), { type: 'application/pdf' });
-    hideLoading();
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({ title: 'Technische Dokumentation S. Fritz', files: [file] });
-    } else { pdf.save(buildFilename(d)); }
-  } catch (e) { hideLoading(); if (e?.name !== 'AbortError') toast('Teilen fehlgeschlagen'); }
 }
 
 /* ===================== UI-Helfer ===================== */
-function esc(s) { return String(s || '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
 let toastTimer;
 function toast(msg) {
   const t = $('toast');
