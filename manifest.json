@@ -1,7 +1,7 @@
 {
   "name": "Technische Dokumentation – S. Fritz",
   "short_name": "TechDoku",
-  "description": "Reklamationen & Fertigungsaufträge mit Fotos dokumentieren, archivieren und als PDF teilen – auch offline.",
+  "description": "Reklamationen & Fertigungsaufträge mit Fotos dokumentieren und als PDF teilen (WhatsApp) – auch offline.",
   "start_url": "./index.html",
   "scope": "./",
   "id": "techdoku-sfritz",
