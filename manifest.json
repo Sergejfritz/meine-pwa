@@ -1,42 +1,21 @@
 {
-  "name": "Meine PWA",
-  "short_name": "PWA",
-  "start_url": "/index.html",
+  "name": "Technische Dokumentation – S. Fritz",
+  "short_name": "TechDoku",
+  "description": "Reklamationen & Fertigungsaufträge mit Fotos dokumentieren, archivieren und als PDF teilen – auch offline.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "techdoku-sfritz",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
-  "description": "Eine großartige Progressive Web App",
-  "icons": [
-    {
-      "src": "icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "maskable"
-    }
-  ],
   "orientation": "portrait",
-  "screenshots": [
-    {
-      "src": "screenshot.png",
-      "sizes": "1080x1920",
-      "type": "image/png"
-    }
-  ],
-  "scope": "/",
-  "id": "/",
-  "launch_handler": {
-    "client_mode": "auto"
-  },
-  "categories": ["utilities", "productivity"],
+  "background_color": "#0f172a",
+  "theme_color": "#005288",
   "lang": "de",
   "dir": "ltr",
-  "iarc_rating_id": "e123456",
-  "related_applications": [],
+  "categories": ["productivity", "utilities", "business"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
   "prefer_related_applications": false
 }
