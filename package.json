@@ -1,0 +1,13 @@
+{
+  "name": "techdoku-sfritz",
+  "version": "2026.1.0",
+  "private": true,
+  "description": "Technische Dokumentation (PWA) – Reklamationen & Fertigungsaufträge als PDF, mit Foto-Markierung, offline-fähig.",
+  "scripts": {
+    "start": "node tests/serve.mjs",
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
+}
