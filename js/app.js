@@ -80,25 +80,32 @@ function refreshSuggestions() {
 
 /* ===================== Fotos ===================== */
 function initPhotos() {
-  $('photoAdd').onclick = () => $('photoInput').click();
-  $('photoInput').onchange = async (e) => {
-    const files = Array.from(e.target.files || []);
-    e.target.value = '';
-    if (!files.length) return;
-    const room = MAX_IMAGES - images.length;
-    if (room <= 0) { toast(`Maximal ${MAX_IMAGES} Bilder`); return; }
-    const take = files.slice(0, room);
-    if (files.length > room) toast(`Nur ${room} weitere Bilder möglich`);
-    showLoading('Bilder werden verarbeitet…');
-    for (const f of take) {
-      try {
-        const src = await compress(await readFile(f));
-        images.push({ id: 'img_' + Date.now() + Math.random().toString(36).slice(2, 6), src, name: f.name, caption: '' });
-      } catch {}
-    }
-    hideLoading();
-    renderPhotos();
-  };
+  ['galleryInput', 'cameraInput'].forEach((id) => {
+    const inp = $(id);
+    if (!inp) return;
+    inp.addEventListener('change', async (e) => {
+      const files = Array.from(e.target.files || []);
+      e.target.value = ''; // erlaubt erneutes Wählen derselben Datei
+      await addFiles(files);
+    });
+  });
+}
+
+async function addFiles(files) {
+  if (!files.length) return;
+  const room = MAX_IMAGES - images.length;
+  if (room <= 0) { toast(`Maximal ${MAX_IMAGES} Bilder`); return; }
+  const take = files.slice(0, room);
+  if (files.length > room) toast(`Nur ${room} weitere Bilder möglich`);
+  showLoading('Bilder werden verarbeitet…');
+  for (const f of take) {
+    try {
+      const src = await compress(await readFile(f));
+      images.push({ id: 'img_' + Date.now() + Math.random().toString(36).slice(2, 6), src, name: f.name, caption: '' });
+    } catch {}
+  }
+  hideLoading();
+  renderPhotos();
 }
 
 function readFile(file) {
@@ -248,7 +255,7 @@ function validate() {
   if (!(Number(doc.stueckzahl) > 0)) { setErr('stueckzahl', true, 'Muss größer als 0 sein.'); flag($('stueckzahl')); }
   if (doc.auftragstyp === 'Reklamation' && !doc.version.trim()) { setErr('version', true); flag($('version')); }
   if (doc.auftragstyp === 'Fertigungsauftrag' && !doc.spanndruck.trim()) { setErr('spanndruck', true); flag($('spanndruck')); }
-  if (!images.length) { $('photoMsg').style.display = 'block'; flag($('photoAdd')); }
+  if (!images.length) { $('photoMsg').style.display = 'block'; flag($('photoArea')); }
 
   if (firstBad) {
     $('errorBox').textContent = '⚠️ Bitte die rot markierten Felder ausfüllen.';

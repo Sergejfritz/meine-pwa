@@ -142,12 +142,20 @@
 
       <div class="card">
         <div class="card-title"><span class="num">4</span> Fotos <span class="count" id="photoCount">0 / 9</span></div>
-        <button type="button" class="photo-add" id="photoAdd">
-          <span class="big" aria-hidden="true">📷</span>
-          <strong>Fotos hinzufügen</strong><br>
-          <small>Kamera oder Galerie · max. 9</small>
-        </button>
-        <input type="file" id="photoInput" accept="image/*" multiple class="hidden" aria-label="Fotos auswählen">
+        <div class="photo-actions" id="photoArea">
+          <label class="photo-add" for="galleryInput">
+            <span class="big" aria-hidden="true">🖼️</span>
+            <strong>Galerie</strong><br>
+            <small>Vorhandene Bilder wählen</small>
+          </label>
+          <label class="photo-add" for="cameraInput">
+            <span class="big" aria-hidden="true">📷</span>
+            <strong>Kamera</strong><br>
+            <small>Neues Foto aufnehmen</small>
+          </label>
+        </div>
+        <input type="file" id="galleryInput" accept="image/*" multiple class="sr-only" aria-label="Bilder aus Galerie wählen">
+        <input type="file" id="cameraInput" accept="image/*" capture="environment" class="sr-only" aria-label="Foto mit Kamera aufnehmen">
         <div class="photo-grid" id="photoGrid"></div>
         <div class="field-msg" id="photoMsg" style="margin-top:10px">Bitte mindestens ein Foto hinzufügen.</div>
       </div>

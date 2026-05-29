@@ -193,12 +193,13 @@ input.invalid, textarea.invalid, .seg.invalid {
 @keyframes pulse { 50% { opacity: .55; } }
 
 /* ===== Fotos ===== */
+.photo-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .photo-add {
   border: 2px dashed var(--border); border-radius: var(--radius);
-  padding: 22px; text-align: center; cursor: pointer; color: var(--text-muted);
-  background: var(--surface-2); transition: all .15s; width: 100%;
+  padding: 18px 12px; text-align: center; cursor: pointer; color: var(--text-muted);
+  background: var(--surface-2); transition: all .15s; width: 100%; display: block;
 }
-.photo-add:active { border-color: var(--accent); color: var(--accent); }
+.photo-add:hover, .photo-add:active { border-color: var(--accent); color: var(--accent); }
 .photo-add .big { font-size: 30px; display: block; margin-bottom: 6px; }
 .photo-add strong { color: var(--text); }
 .photo-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }

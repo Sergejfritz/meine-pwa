@@ -5,7 +5,7 @@ const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR
 
 async function addPhoto(page, n = 1) {
   const files = Array.from({ length: n }, (_, i) => ({ name: `f${i}.png`, mimeType: 'image/png', buffer: PNG }));
-  await page.setInputFiles('#photoInput', files);
+  await page.setInputFiles('#galleryInput', files);
   await expect(page.locator('#photoGrid .thumb')).toHaveCount(n);
 }
 
@@ -24,6 +24,19 @@ async function fillValid(page, { typ = 'typRekl' } = {}) {
   await page.fill('#bemerkung', 'Testbemerkung.');
   await addPhoto(page, 1);
 }
+
+test('Galerie- und Kamera-Auswahl stehen bereit und funktionieren', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('label[for=galleryInput]')).toBeVisible();
+  await expect(page.locator('label[for=cameraInput]')).toBeVisible();
+  // Galerie öffnet vorhandene Bilder (kein capture), Kamera nimmt auf (capture)
+  expect(await page.locator('#galleryInput').getAttribute('capture')).toBeNull();
+  expect(await page.locator('#cameraInput').getAttribute('capture')).toBe('environment');
+  await expect(page.locator('#galleryInput')).toHaveAttribute('multiple', '');
+  // Auch der Kamera-Eingang fügt ein Foto hinzu
+  await page.setInputFiles('#cameraInput', { name: 'cam.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.locator('#photoGrid .thumb')).toHaveCount(1);
+});
 
 test('lädt ohne Konsolenfehler und zeigt die Überschrift', async ({ page }) => {
   const errors = [];
