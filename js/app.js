@@ -1,6 +1,7 @@
 import { Settings, Suggest, Draft } from './store.js';
 import { createPDF, buildFilename } from './pdf.js';
 import { annotate } from './annotate.js';
+import { scanArbeitskarte } from './scan.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGES = 9;
@@ -17,6 +18,7 @@ function init() {
   initTheme();
   initType();
   initPhotos();
+  initScan();
   initVoice();
   initActions();
   initLightbox();
@@ -106,6 +108,96 @@ async function addFiles(files) {
   }
   hideLoading();
   renderPhotos();
+}
+
+/* ===================== Arbeitskarte scannen ===================== */
+// Beschriftungen + zugehörige Formularfelder für den Übernahme-Dialog
+const SCAN_MAP = [
+  { key: 'kunde', label: 'Kunde', target: 'kunde' },
+  { key: 'abnr', label: 'AB-Nr.', target: 'abnr' },
+  { key: 'zeichnungsnummer', label: 'Zeichnungsnr.', target: 'zeichnungsnummer' },
+  { key: 'index', label: 'Index', target: 'index' },
+  { key: 'teilebenennung', label: 'Benennung der Teile', target: 'teilebenennung' },
+  { key: 'stueckzahl', label: 'Stückzahl', target: 'stueckzahl' },
+  { key: 'datum', label: 'Datum', target: 'datum', iso: 'datumIso' },
+];
+let scanFields = {};
+
+function initScan() {
+  $('scanInput').addEventListener('change', async (e) => {
+    const file = (e.target.files || [])[0];
+    e.target.value = '';
+    if (!file) return;
+    await runScan(file);
+  });
+  $('scanClose').onclick = closeScanSheet;
+  $('scanCancel').onclick = closeScanSheet;
+  $('scanApply').onclick = applyScan;
+}
+
+async function runScan(file) {
+  $('scanProgress').textContent = 'Karte wird gelesen… 0%';
+  $('scanLoading').classList.add('show');
+  try {
+    const dataUrl = await readFile(file);
+    const result = await scanArbeitskarte(dataUrl, (p) => {
+      $('scanProgress').textContent = `Karte wird gelesen… ${Math.round(p * 100)}%`;
+    });
+    scanFields = result.fields || {};
+    showScanSheet(scanFields);
+  } catch (err) {
+    console.error(err);
+    toast('Scan fehlgeschlagen – bitte erneut versuchen');
+  } finally {
+    $('scanLoading').classList.remove('show');
+  }
+}
+
+function showScanSheet(fields) {
+  const box = $('scanResults');
+  box.innerHTML = '';
+  const found = SCAN_MAP.filter((m) => fields[m.key]);
+  $('scanEmpty').classList.toggle('hidden', found.length > 0);
+  $('scanApply').disabled = found.length === 0;
+
+  found.forEach((m) => {
+    const row = document.createElement('label');
+    row.className = 'scan-row';
+    const display = m.iso && fields[m.iso] ? fields[m.key] : fields[m.key];
+    row.innerHTML = `
+      <input type="checkbox" data-key="${m.key}" checked>
+      <span class="rl"><span class="rk">${m.label}</span><span class="rv">${esc(display)}</span></span>`;
+    box.appendChild(row);
+  });
+  $('scanSheet').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function applyScan() {
+  let count = 0;
+  $('scanResults').querySelectorAll('input[type=checkbox]:checked').forEach((cb) => {
+    const m = SCAN_MAP.find((x) => x.key === cb.dataset.key);
+    if (!m) return;
+    let val = scanFields[m.key];
+    if (m.iso) val = scanFields[m.iso] || ''; // Datum als ISO ins date-Feld
+    if (!val) return;
+    const el = $(m.target);
+    el.value = val;
+    el.classList.remove('invalid');
+    el.closest('.field')?.classList.remove('has-error');
+    count++;
+  });
+  closeScanSheet();
+  saveDraft();
+  if (count) {
+    toast(`${count} Feld${count > 1 ? 'er' : ''} übernommen – bitte prüfen ✓`);
+    $('kunde').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+}
+
+function closeScanSheet() {
+  $('scanSheet').classList.remove('open');
+  document.body.style.overflow = '';
 }
 
 function readFile(file) {

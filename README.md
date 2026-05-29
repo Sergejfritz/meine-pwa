@@ -11,6 +11,12 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
 
 ## Funktionen
 
+- 📇 **Arbeitskarte scannen** – Foto der Arbeitskarte aufnehmen; die App liest
+  per **Texterkennung (OCR, lokal/offline)** Kunde, AB-Nr., Zeichnungsnr.,
+  Benennung, Stückzahl und Liefertermin aus und schlägt sie zur Übernahme vor.
+  Der Nutzer prüft und bestätigt jedes Feld. Die Erkennung läuft komplett auf
+  dem Gerät (Tesseract.js + deutsches Sprachmodell, selbst gehostet) – es werden
+  keine Daten an einen Server gesendet.
 - 📝 **Geführtes Formular** – Reklamation oder Fertigungsauftrag mit den jeweils
   passenden Zusatzfeldern (Version / Spanndruck).
 - 📷 **Fotos** – bis zu 9 Bilder aus Kamera **oder** Galerie, automatisch
@@ -34,15 +40,19 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
 ## Projektstruktur
 
 ```
-index.html          App-Shell (Formular, Foto-Editor, Vorschau)
+index.html          App-Shell (Formular, Scan, Foto-Editor, Vorschau)
 css/styles.css      Design-System (Hell/Dunkel, responsiv, barrierearm)
-js/app.js           Steuerung (Validierung, Fotos, Entwurf, Aktionen)
+js/app.js           Steuerung (Validierung, Fotos, Scan, Entwurf, Aktionen)
 js/pdf.js           PDF-Erstellung (jsPDF, mehrseitig)
 js/annotate.js      Foto-Markierung (Canvas)
+js/scan.js          Arbeitskarten-Scan (OCR via Tesseract.js, mehrere Rotationen)
+js/cardparse.js     Feld-Extraktion aus dem OCR-Text
 js/store.js         localStorage: Einstellungen, Vorschläge, Entwurf
-sw.js               Service Worker (Offline-Cache)
+sw.js               Service Worker (Offline-Cache; OCR-Dateien lazy gecacht)
 manifest.json       PWA-Manifest (installierbar)
-vendor/             jsPDF (lokal gehostet, offline)
+vendor/jspdf…       jsPDF (lokal gehostet, offline)
+vendor/tesseract/   OCR-Engine + WASM (SIMD), lokal gehostet
+vendor/tessdata/    Deutsches OCR-Sprachmodell (deu.traineddata.gz)
 tests/              Playwright End-to-End-Tests + statischer Server
 ```
 

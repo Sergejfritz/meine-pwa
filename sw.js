@@ -1,7 +1,10 @@
 // Service Worker – macht die App offline-fähig (Werkstatt ohne WLAN)
-const CACHE = 'techdoku-v2026-5';
+const CACHE = 'techdoku-v2026-6';
 
-// Alles, was die App zum Laufen braucht – wird beim ersten Besuch gecacht
+// App-Shell – wird beim ersten Besuch gecacht.
+// Die OCR-Dateien (vendor/tesseract, vendor/tessdata) werden NICHT hier
+// vorgeladen, sondern beim ersten Scan automatisch über den fetch-Handler
+// nachgecacht. So bleibt die Installation klein und auch ohne Netz robust.
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +13,8 @@ const ASSETS = [
   './js/pdf.js',
   './js/annotate.js',
   './js/store.js',
+  './js/scan.js',
+  './js/cardparse.js',
   './vendor/jspdf.umd.min.js',
   './manifest.json',
   './icon-192.png',

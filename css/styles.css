@@ -118,6 +118,55 @@ main { max-width: 760px; margin: 0 auto; padding: 16px; }
   padding: 5px 12px; border-radius: 20px; font-weight: 700; font-size: 13px; cursor: pointer;
 }
 
+/* ===== Scan-Karte (Arbeitskarte) ===== */
+.scan-card {
+  background: linear-gradient(135deg, var(--accent-strong), var(--accent));
+  color: #fff; border-radius: var(--radius); padding: 16px; margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.scan-info { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px; }
+.scan-ico { font-size: 24px; line-height: 1; flex: 0 0 auto; }
+.scan-info strong { display: block; font-size: 15px; }
+.scan-info small { display: block; opacity: .9; font-size: 12.5px; margin-top: 2px; }
+.btn-scan { background: #fff; color: var(--accent-strong); }
+.btn-scan:hover { filter: brightness(.97); }
+
+/* ===== Übernahme-Dialog (Bottom-Sheet) ===== */
+.sheet {
+  position: fixed; left: 0; right: 0; top: 0; z-index: 150; background: rgba(15,23,42,.55);
+  height: 100vh; height: 100dvh; /* sichtbare Höhe (Mobil: ohne URL-Leiste) */
+  display: none; align-items: flex-end; justify-content: center; backdrop-filter: blur(2px);
+}
+.sheet.open { display: flex; }
+.sheet-box {
+  background: var(--surface); width: 100%; max-width: 560px;
+  border-radius: 20px 20px 0 0; padding: 18px 18px calc(18px + var(--safe-bottom));
+  max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);
+  display: flex; flex-direction: column; box-shadow: var(--shadow-lg);
+  animation: sheetUp .25s ease;
+}
+#scanResults { overflow-y: auto; flex: 1; min-height: 0; }
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: none; } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; }
+.sheet-head h2 { font-size: 18px; }
+.sheet-head button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 50%; font-size: 16px; cursor: pointer; }
+.sheet-sub { color: var(--text-muted); font-size: 13px; margin: 6px 0 14px; }
+.sheet-empty { color: var(--text-muted); font-size: 14px; padding: 14px; background: var(--surface-2); border-radius: var(--radius-sm); line-height: 1.5; }
+.sheet-actions {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px;
+  flex: 0 0 auto; padding-top: 14px; border-top: 1px solid var(--border); background: var(--surface);
+}
+.scan-row {
+  display: flex; align-items: center; gap: 12px; padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+.scan-row:last-child { border-bottom: none; }
+.scan-row input[type=checkbox] { width: 22px; height: 22px; flex: 0 0 auto; accent-color: var(--accent); }
+.scan-row .rl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.scan-row .rk { font-size: 11.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .03em; }
+.scan-row .rv { font-size: 16px; color: var(--text); font-weight: 600; word-break: break-word; }
+.scan-row.warn .rv { color: var(--warn); }
+
 /* ===== Karten ===== */
 .card {
   background: var(--surface);

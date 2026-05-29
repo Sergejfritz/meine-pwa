@@ -47,6 +47,19 @@
     <section id="formView">
       <div class="error-box hidden" id="errorBox" role="alert"></div>
 
+      <!-- Arbeitskarte scannen → Felder automatisch vorausfüllen -->
+      <div class="scan-card">
+        <div class="scan-info">
+          <span class="scan-ico" aria-hidden="true">⚡</span>
+          <div>
+            <strong>Arbeitskarte scannen</strong>
+            <small>Foto der Karte machen – Felder werden automatisch ausgefüllt (du prüfst sie).</small>
+          </div>
+        </div>
+        <label class="btn btn-scan" for="scanInput">📇 Karte scannen</label>
+        <input type="file" id="scanInput" accept="image/*" capture="environment" class="sr-only" aria-label="Arbeitskarte fotografieren oder wählen">
+      </div>
+
       <div class="card">
         <div class="card-title"><span class="num">1</span> Auftrag</div>
         <div class="field" data-for="auftragstyp">
@@ -195,6 +208,30 @@
   <div class="lightbox" id="lightbox">
     <button class="close" id="lightboxClose" type="button" aria-label="Schließen">✕</button>
     <img id="lightboxImg" alt="Foto-Vorschau">
+  </div>
+
+  <!-- Übernahme-Dialog: erkannte Felder bestätigen -->
+  <div class="sheet" id="scanSheet" role="dialog" aria-modal="true" aria-label="Erkannte Felder übernehmen">
+    <div class="sheet-box">
+      <div class="sheet-head">
+        <h2>Erkannte Felder</h2>
+        <button id="scanClose" type="button" aria-label="Schließen">✕</button>
+      </div>
+      <p class="sheet-sub">Bitte prüfen und Haken setzen. Nur ausgewählte Felder werden übernommen.</p>
+      <div id="scanResults"></div>
+      <div class="sheet-empty hidden" id="scanEmpty">Es konnten keine Felder sicher erkannt werden. Bitte die Karte gerade, gut beleuchtet und formatfüllend fotografieren – oder Felder von Hand eingeben.</div>
+      <div class="sheet-actions">
+        <button class="btn btn-ghost" id="scanCancel" type="button">Abbrechen</button>
+        <button class="btn btn-primary" id="scanApply" type="button">Übernehmen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scan-Fortschritt -->
+  <div class="loading" id="scanLoading">
+    <div class="spinner"></div>
+    <span id="scanProgress">Karte wird gelesen… 0%</span>
+    <small style="opacity:.8;max-width:260px;text-align:center">Beim ersten Mal wird die Texterkennung geladen – danach geht es schneller und offline.</small>
   </div>
 
   <div class="toast" id="toast" role="status"></div>
