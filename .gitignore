@@ -6,3 +6,5 @@ blob-report/
 *.pdf
 *.log
 .DS_Store
+# entpacktes OCR-Modell (nur die .gz-Variante gehört ins Repo)
+/deu.traineddata

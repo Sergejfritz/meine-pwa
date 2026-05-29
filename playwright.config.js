@@ -12,6 +12,7 @@ module.exports = defineConfig({
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
     acceptDownloads: true,
+    reducedMotion: 'reduce', // stabilere Klicks (keine Einblende-Animationen)
   },
   projects: [
     { name: 'mobile-chromium', use: { ...devices['Pixel 7'] } },
