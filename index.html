@@ -93,8 +93,12 @@
         <div class="grid-2">
           <div class="field">
             <label for="abnr">AB-Nr. <span class="req">*</span></label>
-            <input id="abnr" inputmode="numeric" autocomplete="off">
+            <input id="abnr" autocomplete="off">
             <div class="field-msg">Pflichtfeld.</div>
+          </div>
+          <div class="field">
+            <label for="position">Position</label>
+            <input id="position" inputmode="numeric" autocomplete="off">
           </div>
           <div class="field">
             <label for="zeichnungsnummer">Zeichnungsnr. <span class="req">*</span></label>
@@ -218,6 +222,7 @@
         <button id="scanClose" type="button" aria-label="Schließen">✕</button>
       </div>
       <p class="sheet-sub">Bitte prüfen und Haken setzen. Nur ausgewählte Felder werden übernommen.</p>
+      <div class="scan-hint hidden" id="scanHint"></div>
       <div id="scanResults"></div>
       <div class="sheet-empty hidden" id="scanEmpty">Es konnten keine Felder sicher erkannt werden. Bitte die Karte gerade, gut beleuchtet und formatfüllend fotografieren – oder Felder von Hand eingeben.</div>
       <div class="sheet-actions">

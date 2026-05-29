@@ -121,6 +121,7 @@ function metaTable(pdf, doc, startY) {
     ['Benennung der Teile', doc.teilebenennung],
     ['Stückzahl', doc.stueckzahl],
   ];
+  if (doc.position) pairs.splice(3, 0, ['Position', doc.position]);
   if (doc.auftragstyp === 'Reklamation' && doc.version) pairs.push(['Version', doc.version]);
   if (doc.auftragstyp === 'Fertigungsauftrag' && doc.spanndruck) pairs.push(['Spanndruck', doc.spanndruck]);
 

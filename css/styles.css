@@ -151,6 +151,8 @@ main { max-width: 760px; margin: 0 auto; padding: 16px; }
 .sheet-head h2 { font-size: 18px; }
 .sheet-head button { background: var(--surface-2); border: 1px solid var(--border); color: var(--text); width: 36px; height: 36px; border-radius: 50%; font-size: 16px; cursor: pointer; }
 .sheet-sub { color: var(--text-muted); font-size: 13px; margin: 6px 0 14px; }
+.scan-hint { background: #fff7ed; color: #b45309; border: 1px solid #fed7aa; border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; line-height: 1.45; margin-bottom: 12px; }
+[data-theme="dark"] .scan-hint { background: #2a1c0a; border-color: #7c4a14; color: #fbbf24; }
 .sheet-empty { color: var(--text-muted); font-size: 14px; padding: 14px; background: var(--surface-2); border-radius: var(--radius-sm); line-height: 1.5; }
 .sheet-actions {
   display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px;

@@ -5,11 +5,13 @@ const { test, expect } = require('@playwright/test');
 const STUB = `
 export async function scanArbeitskarte(_dataUrl, onProgress) {
   if (onProgress) { onProgress(0.5); onProgress(1); }
-  return { confidence: 90, rawConfidence: 60, text: 'stub', fields: {
+  return { confidence: 60, hits: 7, text: 'stub', fields: {
     kunde: 'Andritz Hydro GmbH - Ravensburg',
     abnr: 'AB260327',
+    position: '2',
     zeichnungsnummer: '704097971',
     teilebenennung: 'Sensor Kontakt',
+    index: '0',
     stueckzahl: '48',
     datum: '27.05.2026',
     datumIso: '2026-05-27'
@@ -32,15 +34,17 @@ test('Scan-Übernahme füllt die erkannten Felder ins Formular', async ({ page }
   await page.setInputFiles('#scanInput', { name: 'karte.jpg', mimeType: 'image/jpeg', buffer: PNG });
   await expect(page.locator('#scanSheet')).toHaveClass(/open/);
 
-  // Alle erkannten Felder werden angeboten
-  await expect(page.locator('#scanResults .scan-row')).toHaveCount(6);
+  // Alle erkannten Felder werden angeboten (inkl. Position & Index)
+  await expect(page.locator('#scanResults .scan-row')).toHaveCount(8);
 
   await page.click('#scanApply');
   await expect(page.locator('#scanSheet')).not.toHaveClass(/open/);
 
   await expect(page.locator('#kunde')).toHaveValue('Andritz Hydro GmbH - Ravensburg');
   await expect(page.locator('#abnr')).toHaveValue('AB260327');
+  await expect(page.locator('#position')).toHaveValue('2');
   await expect(page.locator('#zeichnungsnummer')).toHaveValue('704097971');
+  await expect(page.locator('#index')).toHaveValue('0');
   await expect(page.locator('#teilebenennung')).toHaveValue('Sensor Kontakt');
   await expect(page.locator('#stueckzahl')).toHaveValue('48');
   await expect(page.locator('#datum')).toHaveValue('2026-05-27');
