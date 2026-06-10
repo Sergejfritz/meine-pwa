@@ -1,4 +1,5 @@
-import { Settings, Suggest, Draft, History, Zones } from './store.js';
+import { Settings, Suggest, Draft, Zones } from './store.js';
+import { Archive } from './archive.js';
 import { createPDF, buildFilename } from './pdf.js';
 import { annotate } from './annotate.js';
 import { scanArbeitskarte } from './scan.js';
@@ -32,7 +33,7 @@ function init() {
   initLightbox();
   initLiveValidation();
   initDraftAutosave();
-  initHistory();
+  initArchive();
   initProgress();
   initRipple();
   initInstall();
@@ -496,7 +497,7 @@ function initActions() {
     try {
       const pdf = await createPDF(doc);
       pdf.save(buildFilename(doc));
-      finalize(doc);
+      await finalize(doc);
       celebrate('PDF erstellt!');
     } finally { hideLoading(); }
   });
@@ -510,11 +511,11 @@ function initActions() {
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ title: 'Technische Dokumentation S. Fritz', text: 'Technische Dokumentation (PDF)', files: [file] });
-        finalize(doc);
+        await finalize(doc);
         celebrate('PDF geteilt!');
       } else {
         pdf.save(buildFilename(doc));
-        finalize(doc);
+        await finalize(doc);
         toast('Teilen nicht unterstützt – PDF gespeichert');
       }
     } catch (e) { if (e?.name !== 'AbortError') toast('Teilen abgebrochen'); }
@@ -545,14 +546,17 @@ function withDoc(btnId, fn) {
   };
 }
 
-// Nach erfolgreichem Erstellen/Teilen: Vorschläge & Verlauf merken, Entwurf löschen
-function finalize(doc) {
+// Nach erfolgreichem Erstellen/Teilen: Vorschläge merken, ins Archiv legen,
+// Entwurf löschen. Das Archiv speichert die komplette Doku inkl. Fotos.
+async function finalize(doc) {
   SUGGEST_FIELDS.forEach((f) => Suggest.remember(f, doc[f]));
   if (doc.verantwortlich) Settings.set({ lastVerantwortlich: doc.verantwortlich.trim() });
   refreshSuggestions();
-  const { images: _imgs, ...fields } = doc; // Verlauf ohne Fotos (klein halten)
-  History.add(fields);
-  renderHistory();
+  const { images, ...fields } = doc;
+  try {
+    await Archive.add({ id: 'a' + Date.now(), createdAt: Date.now(), fields, images: images || [] });
+    await renderArchive();
+  } catch { /* Archiv optional – Fehler nicht blockierend */ }
   Draft.clear();
   hideDraftBanner();
 }
@@ -592,21 +596,23 @@ function hideDraftBanner() { $('draftBanner').classList.add('hidden'); }
 
 /* ===================== Verlauf (Vorlagen) ===================== */
 const HIST_PREVIEW = 3; // eingeklappt sichtbare Einträge
+const TYPE_ICON = { Reklamation: '⚠️', Fertigungsauftrag: '🏭', Privat: '🏠' };
 
-function initHistory() {
+function initArchive() {
   $('histToggle').onclick = () => {
     const btn = $('histToggle');
     const open = btn.getAttribute('aria-expanded') === 'true';
     btn.setAttribute('aria-expanded', String(!open));
     btn.textContent = open ? 'Alle anzeigen' : 'Weniger';
-    renderHistory();
+    renderArchive();
   };
-  renderHistory();
+  renderArchive();
 }
 
-function renderHistory() {
+async function renderArchive() {
+  let list = [];
+  try { list = await Archive.list(); } catch { list = []; }
   const card = $('historyCard');
-  const list = History.list();
   card.classList.toggle('hidden', list.length === 0);
   if (!list.length) return;
 
@@ -620,41 +626,71 @@ function renderHistory() {
     const f = e.fields || {};
     const d = new Date(e.createdAt);
     const when = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+    const thumb = (e.images && e.images[0] && e.images[0].src) || '';
+    const nPhotos = (e.images || []).length;
     const row = document.createElement('div');
     row.className = 'hist-row';
     row.innerHTML = `
       <button class="hist-main" type="button">
-        <span class="hist-ico">${f.auftragstyp === 'Reklamation' ? '⚠️' : '🏭'}</span>
+        ${thumb ? `<img class="hist-thumb" src="${thumb}" alt="">` : `<span class="hist-ico">${TYPE_ICON[f.auftragstyp] || '📄'}</span>`}
         <span class="hist-txt">
           <strong>${esc(f.teilebenennung || f.kunde || 'Dokumentation')}</strong>
-          <small>${esc([f.kunde, f.abnr, when].filter(Boolean).join(' · '))}</small>
+          <small>${esc([f.kunde, f.abnr, when].filter(Boolean).join(' · '))}${nPhotos ? ` · ${nPhotos} 📷` : ''}</small>
         </span>
         <span class="hist-go" aria-hidden="true">↪</span>
       </button>
+      <button class="hist-pdf" type="button" aria-label="Als PDF teilen" title="Als PDF teilen">📄</button>
       <button class="hist-del" type="button" aria-label="Eintrag löschen" title="Löschen">🗑</button>`;
-    row.querySelector('.hist-main').onclick = () => applyHistory(e);
-    row.querySelector('.hist-del').onclick = () => { History.remove(e.id); renderHistory(); };
+    row.querySelector('.hist-main').onclick = () => loadArchiveEntry(e);
+    row.querySelector('.hist-pdf').onclick = () => sharePdfFromEntry(e);
+    row.querySelector('.hist-del').onclick = async () => {
+      if (!confirm('Diesen Archiv-Eintrag löschen?')) return;
+      await Archive.remove(e.id); renderArchive();
+    };
     box.appendChild(row);
   });
 }
 
-function applyHistory(entry) {
+// Vollständige Doku (inkl. Fotos) zurück ins Formular laden
+function loadArchiveEntry(entry) {
   const dirty = images.length || $('kunde').value.trim() || $('bemerkung').value.trim();
-  if (dirty && !confirm('Aktuelle Eingaben mit dieser Vorlage überschreiben?')) return;
+  if (dirty && !confirm('Aktuelle Eingaben mit dieser gespeicherten Doku überschreiben?')) return;
   const f = entry.fields || {};
   $('typRekl').checked = f.auftragstyp === 'Reklamation';
   $('typFert').checked = f.auftragstyp === 'Fertigungsauftrag';
+  $('typPriv').checked = f.auftragstyp === 'Privat';
   updateTypeFields(f.auftragstyp || '');
-  DRAFT_FIELDS.filter((k) => k !== 'auftragstyp' && k !== 'datum').forEach((k) => { $(k).value = f[k] || ''; });
-  setTodayForce();
+  DRAFT_FIELDS.filter((k) => k !== 'auftragstyp').forEach((k) => { $(k).value = f[k] || ''; });
+  setToday();
+  images = (entry.images || []).map((im, i) => ({
+    id: 'img_' + Date.now() + '_' + i, src: im.src, name: im.name || ('Bild' + (i + 1)), caption: im.caption || '',
+  }));
+  renderPhotos();
   clearAllErrors();
   saveDraft();
   updateProgress();
   vibrate(15);
-  toast('Vorlage übernommen – Fotos hinzufügen 📷');
+  toast('Doku geladen – bearbeiten oder neu teilen');
   $('kunde').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-function setTodayForce() { $('datum').value = new Date().toISOString().slice(0, 10); }
+
+// Direkt aus dem Archiv erneut als PDF teilen/speichern
+async function sharePdfFromEntry(entry) {
+  const doc = { ...(entry.fields || {}), images: entry.images || [] };
+  showLoading('PDF wird vorbereitet…');
+  let pdf;
+  try { pdf = await createPDF(doc); } catch (e) { hideLoading(); toast('Fehler bei der PDF-Erstellung'); return; }
+  const file = new File([pdf.output('blob')], buildFilename(doc), { type: 'application/pdf' });
+  hideLoading();
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ title: 'Technische Dokumentation S. Fritz', text: 'Technische Dokumentation (PDF)', files: [file] });
+    } else {
+      pdf.save(buildFilename(doc));
+      toast('PDF gespeichert');
+    }
+  } catch (e) { if (e?.name !== 'AbortError') toast('Teilen abgebrochen'); }
+}
 
 /* ===================== Fortschrittsanzeige ===================== */
 // Zählt Auftragstyp, Pflichtfelder (inkl. typabhängiger) und Fotos.
