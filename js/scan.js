@@ -7,6 +7,9 @@ import { readZones } from './zones.js';
 
 const TESS_BASE = 'vendor/tesseract';
 let workerPromise = null;
+let progressCb = null; // aktueller Fortschritts-Empfänger (während eines Scans)
+
+function report(update) { try { progressCb && progressCb(update); } catch {} }
 
 // Tesseract wird erst bei Bedarf geladen (spart Start-Performance)
 function loadScript(src) {
@@ -18,7 +21,7 @@ function loadScript(src) {
   });
 }
 
-async function getWorker(onProgress) {
+function getWorker() {
   if (workerPromise) return workerPromise;
   workerPromise = (async () => {
     await loadScript(`${TESS_BASE}/tesseract.min.js`);
@@ -28,14 +31,17 @@ async function getWorker(onProgress) {
       corePath: `${TESS_BASE}/`,
       langPath: 'vendor/tessdata',
       gzip: true,
-      logger: (m) => {
-        if (onProgress && m.status === 'recognizing text') onProgress(m.progress);
-      },
+      // alle Phasen melden (Laden der Erkennung + eigentliches Lesen)
+      logger: (m) => report({ status: m.status, progress: m.progress || 0 }),
     });
     return worker;
   })().catch((e) => { workerPromise = null; throw e; });
   return workerPromise;
 }
+
+// Lädt die Texterkennung schon im Hintergrund (z.B. beim Antippen des
+// Scan-Knopfs, während der Nutzer das Foto auswählt) → erstes Scannen wirkt flott.
+export function prewarmScanner() { getWorker().catch(() => {}); }
 
 // Bild als HTMLCanvas in gewünschter Rotation (0/90/180/270 Grad)
 function rotated(img, deg) {
@@ -70,13 +76,22 @@ function downscale(img, maxEdge = 2600) {
 /**
  * Scannt eine Arbeitskarte.
  * @param {string} dataUrl  Bild als DataURL
- * @param {(p:number)=>void} onProgress  Fortschritt 0..1
+ * @param {(u:{status:string,progress:number})=>void} onProgress  Status/Fortschritt
  * @returns {Promise<{fields:object, confidence:number, text:string}>}
  */
 export async function scanArbeitskarte(dataUrl, onProgress) {
-  const worker = await getWorker(onProgress);
-  const img = await loadImage(dataUrl);
-  const base = downscale(img);
+  progressCb = onProgress;
+  try {
+    const worker = await getWorker();
+    const img = await loadImage(dataUrl);
+    const base = downscale(img);
+    return await runScanWith(worker, base);
+  } finally {
+    progressCb = null;
+  }
+}
+
+async function runScanWith(worker, base) {
 
   // Übliche Ausrichtungen testen (Foto kann gedreht sein). Aufrechtes
   // Hochformat (0°) zuerst, dann die gedrehten Varianten.

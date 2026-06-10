@@ -2,7 +2,7 @@ import { Settings, Suggest, Draft, Zones } from './store.js';
 import { Archive } from './archive.js';
 import { createPDF, buildFilename } from './pdf.js';
 import { annotate } from './annotate.js';
-import { scanArbeitskarte } from './scan.js';
+import { scanArbeitskarte, prewarmScanner } from './scan.js';
 import { openZoneCalibrator } from './zonecal.js';
 import { zoneLabel } from './zones.js';
 import { openSignaturePad } from './signature.js';
@@ -273,11 +273,19 @@ const SCAN_MAP = [
 let scanFields = {};
 
 function initScan() {
-  $('scanInput').addEventListener('change', async (e) => {
+  // Kamera UND Galerie: beide Eingänge lösen dieselbe Auto-Erkennung aus
+  const onScanFile = async (e) => {
     const file = (e.target.files || [])[0];
     e.target.value = '';
     if (!file) return;
     await runScan(file);
+  };
+  $('scanInput').addEventListener('change', onScanFile);
+  $('scanGalleryInput').addEventListener('change', onScanFile);
+  // Erkennung schon laden, während der Nutzer Kamera/Galerie öffnet
+  ['scanInput', 'scanGalleryInput'].forEach((id) => {
+    const lbl = document.querySelector(`label[for=${id}]`);
+    if (lbl) lbl.addEventListener('pointerdown', () => prewarmScanner(), { once: false });
   });
   $('scanClose').onclick = closeScanSheet;
   $('scanCancel').onclick = closeScanSheet;
@@ -285,12 +293,16 @@ function initScan() {
 }
 
 async function runScan(file) {
-  $('scanProgress').textContent = 'Karte wird gelesen… 0%';
+  $('scanProgress').textContent = 'Texterkennung wird vorbereitet…';
   $('scanLoading').classList.add('show');
   try {
     const dataUrl = await readFile(file);
-    const result = await scanArbeitskarte(dataUrl, (p) => {
-      $('scanProgress').textContent = `Karte wird gelesen… ${Math.round(p * 100)}%`;
+    const result = await scanArbeitskarte(dataUrl, (u) => {
+      if (u && u.status === 'recognizing text') {
+        $('scanProgress').textContent = `Karte wird gelesen… ${Math.round((u.progress || 0) * 100)}%`;
+      } else {
+        $('scanProgress').textContent = 'Texterkennung wird geladen… (beim ersten Mal etwas länger)';
+      }
     });
     scanFields = result.fields || {};
     showScanSheet(scanFields, result.hits || 0);

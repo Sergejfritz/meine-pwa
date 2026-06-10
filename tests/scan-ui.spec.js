@@ -17,6 +17,7 @@ export async function scanArbeitskarte(_dataUrl, onProgress) {
     datumIso: '2026-05-27'
   }};
 }
+export function prewarmScanner() {}
 export async function disposeScanner() {}
 `;
 
@@ -48,6 +49,15 @@ test('Scan-Übernahme füllt die erkannten Felder ins Formular', async ({ page }
   await expect(page.locator('#teilebenennung')).toHaveValue('Sensor Kontakt');
   await expect(page.locator('#stueckzahl')).toHaveValue('48');
   await expect(page.locator('#datum')).toHaveValue('2026-05-27');
+});
+
+test('Galerie-Eingang löst die Auto-Erkennung ebenfalls aus', async ({ page }) => {
+  await page.goto('/');
+  // Bild aus der Galerie (kein capture) statt Kamera
+  expect(await page.locator('#scanGalleryInput').getAttribute('capture')).toBeNull();
+  await page.setInputFiles('#scanGalleryInput', { name: 'gespeicherte_karte.jpg', mimeType: 'image/jpeg', buffer: PNG });
+  await expect(page.locator('#scanSheet')).toHaveClass(/open/);
+  await expect(page.locator('#scanResults .scan-row')).toHaveCount(8);
 });
 
 test('abgewählte Felder werden nicht übernommen', async ({ page }) => {
