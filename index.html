@@ -215,6 +215,16 @@
       <div style="height:10px"></div>
       <button class="btn btn-ghost" id="btnNew" type="button">✨ Neues Formular / Leeren</button>
 
+      <!-- App installieren: macht aus dem Browser-Tab eine echte Vollbild-App -->
+      <div class="install-card hidden" id="installCard">
+        <button class="install-close" id="installClose" type="button" aria-label="Hinweis schließen">✕</button>
+        <div class="install-top"><span class="install-ico" aria-hidden="true">📲</span>
+          <strong>Als App installieren</strong></div>
+        <p id="installText">Auf dem Startbildschirm ablegen – dann öffnet sie im Vollbild, ohne Browserleiste, und fühlt sich an wie eine echte App.</p>
+        <button class="btn btn-primary" id="installBtn" type="button">📲 Jetzt installieren</button>
+        <ol class="install-steps hidden" id="installSteps"></ol>
+      </div>
+
       <footer class="app-foot">TechDoku · funktioniert auch offline · v2026</footer>
     </section>
   </main>

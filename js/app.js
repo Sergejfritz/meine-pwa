@@ -28,6 +28,7 @@ function init() {
   initHistory();
   initProgress();
   initRipple();
+  initInstall();
   refreshSuggestions();
   setToday();
   const last = Settings.get().lastVerantwortlich;
@@ -44,6 +45,60 @@ function initSplash() {
   if (!el) return;
   const remove = () => { el.classList.add('gone'); setTimeout(() => el.remove(), 400); };
   setTimeout(remove, 1150);
+}
+
+/* ===================== App installieren ===================== */
+// Macht aus dem Browser-Tab eine echte Vollbild-App. Android/Chrome liefern
+// das beforeinstallprompt-Event; iOS/Safari kennt das nicht → Anleitung zeigen.
+function isStandalone() {
+  return matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+}
+function isIOS() {
+  return /iphone|ipad|ipod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+let deferredPrompt = null;
+
+function initInstall() {
+  const card = $('installCard');
+  // Schon installiert oder bewusst weggeklickt? Dann nichts zeigen.
+  if (isStandalone() || Settings.get().installDismissed) return;
+
+  $('installClose').onclick = () => { card.classList.add('hidden'); Settings.set({ installDismissed: true }); };
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    $('installSteps').classList.add('hidden');
+    $('installBtn').classList.remove('hidden');
+    card.classList.remove('hidden');
+  });
+
+  $('installBtn').onclick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    if (outcome === 'accepted') card.classList.add('hidden');
+  };
+
+  window.addEventListener('appinstalled', () => {
+    card.classList.add('hidden');
+    Settings.set({ installDismissed: true });
+    toast('App installiert ✓ – ab jetzt im Vollbild');
+  });
+
+  // iOS: kein automatisches Prompt → Schritt-für-Schritt-Anleitung anzeigen
+  if (isIOS()) {
+    $('installBtn').classList.add('hidden');
+    $('installText').textContent = 'In Safari als App ablegen – dann öffnet sie im Vollbild ohne Browserleiste:';
+    const steps = $('installSteps');
+    steps.innerHTML = '<li>Unten auf <b>Teilen</b> tippen (das Symbol mit dem Pfeil ↑)</li>'
+      + '<li><b>„Zum Home-Bildschirm"</b> wählen</li>'
+      + '<li>Mit <b>„Hinzufügen"</b> bestätigen</li>';
+    steps.classList.remove('hidden');
+    card.classList.remove('hidden');
+  }
 }
 
 /* ===================== Service Worker (+ Update-Hinweis) ===================== */
