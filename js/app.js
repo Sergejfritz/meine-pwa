@@ -273,12 +273,15 @@ const SCAN_MAP = [
 let scanFields = {};
 
 function initScan() {
-  $('scanInput').addEventListener('change', async (e) => {
+  // Kamera UND Galerie: beide Eingänge lösen dieselbe Auto-Erkennung aus
+  const onScanFile = async (e) => {
     const file = (e.target.files || [])[0];
     e.target.value = '';
     if (!file) return;
     await runScan(file);
-  });
+  };
+  $('scanInput').addEventListener('change', onScanFile);
+  $('scanGalleryInput').addEventListener('change', onScanFile);
   $('scanClose').onclick = closeScanSheet;
   $('scanCancel').onclick = closeScanSheet;
   $('scanApply').onclick = applyScan;

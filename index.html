@@ -101,11 +101,15 @@
           <span class="scan-ico" aria-hidden="true">⚡</span>
           <div>
             <strong>Arbeitskarte scannen</strong>
-            <small>Foto der Karte machen – Felder werden automatisch ausgefüllt (du prüfst sie).</small>
+            <small>Karte fotografieren oder aus der Galerie laden – Felder werden automatisch ausgefüllt (du prüfst sie).</small>
           </div>
         </div>
-        <label class="btn btn-scan" for="scanInput">📇 Karte scannen</label>
-        <input type="file" id="scanInput" accept="image/*" capture="environment" class="sr-only" aria-label="Arbeitskarte fotografieren oder wählen">
+        <div class="scan-actions">
+          <label class="btn btn-scan" for="scanInput">📷 Fotografieren</label>
+          <label class="btn btn-scan" for="scanGalleryInput">🖼️ Aus Galerie</label>
+        </div>
+        <input type="file" id="scanInput" accept="image/*" capture="environment" class="sr-only" aria-label="Arbeitskarte fotografieren">
+        <input type="file" id="scanGalleryInput" accept="image/*" class="sr-only" aria-label="Arbeitskarte aus Galerie wählen">
         <button class="scan-tpl" id="zoneSetup" type="button">
           <span id="zoneStatus">⚙️ Scan-Vorlage einrichten – Felder selbst festlegen</span>
         </button>
