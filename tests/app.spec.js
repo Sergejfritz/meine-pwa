@@ -105,6 +105,9 @@ test('Privat: blendet Fertigungsfelder aus und erstellt PDF ohne Pflicht-AB-Nr.'
   await page.setInputFiles('#galleryInput', { name: 'p.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.locator('#photoGrid .thumb')).toHaveCount(1);
 
+  // Fortschrittsring erreicht im Privat-Modus 100% (zählt nur nötige Felder)
+  await expect(page.locator('#progressPct')).toHaveText('100%');
+
   const dl = page.waitForEvent('download');
   await page.click('#btnPdf');
   const download = await dl;

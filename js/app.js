@@ -374,7 +374,7 @@ function renderPhotos() {
     el.className = 'thumb' + (im.caption ? ' has-caption' : '');
     el.innerHTML = `
       <span class="badge">${i + 1}</span>
-      <img src="${im.src}" alt="Foto ${i + 1}${im.caption ? ': ' + esc(im.caption) : ''}">
+      <img src="${im.src}" alt="Foto ${i + 1}${im.caption ? ': ' + esc(im.caption) : ''}" loading="lazy" decoding="async">
       <div class="tools">
         <button data-act="left" title="Nach vorne" aria-label="Nach vorne"${i === 0 ? ' disabled' : ''}>◀</button>
         <button data-act="edit" title="Markieren" aria-label="Markieren">✎</button>
@@ -660,7 +660,7 @@ async function renderArchive() {
     row.className = 'hist-row';
     row.innerHTML = `
       <button class="hist-main" type="button">
-        ${thumb ? `<img class="hist-thumb" src="${thumb}" alt="">` : `<span class="hist-ico">${TYPE_ICON[f.auftragstyp] || '📄'}</span>`}
+        ${thumb ? `<img class="hist-thumb" src="${thumb}" alt="" loading="lazy" decoding="async">` : `<span class="hist-ico">${TYPE_ICON[f.auftragstyp] || '📄'}</span>`}
         <span class="hist-txt">
           <strong>${esc(f.teilebenennung || f.kunde || 'Dokumentation')}</strong>
           <small>${esc([f.kunde, f.abnr, when].filter(Boolean).join(' · '))}${nPhotos ? ` · ${nPhotos} 📷` : ''}</small>
@@ -723,12 +723,13 @@ async function sharePdfFromEntry(entry) {
 }
 
 /* ===================== Fortschrittsanzeige ===================== */
-// Zählt Auftragstyp, Pflichtfelder (inkl. typabhängiger) und Fotos.
+// Zählt Auftragstyp, die je nach Typ tatsächlich nötigen Pflichtfelder und
+// Fotos – passend zu validate(), damit der Ring auch bei "Privat" 100% erreicht.
 function progressParts() {
-  const parts = [!!currentType()];
-  REQUIRED.forEach((f) => parts.push(!!$(f).value.trim()));
-  parts.push(Number($('stueckzahl').value) > 0);
   const typ = currentType();
+  const parts = [!!typ];
+  requiredFor(typ).forEach((f) => parts.push(!!$(f).value.trim()));
+  if (typ !== 'Privat') parts.push(Number($('stueckzahl').value) > 0);
   if (typ === 'Reklamation') parts.push(!!$('version').value.trim());
   if (typ === 'Fertigungsauftrag') parts.push(!!$('spanndruck').value.trim());
   parts.push(images.length > 0);
