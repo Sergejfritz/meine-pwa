@@ -34,6 +34,9 @@
         <span class="sub">S. Fritz · Qualitätssicherung</span>
       </div>
     </div>
+    <div class="progress-ring" id="progressRing" role="status" aria-label="Formular-Fortschritt" title="Formular-Fortschritt">
+      <span id="progressPct">0%</span>
+    </div>
     <button class="icon-btn" id="themeToggle" aria-label="Hell- oder Dunkelmodus umschalten" title="Hell/Dunkel">🌙</button>
   </header>
 
@@ -58,6 +61,16 @@
         </div>
         <label class="btn btn-scan" for="scanInput">📇 Karte scannen</label>
         <input type="file" id="scanInput" accept="image/*" capture="environment" class="sr-only" aria-label="Arbeitskarte fotografieren oder wählen">
+      </div>
+
+      <!-- Verlauf: frühere Dokus als Vorlage wiederverwenden -->
+      <div class="card history-card hidden" id="historyCard">
+        <div class="card-title">
+          <span class="num">↻</span> Letzte Dokumentationen
+          <button class="hist-toggle" id="histToggle" type="button" aria-expanded="false">Alle anzeigen</button>
+        </div>
+        <p class="hist-sub">Antippen, um die Daten als Vorlage zu übernehmen (Fotos kommen neu dazu).</p>
+        <div id="historyList"></div>
       </div>
 
       <div class="card">
@@ -237,6 +250,18 @@
     <div class="spinner"></div>
     <span id="scanProgress">Karte wird gelesen… 0%</span>
     <small style="opacity:.8;max-width:260px;text-align:center">Beim ersten Mal wird die Texterkennung geladen – danach geht es schneller und offline.</small>
+  </div>
+
+  <!-- Erfolgs-Animation nach PDF/Teilen -->
+  <div class="success-overlay" id="successOverlay" aria-hidden="true">
+    <canvas id="confettiCanvas"></canvas>
+    <div class="success-badge">
+      <svg viewBox="0 0 52 52" aria-hidden="true">
+        <circle class="ck-circle" cx="26" cy="26" r="24" fill="none"/>
+        <path class="ck-check" fill="none" d="M14 27l8 8 16-17"/>
+      </svg>
+      <span id="successText">PDF erstellt!</span>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status"></div>
