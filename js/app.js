@@ -5,6 +5,7 @@ import { annotate } from './annotate.js';
 import { scanArbeitskarte } from './scan.js';
 import { openZoneCalibrator } from './zonecal.js';
 import { zoneLabel } from './zones.js';
+import { openSignaturePad } from './signature.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGES = 9;
@@ -19,6 +20,7 @@ function requiredFor(typ) { return typ === 'Privat' ? REQUIRED_PRIVAT : REQUIRED
 const DRAFT_FIELDS = ['auftragstyp', 'kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'];
 
 let images = []; // [{ id, src, name, caption }]
+let signature = ''; // Unterschrift als PNG-Daten-URL ('' = keine)
 
 /* ===================== Init ===================== */
 function init() {
@@ -38,6 +40,7 @@ function init() {
   initRipple();
   initInstall();
   initZones();
+  initSignature();
   refreshSuggestions();
   setToday();
   const last = Settings.get().lastVerantwortlich;
@@ -128,6 +131,25 @@ function refreshZoneStatus() {
   } else {
     el.textContent = '⚙️ Scan-Vorlage einrichten – Felder selbst festlegen';
   }
+}
+
+/* ===================== Unterschrift ===================== */
+function initSignature() {
+  $('sigOpen').onclick = async () => {
+    const r = await openSignaturePad(signature);
+    if (r === null) return;        // Abbruch → unverändert
+    signature = r;                 // '' = geleert übernommen, sonst Daten-URL
+    renderSignature(); saveDraft(); vibrate(10);
+  };
+  $('sigDelete').onclick = () => { signature = ''; renderSignature(); saveDraft(); };
+  renderSignature();
+}
+function renderSignature() {
+  const has = !!signature;
+  $('sigPreviewWrap').classList.toggle('hidden', !has);
+  $('sigDelete').classList.toggle('hidden', !has);
+  if (has) $('sigPreview').src = signature;
+  $('sigOpen').textContent = has ? '✍️ Ändern' : '✍️ Unterschreiben';
 }
 
 /* ===================== Service Worker (+ Update-Hinweis) ===================== */
@@ -410,7 +432,7 @@ function initVoice() {
 
 /* ===================== Formular <-> Daten ===================== */
 function readForm() {
-  const doc = { auftragstyp: currentType(), images: images.map((i) => ({ src: i.src, name: i.name, caption: i.caption })) };
+  const doc = { auftragstyp: currentType(), unterschrift: signature, images: images.map((i) => ({ src: i.src, name: i.name, caption: i.caption })) };
   ['kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum',
     'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'].forEach((f) => doc[f] = $(f).value);
   return doc;
@@ -423,6 +445,8 @@ function clearForm() {
     'stueckzahl', 'version', 'spanndruck', 'bemerkung'].forEach((f) => $(f).value = '');
   $('verantwortlich').value = Settings.get().lastVerantwortlich || '';
   images = [];
+  signature = '';
+  renderSignature();
   renderPhotos();
   setToday();
   clearAllErrors();
@@ -567,6 +591,7 @@ function saveDraft() {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(() => {
     const fields = {}; DRAFT_FIELDS.forEach((f) => fields[f] = f === 'auftragstyp' ? currentType() : $(f).value);
+    fields.unterschrift = signature;
     Draft.save(fields);
   }, 600);
 }
@@ -585,8 +610,11 @@ function restoreDraft() {
   const f = d.fields;
   if (f.auftragstyp === 'Reklamation') $('typRekl').checked = true;
   else if (f.auftragstyp === 'Fertigungsauftrag') $('typFert').checked = true;
+  else if (f.auftragstyp === 'Privat') $('typPriv').checked = true;
   updateTypeFields(f.auftragstyp || '');
   DRAFT_FIELDS.filter((k) => k !== 'auftragstyp').forEach((k) => { if (f[k] != null) $(k).value = f[k]; });
+  signature = f.unterschrift || '';
+  renderSignature();
   const t = new Date(d.savedAt);
   $('draftText').textContent = `Entwurf von ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} wiederhergestellt (Fotos bitte erneut hinzufügen).`;
   $('draftBanner').classList.remove('hidden');
@@ -665,6 +693,8 @@ function loadArchiveEntry(entry) {
   images = (entry.images || []).map((im, i) => ({
     id: 'img_' + Date.now() + '_' + i, src: im.src, name: im.name || ('Bild' + (i + 1)), caption: im.caption || '',
   }));
+  signature = f.unterschrift || '';
+  renderSignature();
   renderPhotos();
   clearAllErrors();
   saveDraft();

@@ -232,6 +232,17 @@
       </div>
 
       <div class="card">
+        <div class="card-title"><span class="num">✍️</span> Unterschrift <span class="count">optional</span></div>
+        <div class="sig-preview-wrap hidden" id="sigPreviewWrap">
+          <img id="sigPreview" alt="Unterschrift">
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-ghost" id="sigOpen" type="button">✍️ Unterschreiben</button>
+          <button class="btn btn-ghost hidden" id="sigDelete" type="button">🗑 Entfernen</button>
+        </div>
+      </div>
+
+      <div class="card">
         <div class="card-title"><span class="num">4</span> Fotos <span class="count" id="photoCount">0 / 9</span></div>
         <div class="photo-actions" id="photoArea">
           <label class="photo-add" for="galleryInput">
@@ -309,6 +320,18 @@
     <div class="canvas-wrap"><canvas id="zoneCanvas"></canvas></div>
     <div class="zone-list" id="zoneList"></div>
     <input type="file" id="zoneInput" accept="image/*" class="sr-only" aria-label="Foto der Arbeitskarte wählen">
+  </div>
+
+  <!-- Unterschrift-Pad -->
+  <div class="modal" id="sigModal" role="dialog" aria-modal="true" aria-label="Unterschrift">
+    <div class="modal-head">
+      <button id="sigCancel" type="button">✕ Abbrechen</button>
+      <h2>Unterschrift</h2>
+      <button id="sigSave" type="button" style="background:#16a34a">✓ Übernehmen</button>
+    </div>
+    <div class="sig-hint">Mit dem Finger im weißen Feld unterschreiben.</div>
+    <div class="canvas-wrap"><div class="sig-wrap"><canvas id="sigCanvas"></canvas></div></div>
+    <div class="zone-bar"><button class="zone-btn" id="sigClear" type="button">🗑 Löschen</button></div>
   </div>
 
   <!-- Vollbild-Vorschau -->

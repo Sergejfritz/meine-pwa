@@ -62,6 +62,43 @@ test('Install-Banner: Schließen merkt sich die Entscheidung', async ({ page }) 
   await expect(page.locator('#installCard')).toBeHidden();
 });
 
+async function sign(page) {
+  await page.click('#sigOpen');
+  await expect(page.locator('#sigModal')).toHaveClass(/open/);
+  const box = await page.locator('#sigCanvas').boundingBox();
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3);
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.6);
+  await page.mouse.up();
+  await page.click('#sigSave');
+  await expect(page.locator('#sigModal')).not.toHaveClass(/open/);
+}
+
+test('Unterschrift: zeichnen zeigt Vorschau; landet im Archiv und wird geladen', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(2300); // Splash weg
+
+  await sign(page);
+  await expect(page.locator('#sigPreviewWrap')).toBeVisible();
+  const src = await page.locator('#sigPreview').getAttribute('src');
+  expect(src).toContain('data:image/png');
+
+  // Doku abschließen → ins Archiv
+  await fillValid(page);
+  const dl = page.waitForEvent('download');
+  await page.click('#btnPdf');
+  await dl;
+  await expect(page.locator('#successOverlay')).toBeHidden({ timeout: 5000 });
+
+  // Neu, dann aus Archiv laden → Unterschrift ist wieder da
+  page.on('dialog', (d) => d.accept());
+  await page.click('#btnNew');
+  await expect(page.locator('#sigPreviewWrap')).toBeHidden();
+  await page.click('.hist-main');
+  await expect(page.locator('#sigPreviewWrap')).toBeVisible();
+});
+
 test('gültig befülltes Pflichtfeld bekommt einen grünen Impuls', async ({ page }) => {
   await page.goto('/');
   await page.fill('#kunde', 'Andritz Hydro GmbH');
