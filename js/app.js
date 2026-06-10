@@ -44,7 +44,7 @@ function initSplash() {
   const el = $('splash');
   if (!el) return;
   const remove = () => { el.classList.add('gone'); setTimeout(() => el.remove(), 400); };
-  setTimeout(remove, 1150);
+  setTimeout(remove, 1800);
 }
 
 /* ===================== App installieren ===================== */
