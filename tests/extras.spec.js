@@ -19,6 +19,49 @@ async function fillValid(page) {
   await expect(page.locator('#photoGrid .thumb')).toHaveCount(1);
 }
 
+test('Install-Banner: versteckt ohne Prompt, erscheint bei beforeinstallprompt', async ({ page }) => {
+  await page.goto('/');
+  // Ohne Installierbarkeit (Desktop-Chromium, kein iOS) bleibt es versteckt
+  await expect(page.locator('#installCard')).toBeHidden();
+
+  // Android/Chrome-Verhalten simulieren
+  const choice = await page.evaluate(() => {
+    let prompted = false;
+    const e = new Event('beforeinstallprompt');
+    e.prompt = () => { prompted = true; };
+    e.userChoice = Promise.resolve({ outcome: 'accepted' });
+    window.dispatchEvent(e);
+    window.__wasPrompted = () => prompted;
+    return document.getElementById('installCard').classList.contains('hidden');
+  });
+  expect(choice).toBe(false); // Banner ist jetzt sichtbar
+  await expect(page.locator('#installCard')).toBeVisible();
+
+  // Klick löst das native Prompt aus
+  await page.click('#installBtn');
+  expect(await page.evaluate(() => window.__wasPrompted())).toBe(true);
+});
+
+test('Install-Banner: Schließen merkt sich die Entscheidung', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => {
+    const e = new Event('beforeinstallprompt');
+    e.prompt = () => {}; e.userChoice = Promise.resolve({ outcome: 'dismissed' });
+    window.dispatchEvent(e);
+  });
+  await expect(page.locator('#installCard')).toBeVisible();
+  await page.click('#installClose');
+  await expect(page.locator('#installCard')).toBeHidden();
+  // Nach Reload bleibt es weg (Entscheidung gemerkt)
+  await page.reload();
+  await page.evaluate(() => {
+    const e = new Event('beforeinstallprompt');
+    e.prompt = () => {}; e.userChoice = Promise.resolve({ outcome: 'dismissed' });
+    window.dispatchEvent(e);
+  });
+  await expect(page.locator('#installCard')).toBeHidden();
+});
+
 test('gültig befülltes Pflichtfeld bekommt einen grünen Impuls', async ({ page }) => {
   await page.goto('/');
   await page.fill('#kunde', 'Andritz Hydro GmbH');
