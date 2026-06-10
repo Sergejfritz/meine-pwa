@@ -1,5 +1,5 @@
 // Service Worker – macht die App offline-fähig (Werkstatt ohne WLAN)
-const CACHE = 'techdoku-v2026-8';
+const CACHE = 'techdoku-v2026-9';
 
 // App-Shell – wird beim ersten Besuch gecacht.
 // Die OCR-Dateien (vendor/tesseract, vendor/tessdata) werden NICHT hier

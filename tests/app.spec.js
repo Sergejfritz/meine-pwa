@@ -47,6 +47,8 @@ test('lädt ohne Konsolenfehler und zeigt die Überschrift', async ({ page }) =>
   await expect(page.locator('.brand-logo svg')).toBeVisible();
   await page.waitForTimeout(300);
   expect(errors).toEqual([]);
+  // Splash blendet weg und wird aus dem DOM entfernt (blockiert nie Klicks)
+  await expect(page.locator('#splash')).toHaveCount(0, { timeout: 3000 });
 });
 
 test('Validierung markiert leere Pflichtfelder', async ({ page }) => {
