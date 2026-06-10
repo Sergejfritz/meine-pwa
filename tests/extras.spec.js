@@ -77,7 +77,7 @@ async function sign(page) {
 
 test('Unterschrift: zeichnen zeigt Vorschau; landet im Archiv und wird geladen', async ({ page }) => {
   await page.goto('/');
-  await page.waitForTimeout(2300); // Splash weg
+  await page.waitForTimeout(2600); // Splash weg
 
   await sign(page);
   await expect(page.locator('#sigPreviewWrap')).toBeVisible();
