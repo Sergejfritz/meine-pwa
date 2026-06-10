@@ -127,15 +127,17 @@ main { animation: appRise .6s cubic-bezier(.2, .7, .2, 1) .5s backwards; }
   50% { background-position: 100% 50%; }
 }
 
-/* Fortschrittsring: füllt sich, während das Formular ausgefüllt wird */
+/* Fortschrittsring: füllt sich, während das Formular ausgefüllt wird.
+   --p ist als animierbare Eigenschaft registriert → die Füllung gleitet weich. */
+@property --p { syntax: '<number>'; inherits: false; initial-value: 0; }
 .progress-ring {
   --p: 0; /* Prozent 0..100 */
   flex: 0 0 auto; width: 42px; height: 42px; border-radius: 50%;
   background:
     radial-gradient(closest-side, var(--accent-dark) 72%, transparent 73% 100%),
-    conic-gradient(#4ade80 calc(var(--p) * 1%), rgba(255,255,255,.22) 0);
+    conic-gradient(from -90deg, #34d399, #4ade80 calc(var(--p) * 1%), rgba(255,255,255,.22) 0);
   display: grid; place-items: center;
-  transition: filter .3s;
+  transition: filter .3s, --p .6s cubic-bezier(.2, .7, .2, 1);
 }
 .progress-ring span { font-size: 10.5px; font-weight: 800; color: #fff; letter-spacing: -.02em; }
 .progress-ring.done {
@@ -332,19 +334,38 @@ input.invalid, textarea.invalid, .seg.invalid {
 .field-msg { color: var(--danger); font-size: 12.5px; font-weight: 600; margin-top: 5px; display: none; }
 .field.has-error .field-msg { display: block; }
 
+/* Kurzer grüner Impuls, wenn ein Pflichtfeld gültig ausgefüllt wurde */
+input.ok-flash, textarea.ok-flash { border-color: var(--ok); animation: okPulse .7s ease; }
+@keyframes okPulse {
+  0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, .45); }
+  100% { box-shadow: 0 0 0 9px rgba(34, 197, 94, 0); }
+}
+
 .input-with-btn { display: flex; gap: 8px; align-items: flex-start; }
 .input-with-btn textarea { flex: 1; }
 
-.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-radius: var(--radius-sm); }
+.seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-radius: var(--radius-sm); }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
+/* Gleitender Auswahl-Hintergrund (Pille), der zwischen den Optionen wandert */
+.seg::before {
+  content: ""; position: absolute; top: 0; bottom: 0; left: 0; z-index: 0;
+  width: calc(50% - 4px); border-radius: var(--radius-sm);
+  background: var(--accent-soft); border: 1.5px solid var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  opacity: 0; pointer-events: none;
+  transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s;
+}
+.seg:has(#typRekl:checked)::before { opacity: 1; transform: translateX(0); }
+.seg:has(#typFert:checked)::before { opacity: 1; transform: translateX(calc(100% + 8px)); }
 .seg label {
+  position: relative; z-index: 1;
   margin: 0; text-align: center; padding: 14px 8px; cursor: pointer;
   border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface-2); font-weight: 600; transition: all .15s;
+  background: var(--surface-2); font-weight: 600; transition: color .2s, border-color .2s, background .2s;
 }
+/* Aktive Option: Hintergrund kommt von der Pille → Label transparent */
 .seg input:checked + label {
-  border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong);
-  box-shadow: 0 0 0 1px var(--accent) inset;
+  border-color: transparent; background: transparent; color: var(--accent-strong); font-weight: 700;
 }
 .seg input:focus-visible + label { outline: 3px solid var(--accent); outline-offset: 2px; }
 
@@ -371,7 +392,9 @@ input.invalid, textarea.invalid, .seg.invalid {
 .thumb {
   position: relative; aspect-ratio: 1; border-radius: var(--radius-sm);
   overflow: hidden; border: 1px solid var(--border); background: var(--surface-2);
+  animation: thumbPop .28s cubic-bezier(.2, .8, .2, 1) backwards;
 }
+@keyframes thumbPop { from { opacity: 0; transform: scale(.88); } }
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; cursor: zoom-in; }
 .thumb .badge {
   position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,.62); color: #fff;
@@ -394,12 +417,20 @@ input.invalid, textarea.invalid, .seg.invalid {
 
 /* ===== Buttons ===== */
 .btn {
+  position: relative; overflow: hidden; /* für Ripple-Effekt */
   width: 100%; padding: 15px; border: none; border-radius: var(--radius-sm);
   font-size: 16px; font-weight: 700; cursor: pointer; color: #fff;
   display: flex; align-items: center; justify-content: center; gap: 8px;
   transition: transform .1s, opacity .15s, filter .15s; min-height: 52px;
 }
 .btn:active { transform: scale(.98); }
+/* Material-artige Welle beim Tippen (Farbe = Textfarbe des Buttons) */
+.btn .ripple {
+  position: absolute; border-radius: 50%; transform: scale(0);
+  background: currentColor; opacity: .28; pointer-events: none;
+  animation: ripple .6s ease-out forwards;
+}
+@keyframes ripple { to { transform: scale(2.4); opacity: 0; } }
 .btn:disabled { opacity: .6; cursor: progress; }
 .btn-primary {
   background: linear-gradient(135deg, var(--accent-strong), var(--accent));

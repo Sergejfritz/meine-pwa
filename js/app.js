@@ -27,6 +27,7 @@ function init() {
   initDraftAutosave();
   initHistory();
   initProgress();
+  initRipple();
   refreshSuggestions();
   setToday();
   const last = Settings.get().lastVerantwortlich;
@@ -355,10 +356,17 @@ function clearAllErrors() {
   $('photoMsg').style.display = 'none';
 }
 function initLiveValidation() {
-  // Fehler verschwindet, sobald der Nutzer das Feld korrigiert
+  // Fehler verschwindet, sobald der Nutzer das Feld korrigiert; zusätzlich
+  // ein grüner Impuls, sobald ein Feld erstmals gültig befüllt ist.
   ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum',
     'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'].forEach((id) => {
-    $(id).addEventListener('input', () => { if ($(id).value.trim()) setErr(id, false); });
+    const el = $(id);
+    el.addEventListener('input', () => {
+      const ok = el.value.trim() && (id !== 'stueckzahl' || Number(el.value) > 0);
+      if (ok) setErr(id, false);
+      if (ok && !el.dataset.filled) { el.dataset.filled = '1'; flashOk(el); }
+      else if (!ok) delete el.dataset.filled;
+    });
   });
 }
 
@@ -566,18 +574,53 @@ function progressParts() {
   parts.push(images.length > 0);
   return parts;
 }
+let ringCur = 0, ringRAF;
 function updateProgress() {
   const parts = progressParts();
   const pct = Math.round(parts.filter(Boolean).length / parts.length * 100);
   const ring = $('progressRing');
-  ring.style.setProperty('--p', pct);
-  $('progressPct').textContent = pct + '%';
+  ring.style.setProperty('--p', pct);           // Füllung gleitet per CSS
   ring.classList.toggle('done', pct === 100);
+  // Prozentzahl weich hochzählen (passend zur gleitenden Füllung)
+  cancelAnimationFrame(ringRAF);
+  const from = ringCur, t0 = performance.now(), dur = 600;
+  (function tick(t) {
+    const k = Math.min(1, (t - t0) / dur);
+    const v = Math.round(from + (pct - from) * (1 - Math.pow(1 - k, 3)));
+    $('progressPct').textContent = v + '%';
+    if (k < 1) ringRAF = requestAnimationFrame(tick); else ringCur = pct;
+  })(t0);
 }
 function initProgress() {
   const sec = $('formView');
   sec.addEventListener('input', updateProgress);
   sec.addEventListener('change', updateProgress);
+}
+
+/* ===================== Micro-Interaktionen ===================== */
+// Material-artige Welle beim Tippen auf Buttons
+function initRipple() {
+  document.addEventListener('pointerdown', (e) => {
+    const btn = e.target.closest('.btn');
+    if (!btn || btn.disabled) return;
+    const r = btn.getBoundingClientRect();
+    const size = Math.max(r.width, r.height);
+    const s = document.createElement('span');
+    s.className = 'ripple';
+    s.style.width = s.style.height = size + 'px';
+    s.style.left = (e.clientX - r.left - size / 2) + 'px';
+    s.style.top = (e.clientY - r.top - size / 2) + 'px';
+    btn.appendChild(s);
+    s.addEventListener('animationend', () => s.remove());
+  });
+}
+
+// Kurzer grüner Impuls, sobald ein Pflichtfeld gültig befüllt ist
+function flashOk(el) {
+  el.classList.remove('ok-flash');
+  void el.offsetWidth; // Reflow → Animation kann neu starten
+  el.classList.add('ok-flash');
+  setTimeout(() => el.classList.remove('ok-flash'), 750);
 }
 
 /* ===================== Erfolgs-Animation ===================== */
