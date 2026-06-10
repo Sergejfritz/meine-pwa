@@ -53,8 +53,9 @@ function loadImage(src) {
   return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 }
 
-// Großes Foto für OCR auf sinnvolle Kantenlänge begrenzen (Tempo)
-function downscale(img, maxEdge = 2200) {
+// Großes Foto für OCR auf sinnvolle Kantenlänge begrenzen.
+// 2600 px: genug Details für die kleine Kopf-Schrift, ohne die OCR zu bremsen.
+function downscale(img, maxEdge = 2600) {
   const long = Math.max(img.width, img.height);
   if (long <= maxEdge) return img;
   const k = maxEdge / long;
@@ -75,24 +76,25 @@ export async function scanArbeitskarte(dataUrl, onProgress) {
   const img = await loadImage(dataUrl);
   const base = downscale(img);
 
-  // Gängige Ausrichtungen testen; Hochformat-Karte → 90/270 zuerst
-  const angles = base.width > base.height ? [0, 90, 270, 180] : [90, 270, 0, 180];
-  let best = { confidence: -1, text: '', fields: {} };
+  // Übliche Ausrichtungen testen (Foto kann gedreht sein). Aufrechtes
+  // Hochformat (0°) zuerst, dann die gedrehten Varianten.
+  const angles = [0, 270, 90, 180];
+  const KEY = ['abnr', 'zeichnungsnummer', 'kunde', 'teilebenennung', 'index', 'position'];
+  let best = { score: -1, hits: 0, text: '', fields: {} };
 
-  for (let i = 0; i < angles.length; i++) {
-    const canvas = angles[i] === 0 ? base : rotated(base, angles[i]);
+  for (const angle of angles) {
+    const canvas = angle === 0 ? base : rotated(base, angle);
     const { data } = await worker.recognize(canvas);
     const fields = parseArbeitskarte(data.text);
-    // Score: OCR-Confidence + Bonus je gefundenem Schlüsselfeld
-    const hits = ['abnr', 'zeichnungsnummer', 'kunde', 'teilebenennung'].filter((k) => fields[k]).length;
+    const hits = KEY.filter((k) => fields[k]).length;
     const score = data.confidence + hits * 12;
-    if (score > best.confidence) best = { confidence: score, rawConfidence: data.confidence, text: data.text, fields };
+    if (score > best.score) best = { score, hits, rawConfidence: data.confidence, text: data.text, fields };
     // Früh abbrechen, wenn eindeutig gut erkannt
-    if (data.confidence > 50 && hits >= 3) break;
+    if (data.confidence > 45 && hits >= 4) break;
   }
 
   if (best.fields.datum) best.fields.datumIso = toIsoDate(best.fields.datum);
-  return best;
+  return { fields: best.fields, hits: best.hits, confidence: best.rawConfidence, text: best.text };
 }
 
 // Worker freigeben (z.B. bei Speicherknappheit) – optional

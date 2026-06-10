@@ -8,7 +8,7 @@ const MAX_IMAGES = 9;
 const SUGGEST_FIELDS = ['kunde', 'maschine', 'verantwortlich', 'teilebenennung'];
 // Pflichttextfelder (datum hat Default); stueckzahl & auftragstyp werden gesondert geprüft
 const REQUIRED = ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'bemerkung'];
-const DRAFT_FIELDS = ['auftragstyp', 'kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'];
+const DRAFT_FIELDS = ['auftragstyp', 'kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'];
 
 let images = []; // [{ id, src, name, caption }]
 
@@ -115,6 +115,7 @@ async function addFiles(files) {
 const SCAN_MAP = [
   { key: 'kunde', label: 'Kunde', target: 'kunde' },
   { key: 'abnr', label: 'AB-Nr.', target: 'abnr' },
+  { key: 'position', label: 'Position', target: 'position' },
   { key: 'zeichnungsnummer', label: 'Zeichnungsnr.', target: 'zeichnungsnummer' },
   { key: 'index', label: 'Index', target: 'index' },
   { key: 'teilebenennung', label: 'Benennung der Teile', target: 'teilebenennung' },
@@ -144,7 +145,7 @@ async function runScan(file) {
       $('scanProgress').textContent = `Karte wird gelesen… ${Math.round(p * 100)}%`;
     });
     scanFields = result.fields || {};
-    showScanSheet(scanFields);
+    showScanSheet(scanFields, result.hits || 0);
   } catch (err) {
     console.error(err);
     toast('Scan fehlgeschlagen – bitte erneut versuchen');
@@ -153,12 +154,21 @@ async function runScan(file) {
   }
 }
 
-function showScanSheet(fields) {
+function showScanSheet(fields, hits) {
   const box = $('scanResults');
   box.innerHTML = '';
   const found = SCAN_MAP.filter((m) => fields[m.key]);
   $('scanEmpty').classList.toggle('hidden', found.length > 0);
   $('scanApply').disabled = found.length === 0;
+
+  // Hinweis bei wenigen/teils unsicheren Treffern
+  const hint = $('scanHint');
+  if (found.length && found.length < 4) {
+    hint.textContent = '⚠️ Wenige Felder erkannt. Tipp: Karte gerade von oben, formatfüllend und gut beleuchtet fotografieren. Fehlende Felder bitte von Hand ergänzen.';
+    hint.classList.remove('hidden');
+  } else {
+    hint.classList.add('hidden');
+  }
 
   found.forEach((m) => {
     const row = document.createElement('label');
@@ -289,7 +299,7 @@ function initVoice() {
 /* ===================== Formular <-> Daten ===================== */
 function readForm() {
   const doc = { auftragstyp: currentType(), images: images.map((i) => ({ src: i.src, name: i.name, caption: i.caption })) };
-  ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum',
+  ['kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum',
     'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'].forEach((f) => doc[f] = $(f).value);
   return doc;
 }
@@ -297,7 +307,7 @@ function readForm() {
 function clearForm() {
   document.querySelectorAll('input[name=auftragstyp]').forEach((r) => r.checked = false);
   updateTypeFields('');
-  ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'teilebenennung',
+  ['kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'teilebenennung',
     'stueckzahl', 'version', 'spanndruck', 'bemerkung'].forEach((f) => $(f).value = '');
   $('verantwortlich').value = Settings.get().lastVerantwortlich || '';
   images = [];
