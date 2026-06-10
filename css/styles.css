@@ -229,6 +229,42 @@ main { max-width: 760px; margin: 0 auto; padding: 16px; }
    die dunkle Schrift nicht überschreibt (sonst weiß auf weiß = unsichtbar) */
 .btn.btn-scan { background: #fff; color: var(--accent-strong); }
 .btn.btn-scan:hover { filter: brightness(.97); }
+/* Link zur Scan-Vorlage unter dem Scan-Button */
+.scan-tpl {
+  display: block; width: 100%; margin-top: 10px; padding: 9px;
+  background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.28);
+  border-radius: var(--radius-sm); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  font-family: inherit; line-height: 1.35; transition: background .15s;
+}
+.scan-tpl:active { background: rgba(255,255,255,.26); }
+
+/* ===== Scan-Vorlage einrichten (Zonen-Dialog) ===== */
+.zone-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; background: #131c2e; color: #fff;
+}
+.zone-bar label { color: #cbd5e1; font-size: 13px; margin: 0; }
+.zone-bar select {
+  flex: 1; min-width: 130px; width: auto; padding: 9px 10px; font-size: 15px;
+  background: #243248; color: #fff; border: 1.5px solid #334155; border-radius: 9px;
+}
+.zone-btn {
+  flex: 0 0 auto; padding: 9px 12px; background: #243248; color: #fff;
+  border: 1.5px solid #334155; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.zone-hint { background: #0f1828; color: #93c5fd; font-size: 12.5px; padding: 8px 14px; text-align: center; }
+#zoneCanvas { max-width: 100%; max-height: 100%; touch-action: none; border-radius: 8px; background: #0b1220; box-shadow: var(--shadow-lg); }
+.zone-list {
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px calc(12px + var(--safe-bottom));
+  background: #131c2e; max-height: 28vh; overflow-y: auto;
+}
+.zone-empty { color: #94a3b8; font-size: 13px; }
+.zone-item {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #243248; color: #fff; border: 1px solid #334155;
+  border-radius: 20px; padding: 5px 6px 5px 13px; font-size: 13px; font-weight: 600;
+}
+.zone-item button { background: none; border: none; color: #fca5a5; font-size: 14px; cursor: pointer; padding: 2px 4px; }
 
 /* ===== Übernahme-Dialog (Bottom-Sheet) ===== */
 .sheet {

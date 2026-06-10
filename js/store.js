@@ -5,6 +5,7 @@ const KEY_SETTINGS = 'techdoku_settings';
 const KEY_SUGGEST = 'techdoku_suggest';
 const KEY_DRAFT = 'techdoku_draft';
 const KEY_HISTORY = 'techdoku_history';
+const KEY_ZONES = 'techdoku_zones';
 
 function read(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
 function write(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
@@ -55,4 +56,17 @@ export const History = {
     write(KEY_HISTORY, this.list().filter((e) => e.id !== id));
   },
   clear() { try { localStorage.removeItem(KEY_HISTORY); } catch {} }
+};
+
+// Scan-Vorlage: vom Nutzer auf einem Karten-Foto eingezeichnete Zonen.
+// Pro Zone: { field, x, y, w, h } – x/y/w/h als Anteil 0..1 des Bildes (so
+// unabhängig von der Auflösung). 'aspect' = Breite/Höhe des Kalibrier-Bildes,
+// hilft beim Zuordnen der richtigen Foto-Ausrichtung. 'image' = verkleinerte
+// Karte zum erneuten Bearbeiten/Anzeigen.
+export const Zones = {
+  get() { return read(KEY_ZONES); },
+  save(items, aspect, image) {
+    write(KEY_ZONES, { items: items || [], aspect: aspect || null, image: image || null, savedAt: Date.now() });
+  },
+  clear() { try { localStorage.removeItem(KEY_ZONES); } catch {} }
 };
