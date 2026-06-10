@@ -14,6 +14,7 @@ let images = []; // [{ id, src, name, caption }]
 
 /* ===================== Init ===================== */
 function init() {
+  initSplash();
   registerSW();
   initTheme();
   initType();
@@ -32,6 +33,16 @@ function init() {
   if (last) $('verantwortlich').value = last;
   restoreDraft();
   updateProgress();
+}
+
+/* ===================== Start-/Ladebildschirm ===================== */
+// Der Splash blendet per CSS von selbst weg (Fallback ohne JS). Hier räumen
+// wir ihn danach aus dem DOM, damit nichts im Hintergrund weiterläuft.
+function initSplash() {
+  const el = $('splash');
+  if (!el) return;
+  const remove = () => { el.classList.add('gone'); setTimeout(() => el.remove(), 400); };
+  setTimeout(remove, 1150);
 }
 
 /* ===================== Service Worker (+ Update-Hinweis) ===================== */
