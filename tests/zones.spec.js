@@ -65,7 +65,7 @@ async function loadBigPhoto(page) {
 
 test('Scan-Vorlage: Kästchen ziehen, speichern und Status anzeigen', async ({ page }) => {
   await page.goto('/');
-  await page.waitForTimeout(2300); // Splash entfernt
+  await page.waitForTimeout(2600); // Splash entfernt
 
   await page.click('#zoneSetup');
   await expect(page.locator('#zoneModal')).toHaveClass(/open/);
