@@ -400,6 +400,7 @@ input.ok-flash, textarea.ok-flash { border-color: var(--ok); animation: okPulse 
 .input-with-btn textarea { flex: 1; }
 
 .seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; border-radius: var(--radius-sm); }
+.seg.seg-3 { grid-template-columns: 1fr 1fr 1fr; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 /* Gleitender Auswahl-Hintergrund (Pille), der zwischen den Optionen wandert */
 .seg::before {
@@ -410,14 +411,18 @@ input.ok-flash, textarea.ok-flash { border-color: var(--ok); animation: okPulse 
   opacity: 0; pointer-events: none;
   transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s;
 }
+.seg.seg-3::before { width: calc((100% - 16px) / 3); }
 .seg:has(#typRekl:checked)::before { opacity: 1; transform: translateX(0); }
 .seg:has(#typFert:checked)::before { opacity: 1; transform: translateX(calc(100% + 8px)); }
+.seg:has(#typPriv:checked)::before { opacity: 1; transform: translateX(calc(200% + 16px)); }
 .seg label {
   position: relative; z-index: 1;
-  margin: 0; text-align: center; padding: 14px 8px; cursor: pointer;
+  margin: 0; text-align: center; padding: 14px 6px; cursor: pointer;
   border: 1.5px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface-2); font-weight: 600; transition: color .2s, border-color .2s, background .2s;
+  background: var(--surface-2); font-weight: 600; font-size: 14px;
+  transition: color .2s, border-color .2s, background .2s;
 }
+.seg.seg-3 label { font-size: 11.5px; padding: 13px 2px; letter-spacing: -.01em; }
 /* Aktive Option: Hintergrund kommt von der Pille → Label transparent */
 .seg input:checked + label {
   border-color: transparent; background: transparent; color: var(--accent-strong); font-weight: 700;

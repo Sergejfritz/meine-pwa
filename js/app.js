@@ -8,8 +8,13 @@ import { zoneLabel } from './zones.js';
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGES = 9;
 const SUGGEST_FIELDS = ['kunde', 'maschine', 'verantwortlich', 'teilebenennung'];
-// Pflichttextfelder (datum hat Default); stueckzahl & auftragstyp werden gesondert geprüft
+// Pflichttextfelder je Auftragstyp (datum hat Default; stueckzahl & auftragstyp
+// werden gesondert geprüft). "Privat" braucht nur das Nötigste.
 const REQUIRED = ['kunde', 'maschine', 'abnr', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'bemerkung'];
+const REQUIRED_PRIVAT = ['teilebenennung', 'datum', 'bemerkung'];
+// Felder, die bei "Privat" ausgeblendet werden (ergeben privat keinen Sinn)
+const PRIVAT_HIDE = ['kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'stueckzahl'];
+function requiredFor(typ) { return typ === 'Privat' ? REQUIRED_PRIVAT : REQUIRED; }
 const DRAFT_FIELDS = ['auftragstyp', 'kunde', 'maschine', 'abnr', 'position', 'zeichnungsnummer', 'index', 'verantwortlich', 'datum', 'teilebenennung', 'stueckzahl', 'version', 'spanndruck', 'bemerkung'];
 
 let images = []; // [{ id, src, name, caption }]
@@ -159,6 +164,16 @@ function initType() {
 function updateTypeFields(val) {
   $('versionField').classList.toggle('hidden', val !== 'Reklamation');
   $('spanndruckField').classList.toggle('hidden', val !== 'Fertigungsauftrag');
+
+  // Bei "Privat": fertigungsspezifische Felder ausblenden
+  const priv = val === 'Privat';
+  PRIVAT_HIDE.forEach((id) => $(id).closest('.field').classList.toggle('hidden', priv));
+
+  // Bezeichnungs-Feld passend benennen + Verantwortlich privat optional
+  $('teilebenennung').closest('.field').querySelector('label').innerHTML =
+    (priv ? 'Bezeichnung' : 'Benennung der Teile') + ' <span class="req">*</span>';
+  const veraReq = $('verantwortlich').closest('.field').querySelector('.req');
+  if (veraReq) veraReq.style.display = priv ? 'none' : '';
 }
 function currentType() { return document.querySelector('input[name=auftragstyp]:checked')?.value || ''; }
 
@@ -454,11 +469,12 @@ function validate() {
   let firstBad = null;
   const flag = (el) => { if (!firstBad) firstBad = el; };
 
+  const priv = doc.auftragstyp === 'Privat';
   if (!doc.auftragstyp) { setTypeError(true); flag(document.querySelector('[data-for=auftragstyp]')); }
-  for (const f of REQUIRED) {
+  for (const f of requiredFor(doc.auftragstyp)) {
     if (!String(doc[f] || '').trim()) { setErr(f, true); flag($(f)); }
   }
-  if (!(Number(doc.stueckzahl) > 0)) { setErr('stueckzahl', true, 'Muss größer als 0 sein.'); flag($('stueckzahl')); }
+  if (!priv && !(Number(doc.stueckzahl) > 0)) { setErr('stueckzahl', true, 'Muss größer als 0 sein.'); flag($('stueckzahl')); }
   if (doc.auftragstyp === 'Reklamation' && !doc.version.trim()) { setErr('version', true); flag($('version')); }
   if (doc.auftragstyp === 'Fertigungsauftrag' && !doc.spanndruck.trim()) { setErr('spanndruck', true); flag($('spanndruck')); }
   if (!images.length) { $('photoMsg').style.display = 'block'; flag($('photoArea')); }
