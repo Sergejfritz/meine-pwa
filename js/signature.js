@@ -80,7 +80,14 @@ export function openSignaturePad(existing) {
       fitCanvas();
       if (existing) {
         const img = new Image();
-        img.onload = () => { ctx.drawImage(img, 0, 0, canvas.width / dpr, canvas.height / dpr); drawn = true; };
+        img.onload = () => {
+          // In echten Geräte-Pixeln zeichnen (transform-unabhängig, HiDPI-korrekt)
+          ctx.save();
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+          drawn = true;
+        };
         img.src = existing;
       }
     });
