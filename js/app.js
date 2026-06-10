@@ -1,7 +1,9 @@
-import { Settings, Suggest, Draft, History } from './store.js';
+import { Settings, Suggest, Draft, History, Zones } from './store.js';
 import { createPDF, buildFilename } from './pdf.js';
 import { annotate } from './annotate.js';
 import { scanArbeitskarte } from './scan.js';
+import { openZoneCalibrator } from './zonecal.js';
+import { zoneLabel } from './zones.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGES = 9;
@@ -29,6 +31,7 @@ function init() {
   initProgress();
   initRipple();
   initInstall();
+  initZones();
   refreshSuggestions();
   setToday();
   const last = Settings.get().lastVerantwortlich;
@@ -98,6 +101,26 @@ function initInstall() {
       + '<li>Mit <b>„Hinzufügen"</b> bestätigen</li>';
     steps.classList.remove('hidden');
     card.classList.remove('hidden');
+  }
+}
+
+/* ===================== Scan-Vorlage (Zonen) ===================== */
+function initZones() {
+  $('zoneSetup').onclick = async () => {
+    const saved = await openZoneCalibrator();
+    if (saved) toast('Scan-Vorlage gespeichert ✓');
+    refreshZoneStatus();
+  };
+  refreshZoneStatus();
+}
+function refreshZoneStatus() {
+  const tpl = Zones.get();
+  const el = $('zoneStatus');
+  if (tpl && tpl.items && tpl.items.length) {
+    const names = tpl.items.map((z) => zoneLabel(z.field)).join(', ');
+    el.textContent = `⚙️ Scan-Vorlage aktiv (${tpl.items.length}): ${names} – tippen zum Ändern`;
+  } else {
+    el.textContent = '⚙️ Scan-Vorlage einrichten – Felder selbst festlegen';
   }
 }
 

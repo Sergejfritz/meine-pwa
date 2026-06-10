@@ -2,6 +2,8 @@
 // Probiert mehrere Rotationen, da das Foto gedreht sein kann, und nimmt das
 // Ergebnis mit der höchsten Erkennungs-Confidence.
 import { parseArbeitskarte, toIsoDate } from './cardparse.js';
+import { Zones } from './store.js';
+import { readZones } from './zones.js';
 
 const TESS_BASE = 'vendor/tesseract';
 let workerPromise = null;
@@ -80,7 +82,7 @@ export async function scanArbeitskarte(dataUrl, onProgress) {
   // Hochformat (0°) zuerst, dann die gedrehten Varianten.
   const angles = [0, 270, 90, 180];
   const KEY = ['abnr', 'zeichnungsnummer', 'kunde', 'teilebenennung', 'index', 'position'];
-  let best = { score: -1, hits: 0, text: '', fields: {} };
+  let best = { score: -1, hits: 0, text: '', fields: {}, canvas: base };
 
   for (const angle of angles) {
     const canvas = angle === 0 ? base : rotated(base, angle);
@@ -88,13 +90,27 @@ export async function scanArbeitskarte(dataUrl, onProgress) {
     const fields = parseArbeitskarte(data.text);
     const hits = KEY.filter((k) => fields[k]).length;
     const score = data.confidence + hits * 12;
-    if (score > best.score) best = { score, hits, rawConfidence: data.confidence, text: data.text, fields };
+    if (score > best.score) best = { score, hits, rawConfidence: data.confidence, text: data.text, fields, canvas };
     // Früh abbrechen, wenn eindeutig gut erkannt
     if (data.confidence > 45 && hits >= 4) break;
   }
 
-  if (best.fields.datum) best.fields.datumIso = toIsoDate(best.fields.datum);
-  return { fields: best.fields, hits: best.hits, confidence: best.rawConfidence, text: best.text };
+  let fields = best.fields;
+  // Scan-Vorlage (Zonen) vorhanden? Dann gezielt diese Bereiche lesen und die
+  // Auto-Erkennung damit überschreiben (Zonen sind verlässlicher bei fester Karte).
+  const tpl = Zones.get();
+  if (tpl && Array.isArray(tpl.items) && tpl.items.length) {
+    try {
+      await worker.setParameters({ tessedit_pageseg_mode: '7' }); // eine Textzeile je Zone
+      const zoneFields = await readZones(best.canvas, tpl.items, async (c) => (await worker.recognize(c)).data.text);
+      await worker.setParameters({ tessedit_pageseg_mode: '3' }); // zurück auf Auto
+      fields = { ...best.fields, ...zoneFields };
+    } catch { /* Zonen-Lesen optional – bei Fehler bleibt die Auto-Erkennung */ }
+  }
+
+  if (fields.datum && !fields.datumIso) fields.datumIso = toIsoDate(fields.datum);
+  const hits = KEY.filter((k) => fields[k]).length;
+  return { fields, hits, confidence: best.rawConfidence, text: best.text };
 }
 
 // Worker freigeben (z.B. bei Speicherknappheit) – optional
