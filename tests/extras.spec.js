@@ -19,6 +19,13 @@ async function fillValid(page) {
   await expect(page.locator('#photoGrid .thumb')).toHaveCount(1);
 }
 
+test('gültig befülltes Pflichtfeld bekommt einen grünen Impuls', async ({ page }) => {
+  await page.goto('/');
+  await page.fill('#kunde', 'Andritz Hydro GmbH');
+  // Der Impuls (ok-flash) erscheint kurz nach gültiger Eingabe
+  await expect(page.locator('#kunde')).toHaveClass(/ok-flash/);
+});
+
 test('Fortschrittsring steigt beim Ausfüllen und erreicht 100 %', async ({ page }) => {
   await page.goto('/');
   // Datum ist vorbelegt → Start > 0, aber klein
