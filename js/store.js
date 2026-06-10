@@ -1,8 +1,10 @@
-// localStorage – Einstellungen, Eingabe-Vorschläge (Tipphilfe) und Entwurf-Sicherung.
-// Es wird KEIN Archiv abgelegter Dokumente gespeichert – nur Komfort-/Sicherungsdaten.
+// localStorage – Einstellungen, Eingabe-Vorschläge (Tipphilfe), Entwurf-Sicherung
+// und ein kleiner Verlauf erstellter Dokumentationen (nur Textfelder als
+// Vorlage zum Wiederverwenden – KEINE Fotos, bleibt also klein und schnell).
 const KEY_SETTINGS = 'techdoku_settings';
 const KEY_SUGGEST = 'techdoku_suggest';
 const KEY_DRAFT = 'techdoku_draft';
+const KEY_HISTORY = 'techdoku_history';
 
 function read(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
 function write(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
@@ -37,4 +39,20 @@ export const Draft = {
   },
   load() { return read(KEY_DRAFT); },
   clear() { try { localStorage.removeItem(KEY_DRAFT); } catch {} }
+};
+
+// Verlauf erstellter Dokus – dient als Vorlage für Wiederholteile.
+// Pro Eintrag nur die Textfelder + Zeitstempel (keine Bilder).
+export const History = {
+  list() { return read(KEY_HISTORY) || []; },
+  add(fields) {
+    const entry = { id: 'h' + Date.now(), fields, createdAt: Date.now() };
+    const list = [entry, ...this.list()].slice(0, 25);
+    write(KEY_HISTORY, list);
+    return entry;
+  },
+  remove(id) {
+    write(KEY_HISTORY, this.list().filter((e) => e.id !== id));
+  },
+  clear() { try { localStorage.removeItem(KEY_HISTORY); } catch {} }
 };

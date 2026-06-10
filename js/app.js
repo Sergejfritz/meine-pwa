@@ -1,4 +1,4 @@
-import { Settings, Suggest, Draft } from './store.js';
+import { Settings, Suggest, Draft, History } from './store.js';
 import { createPDF, buildFilename } from './pdf.js';
 import { annotate } from './annotate.js';
 import { scanArbeitskarte } from './scan.js';
@@ -24,11 +24,14 @@ function init() {
   initLightbox();
   initLiveValidation();
   initDraftAutosave();
+  initHistory();
+  initProgress();
   refreshSuggestions();
   setToday();
   const last = Settings.get().lastVerantwortlich;
   if (last) $('verantwortlich').value = last;
   restoreDraft();
+  updateProgress();
 }
 
 /* ===================== Service Worker (+ Update-Hinweis) ===================== */
@@ -199,7 +202,9 @@ function applyScan() {
   });
   closeScanSheet();
   saveDraft();
+  updateProgress();
   if (count) {
+    vibrate(15);
     toast(`${count} Feld${count > 1 ? 'er' : ''} übernommen – bitte prüfen ✓`);
     $('kunde').scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
@@ -259,6 +264,7 @@ function renderPhotos() {
   });
   $('photoCount').textContent = `${images.length} / ${MAX_IMAGES}`;
   if (images.length) $('photoMsg').style.display = 'none';
+  updateProgress();
 }
 function move(i, dir) {
   const j = i + dir;
@@ -314,6 +320,7 @@ function clearForm() {
   renderPhotos();
   setToday();
   clearAllErrors();
+  updateProgress();
 }
 
 /* ===================== Inline-Validierung ===================== */
@@ -377,7 +384,7 @@ function initActions() {
       const pdf = await createPDF(doc);
       pdf.save(buildFilename(doc));
       finalize(doc);
-      toast('PDF erstellt ✓');
+      celebrate('PDF erstellt!');
     } finally { hideLoading(); }
   });
 
@@ -391,6 +398,7 @@ function initActions() {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ title: 'Technische Dokumentation S. Fritz', text: 'Technische Dokumentation (PDF)', files: [file] });
         finalize(doc);
+        celebrate('PDF geteilt!');
       } else {
         pdf.save(buildFilename(doc));
         finalize(doc);
@@ -424,11 +432,14 @@ function withDoc(btnId, fn) {
   };
 }
 
-// Nach erfolgreichem Erstellen/Teilen: Vorschläge merken, Entwurf löschen
+// Nach erfolgreichem Erstellen/Teilen: Vorschläge & Verlauf merken, Entwurf löschen
 function finalize(doc) {
   SUGGEST_FIELDS.forEach((f) => Suggest.remember(f, doc[f]));
   if (doc.verantwortlich) Settings.set({ lastVerantwortlich: doc.verantwortlich.trim() });
   refreshSuggestions();
+  const { images: _imgs, ...fields } = doc; // Verlauf ohne Fotos (klein halten)
+  History.add(fields);
+  renderHistory();
   Draft.clear();
   hideDraftBanner();
 }
@@ -465,6 +476,142 @@ function restoreDraft() {
   $('draftDiscard').onclick = () => { Draft.clear(); hideDraftBanner(); clearForm(); };
 }
 function hideDraftBanner() { $('draftBanner').classList.add('hidden'); }
+
+/* ===================== Verlauf (Vorlagen) ===================== */
+const HIST_PREVIEW = 3; // eingeklappt sichtbare Einträge
+
+function initHistory() {
+  $('histToggle').onclick = () => {
+    const btn = $('histToggle');
+    const open = btn.getAttribute('aria-expanded') === 'true';
+    btn.setAttribute('aria-expanded', String(!open));
+    btn.textContent = open ? 'Alle anzeigen' : 'Weniger';
+    renderHistory();
+  };
+  renderHistory();
+}
+
+function renderHistory() {
+  const card = $('historyCard');
+  const list = History.list();
+  card.classList.toggle('hidden', list.length === 0);
+  if (!list.length) return;
+
+  const expanded = $('histToggle').getAttribute('aria-expanded') === 'true';
+  $('histToggle').style.display = list.length > HIST_PREVIEW ? '' : 'none';
+  const show = expanded ? list : list.slice(0, HIST_PREVIEW);
+
+  const box = $('historyList');
+  box.innerHTML = '';
+  show.forEach((e) => {
+    const f = e.fields || {};
+    const d = new Date(e.createdAt);
+    const when = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
+    const row = document.createElement('div');
+    row.className = 'hist-row';
+    row.innerHTML = `
+      <button class="hist-main" type="button">
+        <span class="hist-ico">${f.auftragstyp === 'Reklamation' ? '⚠️' : '🏭'}</span>
+        <span class="hist-txt">
+          <strong>${esc(f.teilebenennung || f.kunde || 'Dokumentation')}</strong>
+          <small>${esc([f.kunde, f.abnr, when].filter(Boolean).join(' · '))}</small>
+        </span>
+        <span class="hist-go" aria-hidden="true">↪</span>
+      </button>
+      <button class="hist-del" type="button" aria-label="Eintrag löschen" title="Löschen">🗑</button>`;
+    row.querySelector('.hist-main').onclick = () => applyHistory(e);
+    row.querySelector('.hist-del').onclick = () => { History.remove(e.id); renderHistory(); };
+    box.appendChild(row);
+  });
+}
+
+function applyHistory(entry) {
+  const dirty = images.length || $('kunde').value.trim() || $('bemerkung').value.trim();
+  if (dirty && !confirm('Aktuelle Eingaben mit dieser Vorlage überschreiben?')) return;
+  const f = entry.fields || {};
+  $('typRekl').checked = f.auftragstyp === 'Reklamation';
+  $('typFert').checked = f.auftragstyp === 'Fertigungsauftrag';
+  updateTypeFields(f.auftragstyp || '');
+  DRAFT_FIELDS.filter((k) => k !== 'auftragstyp' && k !== 'datum').forEach((k) => { $(k).value = f[k] || ''; });
+  setTodayForce();
+  clearAllErrors();
+  saveDraft();
+  updateProgress();
+  vibrate(15);
+  toast('Vorlage übernommen – Fotos hinzufügen 📷');
+  $('kunde').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function setTodayForce() { $('datum').value = new Date().toISOString().slice(0, 10); }
+
+/* ===================== Fortschrittsanzeige ===================== */
+// Zählt Auftragstyp, Pflichtfelder (inkl. typabhängiger) und Fotos.
+function progressParts() {
+  const parts = [!!currentType()];
+  REQUIRED.forEach((f) => parts.push(!!$(f).value.trim()));
+  parts.push(Number($('stueckzahl').value) > 0);
+  const typ = currentType();
+  if (typ === 'Reklamation') parts.push(!!$('version').value.trim());
+  if (typ === 'Fertigungsauftrag') parts.push(!!$('spanndruck').value.trim());
+  parts.push(images.length > 0);
+  return parts;
+}
+function updateProgress() {
+  const parts = progressParts();
+  const pct = Math.round(parts.filter(Boolean).length / parts.length * 100);
+  const ring = $('progressRing');
+  ring.style.setProperty('--p', pct);
+  $('progressPct').textContent = pct + '%';
+  ring.classList.toggle('done', pct === 100);
+}
+function initProgress() {
+  const sec = $('formView');
+  sec.addEventListener('input', updateProgress);
+  sec.addEventListener('change', updateProgress);
+}
+
+/* ===================== Erfolgs-Animation ===================== */
+function celebrate(text) {
+  vibrate([20, 40, 30]);
+  const ov = $('successOverlay');
+  $('successText').textContent = text || 'Fertig!';
+  ov.classList.add('show');
+  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) launchConfetti();
+  const hide = () => { ov.classList.remove('show'); ov.onclick = null; };
+  ov.onclick = hide;
+  setTimeout(hide, 2200);
+}
+
+// Leichtes Konfetti auf Canvas – kein zusätzliches Vendor-Skript nötig
+function launchConfetti() {
+  const cv = $('confettiCanvas');
+  const ctx = cv.getContext('2d');
+  cv.width = innerWidth; cv.height = innerHeight;
+  const colors = ['#38bdf8', '#16a34a', '#f59e0b', '#ef4444', '#a78bfa', '#fff'];
+  const parts = Array.from({ length: 120 }, () => ({
+    x: cv.width / 2 + (Math.random() - .5) * 120,
+    y: cv.height / 2,
+    vx: (Math.random() - .5) * 11,
+    vy: -(4 + Math.random() * 9),
+    s: 4 + Math.random() * 5,
+    c: colors[(Math.random() * colors.length) | 0],
+    r: Math.random() * Math.PI,
+    vr: (Math.random() - .5) * .3,
+  }));
+  let frames = 0;
+  (function tick() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    parts.forEach((p) => {
+      p.x += p.vx; p.y += p.vy; p.vy += .28; p.r += p.vr;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * .6);
+      ctx.restore();
+    });
+    if (++frames < 130) requestAnimationFrame(tick);
+    else ctx.clearRect(0, 0, cv.width, cv.height);
+  })();
+}
+
+function vibrate(pattern) { try { navigator.vibrate?.(pattern); } catch {} }
 
 /* ===================== UI-Helfer ===================== */
 function esc(s) { return String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
