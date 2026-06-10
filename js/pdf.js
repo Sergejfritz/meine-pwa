@@ -198,6 +198,23 @@ function remarksBlock(pdf, doc, startY, created) {
   return y + 4;
 }
 
+/* ---------------- Unterschrift / Freigabe ---------------- */
+function signatureBlock(pdf, doc, startY) {
+  let y = startY + 5;
+  if (y > PH - 48) { pdf.addPage(); header(pdf, doc); y = BAND + 12; }
+  y = sectionTitle(pdf, 'Freigabe / Unterschrift', y) + 3;
+  try {
+    pdf.addImage(doc.unterschrift, 'PNG', M, y, 55, 22, undefined, 'FAST');
+  } catch { /* ungültiges Bild ignorieren */ }
+  y += 24;
+  pdf.setDrawColor(...C_LINE); pdf.setLineWidth(0.3);
+  pdf.line(M, y, M + 70, y);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(8); pdf.setTextColor(...C_MUTED);
+  const who = doc.verantwortlich || '';
+  pdf.text(`${who}${who ? ' · ' : ''}${fmtDate(doc.datum)}`, M, y + 5);
+  return y + 8;
+}
+
 /* ---------------- Foto-Seiten ---------------- */
 function layoutFor(n) {
   if (n <= 1) return { cols: 1, rows: 1 };
@@ -268,7 +285,8 @@ export async function createPDF(doc) {
   header(pdf, doc);
   let y = sectionTitle(pdf, 'Auftragsdaten', BAND + 9);
   y = metaTable(pdf, doc, y + 1);
-  remarksBlock(pdf, doc, y, created);
+  y = remarksBlock(pdf, doc, y, created);
+  if (doc.unterschrift) signatureBlock(pdf, doc, y);
 
   // Bilder laden (defekte überspringen)
   const imgs = [];
