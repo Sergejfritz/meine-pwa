@@ -4,7 +4,6 @@
 const KEY_SETTINGS = 'techdoku_settings';
 const KEY_SUGGEST = 'techdoku_suggest';
 const KEY_DRAFT = 'techdoku_draft';
-const KEY_HISTORY = 'techdoku_history';
 const KEY_ZONES = 'techdoku_zones';
 
 function read(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
@@ -42,21 +41,8 @@ export const Draft = {
   clear() { try { localStorage.removeItem(KEY_DRAFT); } catch {} }
 };
 
-// Verlauf erstellter Dokus – dient als Vorlage für Wiederholteile.
-// Pro Eintrag nur die Textfelder + Zeitstempel (keine Bilder).
-export const History = {
-  list() { return read(KEY_HISTORY) || []; },
-  add(fields) {
-    const entry = { id: 'h' + Date.now(), fields, createdAt: Date.now() };
-    const list = [entry, ...this.list()].slice(0, 25);
-    write(KEY_HISTORY, list);
-    return entry;
-  },
-  remove(id) {
-    write(KEY_HISTORY, this.list().filter((e) => e.id !== id));
-  },
-  clear() { try { localStorage.removeItem(KEY_HISTORY); } catch {} }
-};
+// Hinweis: Das frühere localStorage-"History" (nur Text) wurde durch das
+// vollwertige Archiv (js/archive.js, IndexedDB inkl. Fotos) ersetzt.
 
 // Scan-Vorlage: vom Nutzer auf einem Karten-Foto eingezeichnete Zonen.
 // Pro Zone: { field, x, y, w, h } – x/y/w/h als Anteil 0..1 des Bildes (so

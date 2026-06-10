@@ -80,7 +80,7 @@ test('Fortschrittsring steigt beim Ausfüllen und erreicht 100 %', async ({ page
   await expect(page.locator('#progressRing')).toHaveClass(/done/);
 });
 
-test('Verlauf: nach PDF-Erstellung erscheint die Doku als Vorlage', async ({ page }) => {
+test('Archiv: nach PDF-Erstellung erscheint die Doku (überlebt Reload)', async ({ page }) => {
   await page.goto('/');
   await fillValid(page);
   const dl = page.waitForEvent('download');
@@ -91,16 +91,16 @@ test('Verlauf: nach PDF-Erstellung erscheint die Doku als Vorlage', async ({ pag
   await expect(page.locator('#successOverlay')).toBeVisible();
   await expect(page.locator('#successOverlay')).toBeHidden({ timeout: 5000 });
 
-  // Verlauf zeigt den Eintrag
+  // Archiv zeigt den Eintrag
   await expect(page.locator('#historyCard')).toBeVisible();
   await expect(page.locator('.hist-txt strong').first()).toHaveText('Sensor Kontakt');
 
-  // Verlauf überlebt einen Reload
+  // Archiv überlebt einen Reload (IndexedDB)
   await page.reload();
   await expect(page.locator('#historyCard')).toBeVisible();
 });
 
-test('Verlauf: Antippen übernimmt die Daten als Vorlage (ohne Fotos)', async ({ page }) => {
+test('Archiv: Antippen lädt die komplette Doku inkl. Fotos', async ({ page }) => {
   await page.goto('/');
   await fillValid(page);
   const dl = page.waitForEvent('download');
@@ -108,20 +108,21 @@ test('Verlauf: Antippen übernimmt die Daten als Vorlage (ohne Fotos)', async ({
   await dl;
   await expect(page.locator('#successOverlay')).toBeHidden({ timeout: 5000 });
 
-  // Formular leeren, dann Vorlage anwenden
+  // Formular leeren, dann aus dem Archiv laden
   page.on('dialog', (d) => d.accept());
   await page.click('#btnNew');
   await expect(page.locator('#kunde')).toHaveValue('');
+  await expect(page.locator('#photoGrid .thumb')).toHaveCount(0);
 
   await page.click('.hist-main');
   await expect(page.locator('#kunde')).toHaveValue('Andritz Hydro GmbH');
   await expect(page.locator('#zeichnungsnummer')).toHaveValue('704097971');
   await expect(page.locator('#typRekl')).toBeChecked();
-  // Fotos kommen NICHT aus der Vorlage
-  await expect(page.locator('#photoGrid .thumb')).toHaveCount(0);
+  // Fotos werden mitgeladen
+  await expect(page.locator('#photoGrid .thumb')).toHaveCount(1);
 });
 
-test('Verlauf: Eintrag löschen entfernt ihn dauerhaft', async ({ page }) => {
+test('Archiv: Eintrag löschen entfernt ihn dauerhaft', async ({ page }) => {
   await page.goto('/');
   await fillValid(page);
   const dl = page.waitForEvent('download');
@@ -129,6 +130,7 @@ test('Verlauf: Eintrag löschen entfernt ihn dauerhaft', async ({ page }) => {
   await dl;
   await expect(page.locator('#successOverlay')).toBeHidden({ timeout: 5000 });
 
+  page.on('dialog', (d) => d.accept()); // Lösch-Bestätigung
   await page.click('.hist-del');
   await expect(page.locator('#historyCard')).toBeHidden();
   await page.reload();
