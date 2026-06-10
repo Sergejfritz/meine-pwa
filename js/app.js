@@ -156,11 +156,28 @@ function renderSignature() {
 function registerSW() {
   if (!('serviceWorker' in navigator)) return;
   const hadController = !!navigator.serviceWorker.controller;
-  navigator.serviceWorker.register('sw.js').catch(() => {});
-  let notified = false;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    // regelmäßig auf neue Version prüfen (App bleibt oft lange offen)
+    setInterval(() => reg.update().catch(() => {}), 60 * 60 * 1000);
+  }).catch(() => {});
+  let refreshing = false;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadController && !notified) { notified = true; actionToast('Neue Version verfügbar – tippen zum Aktualisieren', () => location.reload()); }
+    if (!hadController || refreshing) return; // beim Erst-Install nicht neu laden
+    refreshing = true;
+    // Nichts Wichtiges offen? Dann automatisch aktualisieren – sonst Hinweis,
+    // damit keine ungespeicherten Fotos verloren gehen.
+    if (isFormDirty()) {
+      refreshing = false;
+      actionToast('Neue Version verfügbar – tippen zum Aktualisieren', () => location.reload());
+    } else {
+      location.reload();
+    }
   });
+}
+// "Dirty" = es gibt ungesicherte Eingaben/Fotos, die ein Reload verlieren würde
+function isFormDirty() {
+  return images.length > 0 || !!signature ||
+    ['kunde', 'teilebenennung', 'bemerkung', 'abnr'].some((id) => $(id) && $(id).value.trim());
 }
 
 /* ===================== Theme ===================== */
