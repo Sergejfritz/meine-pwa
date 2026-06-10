@@ -35,6 +35,7 @@ function nowStr() {
 }
 
 function docRef(doc) {
+  if (doc.auftragstyp === 'Privat') return fmtDate(doc.datum);
   const c = (s) => String(s || '–');
   return `AB ${c(doc.abnr)} · Z ${c(doc.zeichnungsnummer)} · Index ${c(doc.index)}`;
 }
@@ -42,6 +43,7 @@ function docRef(doc) {
 export function buildFilename(doc) {
   const part = (s) => String(s || '').trim().replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_').slice(0, 40);
   const date = doc.datum || new Date().toISOString().slice(0, 10);
+  if (doc.auftragstyp === 'Privat') return `Privat_${part(doc.teilebenennung) || 'Doku'}_${date}.pdf`;
   return `AB${part(doc.abnr)}_Z${part(doc.zeichnungsnummer)}_I${part(doc.index)}_${date}.pdf`;
 }
 
@@ -124,10 +126,16 @@ function metaTable(pdf, doc, startY) {
   if (doc.position) pairs.splice(3, 0, ['Position', doc.position]);
   if (doc.auftragstyp === 'Reklamation' && doc.version) pairs.push(['Version', doc.version]);
   if (doc.auftragstyp === 'Fertigungsauftrag' && doc.spanndruck) pairs.push(['Spanndruck', doc.spanndruck]);
+  // Privat: passendes Label, fertigungsfremde Felder fallen unten ohnehin weg
+  if (doc.auftragstyp === 'Privat') {
+    const t = pairs.find((p) => p[0] === 'Benennung der Teile'); if (t) t[0] = 'Bezeichnung';
+  }
+  // Leere Felder nicht anzeigen (sauberes Layout, v.a. bei Privat)
+  const shown = pairs.filter(([, v]) => String(v || '').trim());
 
   const colW = CW / 2;
   const innerW = colW - 5;
-  const rowsN = Math.ceil(pairs.length / 2);
+  const rowsN = Math.ceil(shown.length / 2);
   let y = startY;
 
   pdf.setDrawColor(...C_LINE);
@@ -139,8 +147,8 @@ function metaTable(pdf, doc, startY) {
     let lineCount = 1;
     for (let c = 0; c < 2; c++) {
       const idx = r * 2 + c;
-      if (idx >= pairs.length) { cells.push(null); continue; }
-      const [label, value] = pairs[idx];
+      if (idx >= shown.length) { cells.push(null); continue; }
+      const [label, value] = shown[idx];
       pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9.5);
       const vLines = pdf.splitTextToSize(String(value || '–'), innerW).slice(0, 2);
       lineCount = Math.max(lineCount, vLines.length);

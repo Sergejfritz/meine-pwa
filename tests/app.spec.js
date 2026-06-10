@@ -89,6 +89,28 @@ test('Theme-Umschalter wechselt und bleibt nach Reload erhalten', async ({ page 
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });
 
+test('Privat: blendet Fertigungsfelder aus und erstellt PDF ohne Pflicht-AB-Nr.', async ({ page }) => {
+  await page.goto('/');
+  await page.click('label[for=typPriv]');
+  // Fertigungsspezifische Felder verschwinden
+  await expect(page.locator('#abnr').locator('xpath=ancestor::div[contains(@class,"field")][1]')).toBeHidden();
+  await expect(page.locator('#maschine').locator('xpath=ancestor::div[contains(@class,"field")][1]')).toBeHidden();
+  await expect(page.locator('#stueckzahl').locator('xpath=ancestor::div[contains(@class,"field")][1]')).toBeHidden();
+  // Bezeichnung wird umbenannt
+  await expect(page.locator('label[for=teilebenennung]')).toContainText('Bezeichnung');
+
+  // Nur das Nötigste ausfüllen
+  await page.fill('#teilebenennung', 'Gartenzaun Schaden');
+  await page.fill('#bemerkung', 'Privat dokumentiert.');
+  await page.setInputFiles('#galleryInput', { name: 'p.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.locator('#photoGrid .thumb')).toHaveCount(1);
+
+  const dl = page.waitForEvent('download');
+  await page.click('#btnPdf');
+  const download = await dl;
+  expect(download.suggestedFilename()).toContain('Privat_Gartenzaun_Schaden_');
+});
+
 test('Auftragstyp blendet das passende Zusatzfeld ein', async ({ page }) => {
   await page.goto('/');
   await page.click('label[for=typRekl]');
