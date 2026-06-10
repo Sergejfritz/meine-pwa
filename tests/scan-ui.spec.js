@@ -17,6 +17,7 @@ export async function scanArbeitskarte(_dataUrl, onProgress) {
     datumIso: '2026-05-27'
   }};
 }
+export function prewarmScanner() {}
 export async function disposeScanner() {}
 `;
 
