@@ -96,3 +96,21 @@ test('Scan-Vorlage: Kästchen ziehen, speichern und Status anzeigen', async ({ p
   await page.click('#zoneSetup');
   await expect(page.locator('.zone-item')).toHaveCount(1);
 });
+
+test('Scan-Vorlage: Bild lässt sich um 90° drehen (Hoch- ↔ Querformat)', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForTimeout(2600);
+  await page.click('#zoneSetup');
+  await loadBigPhoto(page); // 600x800 → Hochformat
+
+  const before = await page.locator('#zoneCanvas').evaluate((c) => ({ w: c.width, h: c.height }));
+  expect(before.h).toBeGreaterThan(before.w); // Hochformat
+
+  await page.click('#zoneRotate');
+  const after = await page.locator('#zoneCanvas').evaluate((c) => ({ w: c.width, h: c.height }));
+  expect(after.w).toBeGreaterThan(after.h); // jetzt Querformat (gedreht)
+
+  await page.click('#zoneSave');
+  const tpl = await page.evaluate(() => JSON.parse(localStorage.getItem('techdoku_zones')));
+  expect(tpl.aspect).toBeGreaterThan(1); // gedrehtes (Quer-)Bild gespeichert
+});
