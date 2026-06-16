@@ -276,6 +276,41 @@
     </section>
   </main>
 
+  <!-- Schwebe-Knopf: Live-Mitschrift starten (Echtzeit-Transkription) -->
+  <button class="fab-rec" id="fabRec" type="button" aria-label="Live-Mitschrift" title="Live-Mitschrift">🎙️</button>
+
+  <!-- Live-Mitschrift (Echtzeit-Transkription) -->
+  <div class="modal" id="trModal" role="dialog" aria-modal="true" aria-label="Live-Mitschrift">
+    <div class="modal-head">
+      <button id="trClose" type="button">✕ Schließen</button>
+      <h2>🎙️ Live-Mitschrift</h2>
+      <button id="trSave" type="button" style="background:#16a34a" disabled>💾 Speichern</button>
+    </div>
+    <div class="tr-body">
+      <div class="tr-status">
+        <span class="tr-dot" id="trDot" aria-hidden="true"></span>
+        <span id="trState">Bereit</span>
+        <span class="tr-timer" id="trTimer">00:00</span>
+      </div>
+      <div class="tr-note">Tipp: Bildschirm bleibt während der Aufnahme an. Echte Hintergrund-Aufnahme bei gesperrtem Handy ist im Browser nicht möglich – dafür braucht es ein Gerät wie Plaud.</div>
+      <div class="tr-transcript" id="trText" aria-live="polite" role="log">
+        <span class="tr-placeholder">Auf „Aufnahme starten“ tippen und sprechen – der Text erscheint hier live …</span>
+      </div>
+      <button class="btn btn-primary tr-rec" id="trToggle" type="button">⏺ Aufnahme starten</button>
+      <div class="tr-tools">
+        <button class="btn btn-ghost" id="trSummary" type="button" disabled>✨ Zusammenfassen</button>
+        <button class="btn btn-ghost" id="trToBemerkung" type="button" disabled>⬇️ In Bemerkung</button>
+        <button class="btn btn-ghost" id="trShare" type="button" disabled>📤 Teilen</button>
+        <button class="btn btn-ghost" id="trCopy" type="button" disabled>📋 Kopieren</button>
+        <button class="btn btn-ghost" id="trClear" type="button">🗑 Leeren</button>
+      </div>
+      <div class="tr-saved">
+        <div class="tr-saved-title">📁 Gespeicherte Mitschriften</div>
+        <div id="trList"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Foto-Editor -->
   <div class="modal" id="annoModal" role="dialog" aria-modal="true" aria-label="Foto markieren">
     <div class="modal-head">

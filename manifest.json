@@ -24,6 +24,12 @@
       "short_name": "Neu",
       "description": "Leeres Formular öffnen",
       "url": "./index.html?new=1"
+    },
+    {
+      "name": "Live-Mitschrift",
+      "short_name": "Mitschrift",
+      "description": "Echtzeit-Transkription starten",
+      "url": "./index.html?record=1"
     }
   ],
   "prefer_related_applications": false
