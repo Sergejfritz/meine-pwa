@@ -55,13 +55,24 @@ test('Live-Mitschrift: Knopf, Aufnahme, Live-Text und Speichern', async ({ page 
   await expect(page.locator('#bemerkung')).toHaveValue(/Reklamation an Maschine fünf/);
 });
 
-test('Live-Mitschrift: ohne Spracherkennung bleibt der Knopf verborgen', async ({ page }) => {
+test('Live-Mitschrift: ohne Browser-Spracherkennung übernimmt der KI-Modus', async ({ page }) => {
   await page.addInitScript(() => {
-    try { delete window.SpeechRecognition; } catch {}
-    try { delete window.webkitSpeechRecognition; } catch {}
     Object.defineProperty(window, 'SpeechRecognition', { value: undefined, configurable: true });
     Object.defineProperty(window, 'webkitSpeechRecognition', { value: undefined, configurable: true });
   });
   await page.goto('/');
-  await expect(page.locator('#fabRec')).toBeHidden();
+  // Knopf bleibt sichtbar, weil die KI-Aufnahme (MediaRecorder) verfügbar ist
+  await expect(page.locator('#fabRec')).toBeVisible();
+  await page.click('#fabRec');
+  // Schnell-Modus ist deaktiviert, KI-Modus automatisch aktiv
+  await expect(page.locator('#trModeFast')).toBeDisabled();
+  await expect(page.locator('#trModeAi')).toBeChecked();
+});
+
+test('Live-Mitschrift: Modus-Umschalter ist vorhanden und Schnell ist Standard', async ({ page }) => {
+  await injectFakeSpeech(page);
+  await page.goto('/');
+  await page.click('#fabRec');
+  await expect(page.locator('#trModeFast')).toBeChecked();
+  await expect(page.locator('#trModeAi')).toBeEnabled();
 });

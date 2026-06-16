@@ -37,6 +37,25 @@ let wakeLock = null;
 let restartTimer = null;
 let currentId = null;  // geladene/zu überschreibende Mitschrift
 
+// Erkennungs-Modus: 'fast' = Browser-Spracherkennung (live, online),
+// 'ai' = Whisper-KI komplett auf dem Gerät (genauer, privat, etwas verzögert).
+const MODE_KEY = 'techdoku_tr_mode';
+let mode = 'fast';
+const hasFast = !!SR;
+const hasAi = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) && typeof MediaRecorder !== 'undefined';
+
+// ---- KI-Modus (Whisper, on-device über transformers.js) ----
+const WHISPER_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
+const WHISPER_MODEL = 'Xenova/whisper-base'; // mehrsprachig, gute Balance Größe/Qualität
+const SEGMENT_MS = 12000;                    // Audio in ~12-Sek-Blöcken transkribieren
+let asr = null;          // geladene Transkriptions-Pipeline
+let asrLoading = null;   // Promise während des Ladens (verhindert Doppel-Laden)
+let micStream = null;    // Mikrofon-Stream
+let mr = null;           // MediaRecorder des aktuellen Segments
+let audioChunks = [];
+let segTimer = null;
+let jobQueue = Promise.resolve(); // serialisiert die Transkription der Segmente
+
 function fmtTime(ms) {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
@@ -127,7 +146,17 @@ function makeRec() {
   return r;
 }
 
-function start() {
+function setAiStatus(msg) {
+  const el = $('trModelStatus');
+  if (el) { el.textContent = msg || ''; el.classList.toggle('hidden', !msg); }
+}
+
+// Gemeinsame Weiche: je nach gewähltem Modus
+function start() { return mode === 'ai' ? startAi() : startFast(); }
+function stop() { return mode === 'ai' ? stopAi() : stopFast(); }
+
+/* ---------- Modus „Schnell" (Browser-Spracherkennung) ---------- */
+function startFast() {
   if (!SR) { toastTr('Spracherkennung wird von diesem Browser nicht unterstützt.'); return; }
   if (wantOn) return;
   wantOn = true;
@@ -140,7 +169,7 @@ function start() {
   setState(true);
 }
 
-function stop() {
+function stopFast() {
   wantOn = false;
   clearTimeout(restartTimer);
   if (rec) { try { rec.stop(); } catch {} }
@@ -151,6 +180,101 @@ function stop() {
   releaseWake();
   setState(false);
   render();
+}
+
+/* ---------- Modus „Genau" (Whisper-KI, on-device) ---------- */
+// Modell einmalig laden (danach im Browser-Cache -> offline nutzbar).
+function ensureModel() {
+  if (asr) return Promise.resolve(asr);
+  if (asrLoading) return asrLoading;
+  setAiStatus('KI-Modell wird geladen … (einmalig ~80 MB, danach offline)');
+  asrLoading = import(WHISPER_LIB)
+    .then(({ pipeline }) => pipeline('automatic-speech-recognition', WHISPER_MODEL, {
+      device: (typeof navigator !== 'undefined' && navigator.gpu) ? 'webgpu' : 'wasm',
+      dtype: 'q8',
+      progress_callback: (p) => {
+        if (p && p.status === 'progress' && p.progress != null) {
+          setAiStatus(`KI-Modell wird geladen … ${Math.round(p.progress)}%`);
+        }
+      },
+    }))
+    .then((p) => { asr = p; setAiStatus(''); return p; })
+    .catch((e) => { asrLoading = null; setAiStatus('KI-Modell konnte nicht geladen werden (Internet beim ersten Mal nötig).'); throw e; });
+  return asrLoading;
+}
+
+// Aufgenommenes Audio-Stück in 16-kHz-Mono umrechnen (Whisper-Eingabe).
+async function blobToPCM(blob) {
+  const buf = await blob.arrayBuffer();
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const ac = new AC();
+  try {
+    const audio = await ac.decodeAudioData(buf);
+    const src = audio.getChannelData(0);
+    const ratio = audio.sampleRate / 16000;
+    const len = Math.max(0, Math.floor(src.length / ratio));
+    const out = new Float32Array(len);
+    for (let i = 0; i < len; i++) out[i] = src[Math.floor(i * ratio)] || 0;
+    return out;
+  } finally { try { ac.close(); } catch {} }
+}
+
+async function transcribeBlob(blob) {
+  if (!blob || blob.size < 2500) return; // zu kurz/leise – überspringen
+  try {
+    const pcm = await blobToPCM(blob);
+    if (pcm.length < 1600) return; // < ~0,1 s
+    const model = await ensureModel();
+    const res = await model(pcm, { language: 'german', task: 'transcribe' });
+    const t = ((res && res.text) || '').trim();
+    if (t) { finalText += (finalText ? ' ' : '') + t; render(); }
+  } catch {
+    // Einzelnes Segment fehlgeschlagen – weiterlaufen, nicht alles abbrechen.
+  }
+}
+
+function startSegment() {
+  audioChunks = [];
+  try { mr = new MediaRecorder(micStream); } catch { mr = new MediaRecorder(micStream, { mimeType: 'audio/webm' }); }
+  mr.ondataavailable = (e) => { if (e.data && e.data.size) audioChunks.push(e.data); };
+  mr.onstop = () => {
+    const blob = new Blob(audioChunks, { type: (mr && mr.mimeType) || 'audio/webm' });
+    if (wantOn) startSegment(); // nahtlos das nächste Stück aufnehmen
+    jobQueue = jobQueue
+      .then(() => transcribeBlob(blob))
+      .then(() => { if (!wantOn) setAiStatus(''); });
+  };
+  try { mr.start(); } catch {}
+  clearTimeout(segTimer);
+  segTimer = setTimeout(() => { if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} } }, SEGMENT_MS);
+}
+
+async function startAi() {
+  if (wantOn) return;
+  if (!hasAi) { toastTr('Dieser Browser unterstützt die KI-Aufnahme nicht.'); return; }
+  wantOn = true;
+  setState(true);
+  ensureModel().catch(() => {}); // schon mal vorladen, während gesprochen wird
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch { wantOn = false; setState(false); toastTr('Mikrofon ist blockiert – bitte Zugriff erlauben.'); return; }
+  startedAt = Date.now();
+  clearInterval(timerId);
+  timerId = setInterval(tickTimer, 500);
+  acquireWake();
+  startSegment();
+}
+
+function stopAi() {
+  wantOn = false;
+  clearTimeout(segTimer);
+  if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} } // letztes Stück wird noch transkribiert
+  if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  if (startedAt) { elapsedBase += Date.now() - startedAt; startedAt = 0; }
+  clearInterval(timerId);
+  releaseWake();
+  setState(false);
+  if (asr || asrLoading) setAiStatus('Rest-Audio wird verarbeitet …');
 }
 
 function resetSession() {
@@ -251,14 +375,38 @@ function close() {
   $('trModal').classList.remove('open');
 }
 
+function applyMode(m) {
+  if (wantOn) stop(); // laufende Aufnahme im alten Modus beenden
+  mode = (m === 'ai' && hasAi) ? 'ai' : (hasFast ? 'fast' : (hasAi ? 'ai' : 'fast'));
+  try { localStorage.setItem(MODE_KEY, mode); } catch {}
+  document.querySelectorAll('input[name=trMode]').forEach((r) => { r.checked = (r.value === mode); });
+  const note = $('trModeNote');
+  if (note) {
+    note.textContent = mode === 'ai'
+      ? '🎯 KI-Modus: läuft komplett auf dem Gerät (privat). Text erscheint in ~12-Sek-Blöcken, also leicht verzögert. Erster Start lädt einmalig das Modell.'
+      : '⚡ Schnell-Modus: Browser-Spracherkennung, sofort live – Audio wird dabei zur Erkennung an den Browser-Anbieter (z. B. Google) gesendet.';
+  }
+  setAiStatus('');
+}
+
 export function initTranscribe(onToBemerkung) {
   const fab = $('fabRec');
   if (!fab) return;
-  if (!SR) {
-    // Ohne Spracherkennung hat die Funktion keinen Sinn -> Knopf ausblenden.
+  if (!hasFast && !hasAi) {
+    // Weder Browser-Spracherkennung noch KI-Aufnahme möglich -> Knopf ausblenden.
     fab.style.display = 'none';
     return;
   }
+  // Modus-Umschalter: nicht verfügbare Modi deaktivieren
+  const fastRadio = document.querySelector('input[name=trMode][value=fast]');
+  const aiRadio = document.querySelector('input[name=trMode][value=ai]');
+  if (fastRadio) fastRadio.disabled = !hasFast;
+  if (aiRadio) aiRadio.disabled = !hasAi;
+  document.querySelectorAll('input[name=trMode]').forEach((r) => { r.onchange = () => applyMode(r.value); });
+  let saved = 'fast';
+  try { saved = localStorage.getItem(MODE_KEY) || 'fast'; } catch {}
+  applyMode(saved);
+
   fab.onclick = open;
   $('trClose').onclick = close;
   $('trToggle').onclick = () => (wantOn ? stop() : start());

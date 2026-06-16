@@ -683,6 +683,20 @@ footer.app-foot { text-align: center; color: var(--text-muted); font-size: 12px;
   background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm);
   padding: 14px; font-size: 16px; line-height: 1.6; color: var(--text); white-space: pre-wrap;
 }
+.tr-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tr-mode input { position: absolute; opacity: 0; pointer-events: none; }
+.tr-mode label {
+  text-align: center; padding: 10px; border-radius: var(--radius-sm); cursor: pointer;
+  background: var(--surface-2); border: 1.5px solid var(--border); color: var(--text);
+  font-weight: 700; font-size: 13px;
+}
+.tr-mode input:checked + label { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-strong); }
+.tr-mode input:disabled + label { opacity: .4; cursor: not-allowed; }
+.tr-model-status {
+  font-size: 13px; font-weight: 600; color: var(--accent-strong);
+  background: var(--accent-soft); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
 .tr-placeholder { color: var(--text-muted); }
 .tr-interim { color: var(--accent); opacity: .8; }
 .btn.tr-rec { font-size: 17px; padding: 16px; }

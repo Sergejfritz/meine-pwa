@@ -292,6 +292,14 @@
         <span id="trState">Bereit</span>
         <span class="tr-timer" id="trTimer">00:00</span>
       </div>
+      <div class="tr-mode" role="radiogroup" aria-label="Erkennungs-Modus">
+        <input type="radio" name="trMode" id="trModeFast" value="fast" checked>
+        <label for="trModeFast">⚡ Schnell (live)</label>
+        <input type="radio" name="trMode" id="trModeAi" value="ai">
+        <label for="trModeAi">🎯 Genau (KI, privat)</label>
+      </div>
+      <div class="tr-note" id="trModeNote"></div>
+      <div class="tr-model-status hidden" id="trModelStatus" role="status"></div>
       <div class="tr-note">Tipp: Bildschirm bleibt während der Aufnahme an. Echte Hintergrund-Aufnahme bei gesperrtem Handy ist im Browser nicht möglich – dafür braucht es ein Gerät wie Plaud.</div>
       <div class="tr-transcript" id="trText" aria-live="polite" role="log">
         <span class="tr-placeholder">Auf „Aufnahme starten“ tippen und sprechen – der Text erscheint hier live …</span>
