@@ -106,11 +106,14 @@ function makeRec() {
     render();
   };
   r.onend = () => {
+    // Noch nicht "final" gewordenen Zwischenstand sichern, sonst gehen beim
+    // Neustart die zuletzt gesprochenen Wörter verloren.
+    if (interim.trim()) { finalText += (finalText ? ' ' : '') + interim.trim(); interim = ''; render(); }
     // Web Speech endet von selbst (Pausen/Limits). Solange der Nutzer noch
-    // aufnimmt: sofort neu starten -> läuft durch bis zum Stopp.
+    // aufnimmt: möglichst sofort neu starten -> läuft durch bis zum Stopp.
     if (wantOn) {
       clearTimeout(restartTimer);
-      restartTimer = setTimeout(() => { try { r.start(); } catch {} }, 250);
+      restartTimer = setTimeout(() => { try { r.start(); } catch {} }, 120);
     }
   };
   r.onerror = (e) => {
