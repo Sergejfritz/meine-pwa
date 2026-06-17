@@ -718,3 +718,75 @@ footer.app-foot { text-align: center; color: var(--text-muted); font-size: 12px;
   background: var(--surface-2); cursor: pointer; font-size: 16px; color: var(--text-muted);
 }
 .tr-item-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ===================== KI-Assistent (Chat) ===================== */
+.fab-chat {
+  position: fixed; right: 16px; bottom: calc(88px + var(--safe-bottom)); z-index: 90;
+  width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer;
+  background: linear-gradient(135deg, #6d28d9, #2563eb);
+  color: #fff; font-size: 26px; box-shadow: var(--shadow-lg);
+  display: grid; place-items: center;
+}
+.fab-chat:active { transform: scale(.94); }
+
+.chat-body {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+  padding: 16px; padding-bottom: calc(16px + var(--safe-bottom)); background: var(--bg);
+}
+.chat-note {
+  font-size: 12px; line-height: 1.5; color: var(--text-muted);
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-left: 4px solid var(--accent); border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.chat-model { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; color: var(--text); }
+.chat-model select {
+  flex: 1; padding: 9px 10px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font-size: 13px;
+}
+.chat-status {
+  font-size: 13px; font-weight: 600; color: var(--accent-strong);
+  background: var(--accent-soft); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+}
+.chat-messages {
+  flex: 1; min-height: 180px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 14px;
+}
+.chat-empty { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+.msg { display: flex; flex-direction: column; gap: 4px; max-width: 88%; }
+.msg-user { align-self: flex-end; align-items: flex-end; }
+.msg-ai { align-self: flex-start; align-items: flex-start; }
+.msg-text {
+  padding: 10px 13px; border-radius: var(--radius-sm); font-size: 15px; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+.msg-user .msg-text { background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+.msg-ai .msg-text { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.msg-tools { display: flex; }
+.chat-caret { opacity: .6; animation: pulse 1s infinite; }
+.chat-quick { display: flex; flex-wrap: wrap; gap: 8px; }
+.chat-chip {
+  background: var(--surface-2); border: 1.5px solid var(--border); color: var(--accent);
+  border-radius: 999px; padding: 8px 13px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.chat-chip:hover { border-color: var(--accent); }
+.chat-chip:disabled { opacity: .45; cursor: not-allowed; }
+.chat-input-row { display: flex; gap: 8px; }
+.chat-input-row input {
+  flex: 1; padding: 12px 14px; border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px;
+}
+.chat-input-row .btn { flex: 0 0 auto; }
+.chat-mem { border-top: 1px solid var(--border); padding-top: 10px; }
+.chat-mem-toggle { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 13px; cursor: pointer; padding: 4px 0; }
+.chat-mem-panel { display: none; margin-top: 8px; flex-direction: column; gap: 8px; }
+.chat-mem-panel.open { display: flex; }
+.chat-mem-empty { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.chat-mem-item {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 10px;
+}
+.chat-mem-item span { flex: 1; }
+.chat-mem-del { flex: 0 0 auto; background: none; border: none; cursor: pointer; font-size: 15px; color: var(--text-muted); }
+.chat-mem-del:hover { color: var(--danger); }
+.chat-mem-clearbtn { align-self: flex-start; color: var(--danger); border-color: var(--border); }
