@@ -80,6 +80,20 @@ test('Live-Mitschrift: Wortwiederholungen werden zusammengefasst', async ({ page
   expect((txt.match(/Red Bull/g) || []).length).toBe(1); // nur einmal, nicht gedoppelt
 });
 
+test('Live-Mitschrift: erneut gesendete Ergebnisse doppeln nicht (+ Alias)', async ({ page }) => {
+  await injectFakeSpeech(page);
+  await page.goto('/');
+  await page.click('#fabRec');
+  await page.click('#trToggle');
+  // Manche Browser senden bei jedem Event die ganze Liste neu – darf nicht doppeln.
+  await fireFinal(page, 'Hose Cover liefert die Maschine');
+  await fireFinal(page, 'Hose Cover liefert die Maschine');
+  const txt = await page.locator('#trText').innerText();
+  expect(txt).toContain('Hosokawa');                       // Alias greift
+  expect((txt.match(/Hosokawa/g) || []).length).toBe(1);   // nur einmal
+  expect((txt.match(/Maschine/g) || []).length).toBe(1);
+});
+
 test('Live-Mitschrift: Fachbegriffe werden korrigiert', async ({ page }) => {
   await injectFakeSpeech(page);
   await page.goto('/');

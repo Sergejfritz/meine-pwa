@@ -38,6 +38,12 @@ let timerId = null;
 let wakeLock = null;
 let restartTimer = null;
 let currentId = null;  // geladene/zu überschreibende Mitschrift
+// Schnell-Modus: festgeschriebener Text aus beendeten Erkennungs-Sitzungen +
+// das, was die LAUFENDE Sitzung gerade als "final" liefert. Wir bauen den Text
+// bei jedem Update KOMPLETT neu auf (committed + sessionFinal), statt anzuhängen.
+// So kann sich nichts doppeln, auch wenn der Browser die Ergebnisliste neu sendet.
+let committed = '';
+let sessionFinal = '';
 
 // Erkennungs-Modus: 'fast' = Browser-Spracherkennung (live, online),
 // 'ai' = Whisper-KI komplett auf dem Gerät (genauer, privat, etwas verzögert).
@@ -118,32 +124,29 @@ function makeRec() {
   r.continuous = true;
   r.interimResults = true;
   r.onresult = (e) => {
-    let live = '';
-    for (let i = e.resultIndex; i < e.results.length; i++) {
+    // Text der LAUFENDEN Sitzung jedes Mal komplett aus der Ergebnisliste
+    // neu zusammensetzen (nicht anhängen!) – verhindert Doppelungen, falls der
+    // Browser bei jedem Event die ganze Liste erneut schickt.
+    let fin = '', live = '';
+    for (let i = 0; i < e.results.length; i++) {
       const res = e.results[i];
-      const txt = res[0].transcript;
-      if (res.isFinal) {
-        const t = applyGlossary(txt.trim());
-        if (t) finalText = collapseRepeats((finalText ? finalText + ' ' : '') + t);
-      } else {
-        live += txt;
-      }
+      const txt = (res[0] && res[0].transcript) || '';
+      if (res.isFinal) fin += txt + ' '; else live += txt + ' ';
     }
-    interim = live;
+    sessionFinal = fin.trim();
+    interim = live.trim();
+    finalText = clean((committed ? committed + ' ' : '') + sessionFinal);
     render();
   };
   r.onend = () => {
+    // Sitzung festschreiben (nur den finalen Teil; Zwischenstand kommt beim
+    // Stopp über stopFast). Dann ggf. neu starten.
+    committed = clean((committed ? committed + ' ' : '') + sessionFinal);
+    sessionFinal = '';
+    finalText = committed; render();
     if (wantOn) {
-      // Auto-Neustart bei Sprechpausen: den Zwischenstand NICHT übernehmen –
-      // sonst doppeln sich Wörter ("Red Bull Red Bull und dann ...").
-      // Pausen-Wörter sind in aller Regel schon als "final" angekommen.
       clearTimeout(restartTimer);
       restartTimer = setTimeout(() => { try { r.start(); } catch {} }, 120);
-    } else if (interim.trim()) {
-      // Nur beim echten Stopp: letzten Zwischenstand noch sichern.
-      finalText = collapseRepeats((finalText ? finalText + ' ' : '') + applyGlossary(interim.trim()));
-      interim = '';
-      render();
     }
   };
   r.onerror = (e) => {
@@ -166,11 +169,16 @@ function setAiStatus(msg) {
 function start() { return mode === 'ai' ? startAi() : startFast(); }
 function stop() { return mode === 'ai' ? stopAi() : stopFast(); }
 
+// Text aufräumen: Fachbegriffe angleichen + Wiederholungs-Schleifen kollabieren.
+function clean(s) { return collapseRepeats(applyGlossary(applyAliases((s || '').trim()))); }
+
 /* ---------- Modus „Schnell" (Browser-Spracherkennung) ---------- */
 function startFast() {
   if (!SR) { toastTr('Spracherkennung wird von diesem Browser nicht unterstützt.'); return; }
   if (wantOn) return;
   wantOn = true;
+  committed = finalText.trim(); // an vorhandenen Text (geladene Notiz) anknüpfen
+  sessionFinal = ''; interim = '';
   rec = makeRec();
   try { rec.start(); } catch {}
   startedAt = Date.now();
@@ -185,9 +193,12 @@ function stopFast() {
   clearTimeout(restartTimer);
   if (rec) { try { rec.stop(); } catch {} }
   rec = null;
+  // Restlichen finalen Text + letzten Zwischenstand festschreiben.
+  committed = clean((committed ? committed + ' ' : '') + sessionFinal + (interim ? ' ' + interim : ''));
+  sessionFinal = ''; interim = '';
+  finalText = committed;
   if (startedAt) { elapsedBase += Date.now() - startedAt; startedAt = 0; }
   clearInterval(timerId);
-  interim = '';
   releaseWake();
   setState(false);
   render();
@@ -245,7 +256,7 @@ function collapseRepeats(text) {
   const out = [];
   for (const t of tok) {
     out.push(t);
-    for (let k = 1; k <= 5; k++) {
+    for (let k = 1; k <= 8; k++) {
       if (out.length >= 2 * k) {
         let rep = true;
         for (let i = 0; i < k; i++) {
@@ -284,8 +295,7 @@ async function transcribeBlob(blob) {
       temperature: 0,                     // deterministisch (kein „Fantasieren")
       compression_ratio_threshold: 2.4,   // verdächtig repetitive Ausgaben verwerfen
     });
-    let t = applyGlossary(collapseRepeats(((res && res.text) || '').trim()));
-    t = trimBoundary(t);
+    let t = trimBoundary(clean(((res && res.text) || '').trim()));
     if (t) { finalText += (finalText ? ' ' : '') + t; render(); }
   } catch {
     // Einzelnes Segment fehlgeschlagen – weiterlaufen, nicht alles abbrechen.
@@ -369,7 +379,7 @@ function stopAi() {
 
 function resetSession() {
   stop();
-  finalText = ''; interim = ''; elapsedBase = 0; currentId = null;
+  finalText = ''; interim = ''; committed = ''; sessionFinal = ''; elapsedBase = 0; currentId = null;
   render(); tickTimer();
 }
 
@@ -381,9 +391,23 @@ const DOMAIN_TERMS = (
   'Spanndruck Position Maschine Toleranz Maßabweichung Oberfläche Rauheit Gewinde Bohrung Durchmesser ' +
   'Radius Fase Passung Planfläche Fräsen Drehen Schleifen Bohren Werkstück Werkzeug Vorrichtung Spannmittel ' +
   'Messprotokoll Nacharbeit Ausschuss Charge Rüsten Bauteil Baugruppe Schweißnaht Härtung Beschichtung ' +
-  'Grat entgraten Riss Lunker Pore Verzug Maßhaltigkeit Konturf Welle Lager Flansch Nut Bund Senkung ' +
-  'Verantwortlich Liefertermin Auftrag Mangel Abnahme Prüfung Kontur Mittelpunkt Anschlag'
+  'Grat entgraten Riss Lunker Pore Verzug Maßhaltigkeit Welle Lager Flansch Nut Bund Senkung ' +
+  'Verantwortlich Liefertermin Auftrag Mangel Abnahme Prüfung Kontur Mittelpunkt Anschlag ' +
+  'Hosokawa'
 ).split(/\s+/);
+
+// Feste Korrekturen für oft falsch gehörte (mehrwortige) Eigennamen/Begriffe.
+// Hier kannst du jederzeit weitere Begriffe ergänzen lassen.
+const ALIASES = [
+  [/\bhose\s+cover\b/gi, 'Hosokawa'],
+  [/\bhoso\s*kawa\b/gi, 'Hosokawa'],
+  [/\bhosokava\b/gi, 'Hosokawa'],
+];
+function applyAliases(text) {
+  let t = text || '';
+  for (const [re, to] of ALIASES) t = t.replace(re, to);
+  return t;
+}
 
 let glossary = []; // [{ words:[lc...], n, term }] – längste zuerst
 function buildGlossary() {
