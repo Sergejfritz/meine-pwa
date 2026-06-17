@@ -74,12 +74,12 @@ test('KI-Assistent: Handy bekommt automatisch ein kleines Modell', async ({ page
   await page.goto('/');
   await page.click('#fabChat');
 
-  // Das Handy-Modell steht immer zur Auswahl …
+  // Das sparsame Handy-Modell steht immer zur Auswahl …
   await expect(page.locator('#chatModel option[value="winzig"]')).toHaveCount(1);
 
-  // … und ist auf dem Handy automatisch vorgewählt (Desktop: starkes Modell).
+  // … auf dem Handy ist das empfohlene 1.5B vorgewählt (Desktop: starkes 3B).
   const val = await page.locator('#chatModel').inputValue();
-  if (testInfo.project.name.includes('mobile')) expect(val).toBe('winzig');
+  if (testInfo.project.name.includes('mobile')) expect(val).toBe('klein');
   else expect(val).toBe('standard');
 });
 
