@@ -116,7 +116,7 @@ function makeRec() {
       const txt = res[0].transcript;
       if (res.isFinal) {
         const t = txt.trim();
-        if (t) finalText += (finalText ? ' ' : '') + t;
+        if (t) finalText = collapseRepeats((finalText ? finalText + ' ' : '') + t);
       } else {
         live += txt;
       }
@@ -125,14 +125,17 @@ function makeRec() {
     render();
   };
   r.onend = () => {
-    // Noch nicht "final" gewordenen Zwischenstand sichern, sonst gehen beim
-    // Neustart die zuletzt gesprochenen Wörter verloren.
-    if (interim.trim()) { finalText += (finalText ? ' ' : '') + interim.trim(); interim = ''; render(); }
-    // Web Speech endet von selbst (Pausen/Limits). Solange der Nutzer noch
-    // aufnimmt: möglichst sofort neu starten -> läuft durch bis zum Stopp.
     if (wantOn) {
+      // Auto-Neustart bei Sprechpausen: den Zwischenstand NICHT übernehmen –
+      // sonst doppeln sich Wörter ("Red Bull Red Bull und dann ...").
+      // Pausen-Wörter sind in aller Regel schon als "final" angekommen.
       clearTimeout(restartTimer);
       restartTimer = setTimeout(() => { try { r.start(); } catch {} }, 120);
+    } else if (interim.trim()) {
+      // Nur beim echten Stopp: letzten Zwischenstand noch sichern.
+      finalText = collapseRepeats((finalText ? finalText + ' ' : '') + interim.trim());
+      interim = '';
+      render();
     }
   };
   r.onerror = (e) => {
