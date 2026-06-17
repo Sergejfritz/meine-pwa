@@ -46,8 +46,8 @@ const hasAi = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) 
 
 // ---- KI-Modus (Whisper, on-device über transformers.js) ----
 const WHISPER_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
-const WHISPER_MODEL = 'Xenova/whisper-base'; // mehrsprachig, gute Balance Größe/Qualität
-const SEGMENT_MS = 12000;                    // Audio in ~12-Sek-Blöcken transkribieren
+const WHISPER_MODEL = 'Xenova/whisper-small'; // mehrsprachig, deutlich genauer als base (größer/langsamer)
+const SEGMENT_MS = 15000;                      // Audio in ~15-Sek-Blöcken (weniger Modell-Aufrufe)
 let asr = null;          // geladene Transkriptions-Pipeline
 let asrLoading = null;   // Promise während des Ladens (verhindert Doppel-Laden)
 let micStream = null;    // Mikrofon-Stream
@@ -187,7 +187,7 @@ function stopFast() {
 function ensureModel() {
   if (asr) return Promise.resolve(asr);
   if (asrLoading) return asrLoading;
-  setAiStatus('KI-Modell wird geladen … (einmalig ~80 MB, danach offline)');
+  setAiStatus('KI-Modell wird geladen … (einmalig ~250 MB, danach offline)');
   asrLoading = import(WHISPER_LIB)
     .then(({ pipeline }) => pipeline('automatic-speech-recognition', WHISPER_MODEL, {
       device: (typeof navigator !== 'undefined' && navigator.gpu) ? 'webgpu' : 'wasm',
@@ -383,7 +383,7 @@ function applyMode(m) {
   const note = $('trModeNote');
   if (note) {
     note.textContent = mode === 'ai'
-      ? '🎯 KI-Modus: läuft komplett auf dem Gerät (privat). Text erscheint in ~12-Sek-Blöcken, also leicht verzögert. Erster Start lädt einmalig das Modell.'
+      ? '🎯 KI-Modus (whisper-small): läuft komplett auf dem Gerät (privat) und ist genauer. Text erscheint in ~15-Sek-Blöcken, also verzögert. Erster Start lädt einmalig das Modell (~250 MB, WLAN empfohlen).'
       : '⚡ Schnell-Modus: Browser-Spracherkennung, sofort live – Audio wird dabei zur Erkennung an den Browser-Anbieter (z. B. Google) gesendet.';
   }
   setAiStatus('');
