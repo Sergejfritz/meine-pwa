@@ -80,6 +80,19 @@ test('Live-Mitschrift: Wortwiederholungen werden zusammengefasst', async ({ page
   expect((txt.match(/Red Bull/g) || []).length).toBe(1); // nur einmal, nicht gedoppelt
 });
 
+test('Live-Mitschrift: Fachbegriffe werden korrigiert', async ({ page }) => {
+  await injectFakeSpeech(page);
+  await page.goto('/');
+  await page.click('#fabRec');
+  await page.click('#trToggle');
+  await fireFinal(page, 'Reklamatzion an der Maschiene mit Spannddruck und der Index passt');
+  const txt = await page.locator('#trText').innerText();
+  expect(txt).toContain('Reklamation');
+  expect(txt).toContain('Maschine');
+  expect(txt).toContain('Spanndruck');
+  expect(txt).toContain('und'); // häufiges Wort bleibt unangetastet
+});
+
 test('Live-Mitschrift: Modus-Umschalter ist vorhanden und Schnell ist Standard', async ({ page }) => {
   await injectFakeSpeech(page);
   await page.goto('/');
