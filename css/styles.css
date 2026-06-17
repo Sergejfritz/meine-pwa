@@ -773,10 +773,12 @@ footer.app-foot { text-align: center; color: var(--text-muted); font-size: 12px;
 .chat-chip:disabled { opacity: .45; cursor: not-allowed; }
 .chat-input-row { display: flex; gap: 8px; }
 .chat-input-row input {
-  flex: 1; padding: 12px 14px; border-radius: var(--radius-sm);
+  flex: 1 1 auto; min-width: 0; padding: 12px 14px; border-radius: var(--radius-sm);
   border: 1.5px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px;
 }
-.chat-input-row .btn { flex: 0 0 auto; }
+/* Senden-Knopf NICHT auf volle Breite (die .btn-Basis ist width:100%): sonst
+   quetscht er das Eingabefeld auf ~30px und das Tippen zerfällt. */
+.chat-input-row .btn { flex: 0 0 auto; width: auto; }
 .chat-mem { border-top: 1px solid var(--border); padding-top: 10px; }
 .chat-mem-toggle { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 13px; cursor: pointer; padding: 4px 0; }
 .chat-mem-panel { display: none; margin-top: 8px; flex-direction: column; gap: 8px; }

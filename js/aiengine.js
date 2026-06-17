@@ -8,13 +8,13 @@
 
 import { Settings } from './store.js';
 
-// Auswahl an MLC/WebLLM-Modellen, nach Gerätestärke gestaffelt. Auf dem Handy
-// ist ein kleines Modell Pflicht (RAM/Download), auf dem Desktop darf es größer
-// sein. Umschaltbar über die Einstellungen (Settings.aiModel).
+// Modelle der Qwen-2.5-Familie – bestes kostenloses, mehrsprachiges (deutsches)
+// On-Device-Modell in kleiner Größe. Nach Gerätestärke gestaffelt: Handy klein,
+// Desktop größer. Umschaltbar über die Einstellungen (Settings.aiModel).
 export const MODELS = {
-  winzig: { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', label: 'Handy – Qwen2.5 0.5B (~0,5 GB)' },
-  klein: { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Mittel – Llama 3.2 1B (~0,9 GB)' },
-  standard: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Stark – Llama 3.2 3B (~1,7 GB, Desktop)' },
+  winzig: { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', label: 'Sparsam – Qwen 2.5 0.5B (~0,5 GB, ältere Handys)' },
+  klein: { id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', label: 'Empfohlen – Qwen 2.5 1.5B (~1 GB, Handy)' },
+  standard: { id: 'Qwen2.5-3B-Instruct-q4f16_1-MLC', label: 'Stark – Qwen 2.5 3B (~1,8 GB, Desktop)' },
 };
 
 const WEBLLM_LIB = 'https://esm.run/@mlc-ai/web-llm';
@@ -39,9 +39,11 @@ export function isMobile() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test((navigator && navigator.userAgent) || '');
 }
 
-// Sinnvolles Standard-Modell je nach Gerät (Handy klein, Desktop stark).
+// Sinnvolles Standard-Modell je nach Gerät: Handy = empfohlenes 1.5B (beste
+// Balance auf modernen Handys), Desktop = stärkeres 3B. Ältere Handys können
+// in den Einstellungen auf das sparsame 0.5B-Modell wechseln.
 export function defaultModelKey() {
-  return isMobile() ? 'winzig' : 'standard';
+  return isMobile() ? 'klein' : 'standard';
 }
 
 // Test-Haken: Ist window.__AI_MOCK gesetzt, wird das echte Modell NICHT geladen

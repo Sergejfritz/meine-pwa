@@ -34,10 +34,12 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
   **zusammenfassen / in Stichpunkte wandeln / verständlicher schreiben** und das
   Ergebnis ins Feld übernehmen. Über **„merke dir: …“** lernt er Fakten, die
   lokal (IndexedDB) gespeichert und in späteren Gesprächen genutzt werden.
-  **Läuft auch auf dem Handy:** auf Mobilgeräten wird automatisch ein kleines
-  Modell (~0,5 GB) gewählt, am PC ein stärkeres – manuell umschaltbar.
-  Voraussetzung: WebGPU (Handy: aktuelles Chrome/Android bzw. Safari ab iOS 18;
-  PC: Chrome/Edge). Der erste Modell-Download wird danach gecacht.
+  Verwendet **Qwen 2.5** (bestes kostenloses, mehrsprachiges On-Device-Modell mit
+  guter Deutsch-Fähigkeit). **Läuft auch auf dem Handy:** dort wird automatisch
+  die passende Größe gewählt (1.5B, ~1 GB; ältere Handys 0.5B), am PC das
+  stärkere 3B – manuell umschaltbar. Voraussetzung: WebGPU (Handy: aktuelles
+  Chrome/Android bzw. Safari ab iOS 18; PC: Chrome/Edge). Der erste Modell-
+  Download wird danach gecacht.
 - ⚡ **Komfort** – Auto-Vervollständigung früherer Eingaben, Spracheingabe für
   Bemerkungen, Hell-/Dunkelmodus, Entwurf-Wiederherstellung gegen Datenverlust.
 

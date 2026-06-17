@@ -74,12 +74,12 @@ test('KI-Assistent: Handy bekommt automatisch ein kleines Modell', async ({ page
   await page.goto('/');
   await page.click('#fabChat');
 
-  // Das Handy-Modell steht immer zur Auswahl …
+  // Das sparsame Handy-Modell steht immer zur Auswahl …
   await expect(page.locator('#chatModel option[value="winzig"]')).toHaveCount(1);
 
-  // … und ist auf dem Handy automatisch vorgewählt (Desktop: starkes Modell).
+  // … auf dem Handy ist das empfohlene 1.5B vorgewählt (Desktop: starkes 3B).
   const val = await page.locator('#chatModel').inputValue();
-  if (testInfo.project.name.includes('mobile')) expect(val).toBe('winzig');
+  if (testInfo.project.name.includes('mobile')) expect(val).toBe('klein');
   else expect(val).toBe('standard');
 });
 
@@ -90,4 +90,20 @@ test('KI-Assistent: Schnellaktion ohne Bemerkung gibt Hinweis', async ({ page })
 
   await page.click('.chat-quick button[data-kind="bullets"]');
   await expect(page.locator('#toast')).toContainText('Bemerkungsfeld');
+});
+
+test('KI-Assistent: Eingabefeld ist breit genug und behält den Text (auch Umlaute)', async ({ page }) => {
+  // Regression: Der Senden-Knopf (Basis .btn = width:100%) quetschte das
+  // Eingabefeld auf ~30px; in so einem Mini-Feld zerfiel die Eingabe beim
+  // Tippen. Feld muss breit sein UND den getippten Text exakt behalten.
+  await injectFakeAI(page);
+  await page.goto('/');
+  await page.click('#fabChat');
+
+  const box = await page.locator('#chatInput').boundingBox();
+  expect(box.width).toBeGreaterThan(120);
+
+  const satz = 'Schöne Grüße äöü ß!';
+  await page.locator('#chatInput').pressSequentially(satz, { delay: 20 });
+  await expect(page.locator('#chatInput')).toHaveValue(satz);
 });
