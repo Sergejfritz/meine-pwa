@@ -11,10 +11,12 @@ import { Settings } from './store.js';
 const $ = (id) => document.getElementById(id);
 
 const BASE_PERSONA =
-  'Du bist ein hilfreicher Assistent, der komplett offline auf dem Gerät läuft, '
-  + 'eingebettet in eine App für technische Dokumentationen (Reklamationen, '
-  + 'Arbeitskarten, Bemerkungen). Antworte auf Deutsch, knapp und sachlich. '
-  + 'Hilf beim Formulieren, Zusammenfassen und Beantworten von Fragen.';
+  'Du antwortest AUSSCHLIESSLICH auf Deutsch – immer, egal in welcher Sprache die '
+  + 'Frage erscheint oder wirkt. Du bist ein hilfreicher Assistent, der komplett '
+  + 'offline auf dem Gerät läuft, eingebettet in eine App für technische '
+  + 'Dokumentationen (Reklamationen, Arbeitskarten, Bemerkungen). Antworte knapp '
+  + 'und sachlich. Hilf beim Formulieren, Zusammenfassen und Beantworten von Fragen. '
+  + 'Wichtig: Deine Antwort ist immer auf Deutsch.';
 
 const HISTORY_KEY = 'techdoku_chat';
 const HISTORY_MAX = 40; // gespeicherte Nachrichten (für den Kontext genutzt: die letzten ~12)
@@ -227,7 +229,10 @@ function open() {
     setStatus('Hinweis: Dieses Gerät/Browser unterstützt das lokale KI-Modell nicht (WebGPU fehlt). Auf dem Handy: aktuelles Chrome (Android) bzw. Safari ab iOS 18; am PC: Chrome oder Edge.');
   }
   render();
-  setTimeout(() => { const i = $('chatInput'); if (i && isSupported()) i.focus(); }, 50);
+  // KEIN verzögerter Fokus: ein setTimeout(...focus...) feuerte mitten ins
+  // Tippen und setzte den Cursor zurück → Zeichen landeten verdreht/am Anfang
+  // (besonders auf dem Handy). Der Nutzer tippt selbst ins Feld; auf dem Handy
+  // öffnet ein programmatischer Fokus ohnehin keine Tastatur.
 }
 function close() {
   $('chatModal').classList.remove('open');
