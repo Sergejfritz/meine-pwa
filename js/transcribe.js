@@ -47,14 +47,20 @@ const hasAi = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) 
 // ---- KI-Modus (Whisper, on-device über transformers.js) ----
 const WHISPER_LIB = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3';
 const WHISPER_MODEL = 'Xenova/whisper-small'; // mehrsprachig, deutlich genauer als base (größer/langsamer)
-const SEGMENT_MS = 15000;                      // Audio in ~15-Sek-Blöcken (weniger Modell-Aufrufe)
+// Statt nach fester Zeit wird an SPRECHPAUSEN geschnitten (VAD) – so wird kein
+// Wort zerrissen oder doppelt erkannt. MAX = Notschnitt bei Dauerreden.
+const SILENCE_MS = 650;   // so lange Stille = Satzende -> hier schneiden
+const MIN_SEG_MS = 1800;  // vorher nicht schneiden (zu kurze Fetzen vermeiden)
+const MAX_SEG_MS = 22000; // Notschnitt, falls ununterbrochen geredet wird
+const VOICE_LEVEL = 0.012; // Pegel ab dem es als "Stimme" gilt
 let asr = null;          // geladene Transkriptions-Pipeline
 let asrLoading = null;   // Promise während des Ladens (verhindert Doppel-Laden)
 let micStream = null;    // Mikrofon-Stream
 let mr = null;           // MediaRecorder des aktuellen Segments
 let audioChunks = [];
-let segTimer = null;
 let jobQueue = Promise.resolve(); // serialisiert die Transkription der Segmente
+let audioCtx = null, analyser = null, vadData = null, vadTimer = null;
+let segStartedAt = 0, lastVoiceAt = 0, sawVoice = false;
 
 function fmtTime(ms) {
   const s = Math.floor(ms / 1000);
@@ -296,8 +302,26 @@ function startSegment() {
       .then(() => { if (!wantOn) setAiStatus(''); });
   };
   try { mr.start(); } catch {}
-  clearTimeout(segTimer);
-  segTimer = setTimeout(() => { if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} } }, SEGMENT_MS);
+  segStartedAt = Date.now();
+  lastVoiceAt = Date.now();
+  sawVoice = false;
+}
+
+// Pegel live mitlesen und an Sprechpausen schneiden (Voice Activity Detection).
+function vadTick() {
+  if (!analyser || !mr || mr.state === 'inactive') return;
+  analyser.getFloatTimeDomainData(vadData);
+  let s = 0;
+  for (let i = 0; i < vadData.length; i++) s += vadData[i] * vadData[i];
+  const level = Math.sqrt(s / vadData.length);
+  const now = Date.now();
+  if (level > VOICE_LEVEL) { lastVoiceAt = now; sawVoice = true; }
+  const segLen = now - segStartedAt;
+  const silenceLen = now - lastVoiceAt;
+  // Schneiden: nach Mindestlänge bei genug Stille – oder spätestens beim Notschnitt
+  if (segLen >= MAX_SEG_MS || (sawVoice && segLen >= MIN_SEG_MS && silenceLen >= SILENCE_MS)) {
+    if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} } // onstop startet das nächste Segment
+  }
 }
 
 async function startAi() {
@@ -309,18 +333,31 @@ async function startAi() {
   try {
     micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch { wantOn = false; setState(false); toastTr('Mikrofon ist blockiert – bitte Zugriff erlauben.'); return; }
+  // Pegel-Analyse für die Pausen-Erkennung aufsetzen
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    audioCtx = new AC();
+    const srcNode = audioCtx.createMediaStreamSource(micStream);
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 2048;
+    vadData = new Float32Array(analyser.fftSize);
+    srcNode.connect(analyser);
+  } catch { analyser = null; }
   startedAt = Date.now();
   clearInterval(timerId);
   timerId = setInterval(tickTimer, 500);
+  clearInterval(vadTimer);
+  vadTimer = setInterval(vadTick, 100);
   acquireWake();
   startSegment();
 }
 
 function stopAi() {
   wantOn = false;
-  clearTimeout(segTimer);
+  clearInterval(vadTimer);
   if (mr && mr.state !== 'inactive') { try { mr.stop(); } catch {} } // letztes Stück wird noch transkribiert
   if (micStream) { micStream.getTracks().forEach((t) => t.stop()); micStream = null; }
+  if (audioCtx) { try { audioCtx.close(); } catch {} audioCtx = null; analyser = null; }
   if (startedAt) { elapsedBase += Date.now() - startedAt; startedAt = 0; }
   clearInterval(timerId);
   releaseWake();
@@ -434,7 +471,7 @@ function applyMode(m) {
   const note = $('trModeNote');
   if (note) {
     note.textContent = mode === 'ai'
-      ? '🎯 KI-Modus (whisper-small): läuft komplett auf dem Gerät (privat) und ist genauer. Text erscheint in ~15-Sek-Blöcken, also verzögert. Erster Start lädt einmalig das Modell (~250 MB, WLAN empfohlen).'
+      ? '🎯 KI-Modus (whisper-small): läuft komplett auf dem Gerät (privat) und ist genauer. Text erscheint nach jeder Sprechpause (satzweise), also etwas verzögert. Erster Start lädt einmalig das Modell (~250 MB, WLAN empfohlen).'
       : '⚡ Schnell-Modus: Browser-Spracherkennung, sofort live – Audio wird dabei zur Erkennung an den Browser-Anbieter (z. B. Google) gesendet.';
   }
   setAiStatus('');
