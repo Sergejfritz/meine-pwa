@@ -69,6 +69,17 @@ test('Live-Mitschrift: ohne Browser-Spracherkennung übernimmt der KI-Modus', as
   await expect(page.locator('#trModeAi')).toBeChecked();
 });
 
+test('Live-Mitschrift: Wortwiederholungen werden zusammengefasst', async ({ page }) => {
+  await injectFakeSpeech(page);
+  await page.goto('/');
+  await page.click('#fabRec');
+  await page.click('#trToggle');
+  await fireFinal(page, 'Red Bull Red Bull Red Bull und dann gehen wir');
+  await expect(page.locator('#trText')).toContainText('Red Bull und dann gehen wir');
+  const txt = await page.locator('#trText').innerText();
+  expect((txt.match(/Red Bull/g) || []).length).toBe(1); // nur einmal, nicht gedoppelt
+});
+
 test('Live-Mitschrift: Modus-Umschalter ist vorhanden und Schnell ist Standard', async ({ page }) => {
   await injectFakeSpeech(page);
   await page.goto('/');
