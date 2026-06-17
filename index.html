@@ -279,6 +279,9 @@
   <!-- Schwebe-Knopf: Live-Mitschrift starten (Echtzeit-Transkription) -->
   <button class="fab-rec" id="fabRec" type="button" aria-label="Live-Mitschrift" title="Live-Mitschrift">🎙️</button>
 
+  <!-- Schwebe-Knopf: KI-Assistent (läuft lokal auf dem Gerät) -->
+  <button class="fab-chat" id="fabChat" type="button" aria-label="KI-Assistent" title="KI-Assistent">💬</button>
+
   <!-- Live-Mitschrift (Echtzeit-Transkription) -->
   <div class="modal" id="trModal" role="dialog" aria-modal="true" aria-label="Live-Mitschrift">
     <div class="modal-head">
@@ -315,6 +318,46 @@
       <div class="tr-saved">
         <div class="tr-saved-title">📁 Gespeicherte Mitschriften</div>
         <div id="trList"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KI-Assistent (lokales Modell, kein Server) -->
+  <div class="modal" id="chatModal" role="dialog" aria-modal="true" aria-label="KI-Assistent">
+    <div class="modal-head">
+      <button id="chatClose" type="button">✕ Schließen</button>
+      <h2>💬 KI-Assistent</h2>
+      <button id="chatClear" type="button">🗑 Verlauf</button>
+    </div>
+    <div class="chat-body">
+      <div class="chat-note">
+        Läuft komplett auf deinem Gerät – ohne Internet-Dienst, ohne Konto. Beim ersten Start lädt einmalig ein Modell (groß, WLAN empfohlen) und wird danach gespeichert.
+      </div>
+      <label class="chat-model">
+        <span>Modell</span>
+        <select id="chatModel" aria-label="KI-Modell"></select>
+      </label>
+      <div class="chat-status hidden" id="chatStatus" role="status" aria-live="polite"></div>
+
+      <div class="chat-messages" id="chatMessages" aria-live="polite" role="log"></div>
+
+      <div class="chat-quick" aria-label="Schnellaktionen für die Bemerkung">
+        <button class="chat-chip" data-kind="summary" type="button">📝 Bemerkung kürzen</button>
+        <button class="chat-chip" data-kind="bullets" type="button">• Stichpunkte</button>
+        <button class="chat-chip" data-kind="clearer" type="button">✨ Verständlicher</button>
+      </div>
+
+      <div class="chat-input-row">
+        <input id="chatInput" type="text" placeholder="Frage stellen oder „merke dir: …“" autocomplete="off">
+        <button class="btn btn-primary" id="chatSend" type="button">Senden</button>
+      </div>
+
+      <div class="chat-mem">
+        <button class="chat-mem-toggle" id="chatMemToggle" type="button">🧠 Gedächtnis anzeigen/verbergen</button>
+        <div class="chat-mem-panel" id="chatMemPanel">
+          <div id="chatMemList"></div>
+          <button class="chat-chip chat-mem-clearbtn" id="chatMemClear" type="button">Gesamtes Gedächtnis löschen</button>
+        </div>
       </div>
     </div>
   </div>

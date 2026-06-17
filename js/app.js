@@ -7,6 +7,7 @@ import { openZoneCalibrator } from './zonecal.js';
 import { zoneLabel } from './zones.js';
 import { openSignaturePad } from './signature.js';
 import { initTranscribe } from './transcribe.js';
+import { initChat } from './chat.js';
 
 const $ = (id) => document.getElementById(id);
 const MAX_IMAGES = 9;
@@ -42,13 +43,15 @@ function init() {
   initInstall();
   initZones();
   initSignature();
-  initTranscribe((text) => {
-    // Mitschrift in das Bemerkungsfeld übernehmen (an vorhandenen Text anhängen).
+  // An das Bemerkungsfeld anhängen (von Mitschrift UND KI-Assistent genutzt).
+  const appendBemerkung = (text) => {
     const ta = $('bemerkung');
     ta.value = (ta.value ? ta.value.trim() + '\n\n' : '') + text;
     ta.dispatchEvent(new Event('input', { bubbles: true }));
     saveDraft();
-  });
+  };
+  initTranscribe(appendBemerkung);
+  initChat(appendBemerkung);
   refreshSuggestions();
   setToday();
   const last = Settings.get().lastVerantwortlich;

@@ -28,6 +28,14 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
   Erstell-Zeitstempel.
 - 📤 **Teilen** – natives Teilen (WhatsApp, E-Mail …); Fallback auf Download.
 - 📴 **Offline-fähig** – Service Worker cacht die App inkl. PDF-Bibliothek.
+- 💬 **KI-Assistent (lokal)** – ein Chat-Assistent, dessen Sprachmodell
+  **komplett im Browser** läuft (WebLLM/WebGPU) – **ohne API-Schlüssel und ohne
+  Server**. Er beantwortet Fragen, hilft beim Formulieren und kann die Bemerkung
+  **zusammenfassen / in Stichpunkte wandeln / verständlicher schreiben** und das
+  Ergebnis ins Feld übernehmen. Über **„merke dir: …“** lernt er Fakten, die
+  lokal (IndexedDB) gespeichert und in späteren Gesprächen genutzt werden.
+  Voraussetzung: aktuelles Chrome/Edge mit WebGPU; der erste Modell-Download ist
+  groß und wird danach gecacht.
 - ⚡ **Komfort** – Auto-Vervollständigung früherer Eingaben, Spracheingabe für
   Bemerkungen, Hell-/Dunkelmodus, Entwurf-Wiederherstellung gegen Datenverlust.
 
@@ -48,6 +56,9 @@ js/annotate.js      Foto-Markierung (Canvas)
 js/scan.js          Arbeitskarten-Scan (OCR via Tesseract.js, mehrere Rotationen)
 js/cardparse.js     Feld-Extraktion aus dem OCR-Text
 js/store.js         localStorage: Einstellungen, Vorschläge, Entwurf
+js/chat.js          KI-Assistent: Chat-Fenster, Schnellaktionen auf die Bemerkung
+js/aiengine.js      Lokales Sprachmodell (WebLLM/WebGPU, on-demand vom CDN)
+js/aimemory.js      Gedächtnis des Assistenten (IndexedDB, „merke dir …“)
 sw.js               Service Worker (Offline-Cache; OCR-Dateien lazy gecacht)
 manifest.json       PWA-Manifest (installierbar)
 vendor/jspdf…       jsPDF (lokal gehostet, offline)
