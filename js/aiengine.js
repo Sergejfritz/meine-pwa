@@ -8,11 +8,13 @@
 
 import { Settings } from './store.js';
 
-// Auswahl an MLC/WebLLM-Modellen. Default: gute Deutsch-Fähigkeit; Sparoption
-// für schwächere Geräte. Umschaltbar über die Einstellungen (Settings.aiModel).
+// Auswahl an MLC/WebLLM-Modellen, nach Gerätestärke gestaffelt. Auf dem Handy
+// ist ein kleines Modell Pflicht (RAM/Download), auf dem Desktop darf es größer
+// sein. Umschaltbar über die Einstellungen (Settings.aiModel).
 export const MODELS = {
-  standard: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Standard – Llama 3.2 3B (~1,7 GB)' },
-  klein: { id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', label: 'Klein & schnell – Qwen2.5 1.5B (~1 GB)' },
+  winzig: { id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC', label: 'Handy – Qwen2.5 0.5B (~0,5 GB)' },
+  klein: { id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC', label: 'Mittel – Llama 3.2 1B (~0,9 GB)' },
+  standard: { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', label: 'Stark – Llama 3.2 3B (~1,7 GB, Desktop)' },
 };
 
 const WEBLLM_LIB = 'https://esm.run/@mlc-ai/web-llm';
@@ -21,9 +23,25 @@ let engine = null;        // geladene WebLLM-Engine
 let loadedId = null;      // welches Modell ist aktuell geladen
 let loadingPromise = null; // Promise während des Ladens (verhindert Doppel-Laden)
 
-// Läuft hier überhaupt ein KI-Modell? WebLLM braucht WebGPU.
+// Läuft hier überhaupt ein KI-Modell? WebLLM braucht WebGPU (auf dem Handy:
+// aktuelles Chrome für Android bzw. Safari ab iOS 18).
 export function isSupported() {
   return typeof navigator !== 'undefined' && 'gpu' in navigator;
+}
+
+// Handy oder Desktop? Bestimmt das Standard-Modell (kleines Modell fürs Handy).
+export function isMobile() {
+  try {
+    if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
+      return navigator.userAgentData.mobile;
+    }
+  } catch {}
+  return /Android|iPhone|iPad|iPod|Mobile/i.test((navigator && navigator.userAgent) || '');
+}
+
+// Sinnvolles Standard-Modell je nach Gerät (Handy klein, Desktop stark).
+export function defaultModelKey() {
+  return isMobile() ? 'winzig' : 'standard';
 }
 
 // Test-Haken: Ist window.__AI_MOCK gesetzt, wird das echte Modell NICHT geladen
@@ -32,10 +50,10 @@ function mock() {
   return (typeof window !== 'undefined') ? window.__AI_MOCK : null;
 }
 
-// Aktuell gewähltes Modell (aus den Einstellungen), mit sinnvollem Default.
+// Aktuell gewähltes Modell (aus den Einstellungen), sonst geräteabhängiger Default.
 export function currentModelKey() {
   const k = Settings.get().aiModel;
-  return MODELS[k] ? k : 'standard';
+  return MODELS[k] ? k : defaultModelKey();
 }
 export function currentModelId() {
   return MODELS[currentModelKey()].id;

@@ -224,7 +224,7 @@ function open() {
   $('chatModal').classList.add('open');
   document.body.style.overflow = 'hidden';
   if (!isSupported()) {
-    setStatus('Hinweis: Dieses Gerät unterstützt das lokale KI-Modell nicht (WebGPU fehlt). Bitte ein aktuelles Chrome oder Edge verwenden.');
+    setStatus('Hinweis: Dieses Gerät/Browser unterstützt das lokale KI-Modell nicht (WebGPU fehlt). Auf dem Handy: aktuelles Chrome (Android) bzw. Safari ab iOS 18; am PC: Chrome oder Edge.');
   }
   render();
   setTimeout(() => { const i = $('chatInput'); if (i && isSupported()) i.focus(); }, 50);

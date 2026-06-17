@@ -69,6 +69,20 @@ test('KI-Assistent: Schnellaktion schreibt Ergebnis in die Bemerkung', async ({ 
   await expect(page.locator('#bemerkung')).toHaveValue(/Werkstück hat Riss[\s\S]*Antwort auf:/);
 });
 
+test('KI-Assistent: Handy bekommt automatisch ein kleines Modell', async ({ page }, testInfo) => {
+  await injectFakeAI(page);
+  await page.goto('/');
+  await page.click('#fabChat');
+
+  // Das Handy-Modell steht immer zur Auswahl …
+  await expect(page.locator('#chatModel option[value="winzig"]')).toHaveCount(1);
+
+  // … und ist auf dem Handy automatisch vorgewählt (Desktop: starkes Modell).
+  const val = await page.locator('#chatModel').inputValue();
+  if (testInfo.project.name.includes('mobile')) expect(val).toBe('winzig');
+  else expect(val).toBe('standard');
+});
+
 test('KI-Assistent: Schnellaktion ohne Bemerkung gibt Hinweis', async ({ page }) => {
   await injectFakeAI(page);
   await page.goto('/');
