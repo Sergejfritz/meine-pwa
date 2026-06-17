@@ -219,14 +219,62 @@ async function blobToPCM(blob) {
   } finally { try { ac.close(); } catch {} }
 }
 
+// Lautstärke (RMS) eines Audio-Stücks – zum Überspringen (fast) stiller Blöcke,
+// die Whisper sonst zu Halluzinationen/Wiederholungen verleiten.
+function rms(a) {
+  let s = 0;
+  for (let i = 0; i < a.length; i++) s += a[i] * a[i];
+  return a.length ? Math.sqrt(s / a.length) : 0;
+}
+
+// Whisper „hängt" gern in Schleifen ("a b a b a b"). Diese Funktion kollabiert
+// unmittelbar wiederholte Wörter und Phrasen (Länge 1–5) auf einmal.
+function collapseRepeats(text) {
+  const tok = (text || '').split(/\s+/).filter(Boolean);
+  const out = [];
+  for (const t of tok) {
+    out.push(t);
+    for (let k = 1; k <= 5; k++) {
+      if (out.length >= 2 * k) {
+        let rep = true;
+        for (let i = 0; i < k; i++) {
+          if (out[out.length - 1 - i].toLowerCase() !== out[out.length - 1 - k - i].toLowerCase()) { rep = false; break; }
+        }
+        if (rep) { out.splice(out.length - k, k); break; }
+      }
+    }
+  }
+  return out.join(' ');
+}
+
+// Doppelung an der Block-Grenze entfernen (letzte Wörter == erste Wörter).
+function trimBoundary(t) {
+  const prev = finalText.trim().split(/\s+/).filter(Boolean).slice(-8).map((x) => x.toLowerCase());
+  let cur = t.split(/\s+/).filter(Boolean);
+  for (let k = Math.min(8, cur.length, prev.length); k >= 1; k--) {
+    const a = prev.slice(prev.length - k).join(' ');
+    const b = cur.slice(0, k).map((x) => x.toLowerCase()).join(' ');
+    if (a === b) { cur = cur.slice(k); break; }
+  }
+  return cur.join(' ');
+}
+
 async function transcribeBlob(blob) {
-  if (!blob || blob.size < 2500) return; // zu kurz/leise – überspringen
+  if (!blob || blob.size < 2500) return; // zu kurz – überspringen
   try {
     const pcm = await blobToPCM(blob);
-    if (pcm.length < 1600) return; // < ~0,1 s
+    if (pcm.length < 1600) return;        // < ~0,1 s
+    if (rms(pcm) < 0.006) return;         // (fast) Stille -> nichts ans Modell geben
     const model = await ensureModel();
-    const res = await model(pcm, { language: 'german', task: 'transcribe' });
-    const t = ((res && res.text) || '').trim();
+    const res = await model(pcm, {
+      language: 'german',
+      task: 'transcribe',
+      no_repeat_ngram_size: 3,            // verhindert Wiederholungs-Schleifen
+      temperature: 0,                     // deterministisch (kein „Fantasieren")
+      compression_ratio_threshold: 2.4,   // verdächtig repetitive Ausgaben verwerfen
+    });
+    let t = collapseRepeats(((res && res.text) || '').trim());
+    t = trimBoundary(t);
     if (t) { finalText += (finalText ? ' ' : '') + t; render(); }
   } catch {
     // Einzelnes Segment fehlgeschlagen – weiterlaufen, nicht alles abbrechen.
