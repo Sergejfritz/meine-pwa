@@ -7,6 +7,8 @@
 // den Bildschirm an, solange aufgenommen wird, und starten die Erkennung bei
 // Sprechpausen automatisch neu, sodass sie durchläuft, bis DU stoppst.
 
+import { Suggest } from './store.js';
+
 const $ = (id) => document.getElementById(id);
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -121,7 +123,7 @@ function makeRec() {
       const res = e.results[i];
       const txt = res[0].transcript;
       if (res.isFinal) {
-        const t = txt.trim();
+        const t = applyGlossary(txt.trim());
         if (t) finalText = collapseRepeats((finalText ? finalText + ' ' : '') + t);
       } else {
         live += txt;
@@ -139,7 +141,7 @@ function makeRec() {
       restartTimer = setTimeout(() => { try { r.start(); } catch {} }, 120);
     } else if (interim.trim()) {
       // Nur beim echten Stopp: letzten Zwischenstand noch sichern.
-      finalText = collapseRepeats((finalText ? finalText + ' ' : '') + interim.trim());
+      finalText = collapseRepeats((finalText ? finalText + ' ' : '') + applyGlossary(interim.trim()));
       interim = '';
       render();
     }
@@ -282,7 +284,7 @@ async function transcribeBlob(blob) {
       temperature: 0,                     // deterministisch (kein „Fantasieren")
       compression_ratio_threshold: 2.4,   // verdächtig repetitive Ausgaben verwerfen
     });
-    let t = collapseRepeats(((res && res.text) || '').trim());
+    let t = applyGlossary(collapseRepeats(((res && res.text) || '').trim()));
     t = trimBoundary(t);
     if (t) { finalText += (finalText ? ' ' : '') + t; render(); }
   } catch {
@@ -371,6 +373,78 @@ function resetSession() {
   render(); tickTimer();
 }
 
+// ---- Fachbegriff-Korrektur (gleicht erkannten Text an bekannte Begriffe an) ----
+// Technik-/QS-/Fertigungs-Glossar. Wird mit dem EIGENEN Vokabular des Nutzers
+// (gespeicherte Kunden, Maschinen, Teilebenennungen, Verantwortliche) ergänzt.
+const DOMAIN_TERMS = (
+  'Reklamation Fertigungsauftrag Qualitätssicherung Zeichnungsnummer Zeichnung Index Stückzahl ' +
+  'Spanndruck Position Maschine Toleranz Maßabweichung Oberfläche Rauheit Gewinde Bohrung Durchmesser ' +
+  'Radius Fase Passung Planfläche Fräsen Drehen Schleifen Bohren Werkstück Werkzeug Vorrichtung Spannmittel ' +
+  'Messprotokoll Nacharbeit Ausschuss Charge Rüsten Bauteil Baugruppe Schweißnaht Härtung Beschichtung ' +
+  'Grat entgraten Riss Lunker Pore Verzug Maßhaltigkeit Konturf Welle Lager Flansch Nut Bund Senkung ' +
+  'Verantwortlich Liefertermin Auftrag Mangel Abnahme Prüfung Kontur Mittelpunkt Anschlag'
+).split(/\s+/);
+
+let glossary = []; // [{ words:[lc...], n, term }] – längste zuerst
+function buildGlossary() {
+  const terms = new Map(); // lc-key -> Originalschreibweise
+  const add = (v) => { v = (v || '').trim(); if (v && v.length >= 3) terms.set(v.toLowerCase(), v); };
+  DOMAIN_TERMS.forEach(add);
+  ['kunde', 'maschine', 'verantwortlich', 'teilebenennung'].forEach((f) => {
+    try { Suggest.get(f).forEach(add); } catch {}
+  });
+  glossary = [...terms.values()]
+    .map((term) => { const words = term.toLowerCase().split(/\s+/); return { term, words, n: words.length }; })
+    .sort((a, b) => b.n - a.n);
+}
+
+// Levenshtein mit früher Obergrenze (klein = ähnlich)
+function lev(a, b, max) {
+  const m = a.length, n = b.length;
+  if (Math.abs(m - n) > max) return max + 1;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  for (let i = 1; i <= m; i++) {
+    let cur = [i]; let best = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+      if (cur[j] < best) best = cur[j];
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[n];
+}
+
+// Erkannten Text Wort für Wort (und mehrwortige Begriffe) an das Glossar angleichen.
+function applyGlossary(text) {
+  if (!glossary.length || !text) return text;
+  const tok = text.split(/\s+/).filter(Boolean);
+  const out = [];
+  let i = 0;
+  while (i < tok.length) {
+    let matched = false;
+    for (const g of glossary) {
+      if (i + g.n > tok.length) continue;
+      const slice = tok.slice(i, i + g.n);
+      const cand = slice.join(' ').toLowerCase().replace(/[.,;:!?]/g, '');
+      const target = g.words.join(' ');
+      if (cand === target) { out.push(g.term); i += g.n; matched = true; break; } // schon korrekt -> kanonische Schreibweise
+      if (target.length < 4) continue;
+      // Häufige Wörter ("und", "der" …) und sehr kurze Token nie verbiegen
+      if (g.n === 1 && (cand.length < 3 || STOP.has(cand))) continue;
+      const tol = target.length <= 6 ? 1 : Math.floor(target.length * 0.22);
+      if (lev(cand, target, tol) <= tol) {
+        // Satzzeichen am Ende des letzten Wortes erhalten
+        const tail = (slice[slice.length - 1].match(/[.,;:!?]+$/) || [''])[0];
+        out.push(g.term + tail); i += g.n; matched = true; break;
+      }
+    }
+    if (!matched) { out.push(tok[i]); i++; }
+  }
+  return out.join(' ');
+}
+
 // ---- Lokale Kurzfassung (extraktiv, ganz ohne Internet) ----
 const STOP = new Set(('der die das und oder aber ich du er sie es wir ihr ein eine einen einem einer ' +
   'ist sind war waren hat haben hatte mit von zu im in den dem des auf für als auch so dann noch nur ' +
@@ -453,6 +527,7 @@ function toastTr(msg) {
 }
 
 function open() {
+  buildGlossary(); // aktuelles Vokabular (Kunden/Maschinen/…) einbeziehen
   $('trModal').classList.add('open');
   renderList();
   render();
@@ -494,6 +569,7 @@ export function initTranscribe(onToBemerkung) {
   let saved = 'fast';
   try { saved = localStorage.getItem(MODE_KEY) || 'fast'; } catch {}
   applyMode(saved);
+  buildGlossary();
 
   fab.onclick = open;
   $('trClose').onclick = close;
