@@ -129,9 +129,10 @@ async function runTurn(promptContent, displayUser) {
   } catch (e) {
     setStatus('');
     setBusy(false);
+    const detail = (e && e.message && e.message !== 'NO_WEBGPU') ? `\n\nTechnischer Hinweis: ${String(e.message).slice(0, 200)}` : '';
     const why = (e && e.message === 'NO_WEBGPU')
-      ? 'Dieses Gerät unterstützt das lokale KI-Modell nicht (WebGPU fehlt). Nutze ein aktuelles Chrome/Edge.'
-      : 'Das Modell konnte nicht antworten. Beim ersten Start braucht der Download etwas Geduld und WLAN.';
+      ? 'Dieses Gerät unterstützt das lokale KI-Modell nicht (WebGPU fehlt oder ist deaktiviert). Auf dem Handy: aktuelles Chrome (Android) bzw. Safari ab iOS 18.'
+      : 'Das Modell konnte nicht geladen werden oder nicht antworten. Beim ersten Start braucht der Download etwas Geduld und WLAN. Tipp: In den Einstellungen oben das sparsame Modell wählen und erneut versuchen.' + detail;
     history.push({ role: 'assistant', content: why });
     saveHistory();
     render();
