@@ -61,6 +61,20 @@ export function currentModelId() {
   return MODELS[currentModelKey()].id;
 }
 
+// Prüft die tatsächliche WebGPU-Fähigkeit des Geräts. Wichtig fürs Handy:
+// Viele (v. a. Android-)GPUs können kein shader-f16 – dann laden wir statt der
+// q4f16-Variante automatisch die q4f32-Variante des gleichen Modells (etwas
+// mehr Speicher, läuft aber überall). Ohne diesen Tausch bricht die Engine auf
+// solchen Geräten beim Start ab.
+async function resolveModelId(modelId) {
+  const adapter = await navigator.gpu.requestAdapter();
+  if (!adapter) throw new Error('NO_WEBGPU'); // WebGPU vorhanden, aber deaktiviert/ohne Adapter
+  if (!adapter.features.has('shader-f16')) {
+    return modelId.replace('q4f16_1', 'q4f32_1');
+  }
+  return modelId;
+}
+
 // Lädt das Modell on demand. onProgress({ text, progress }) für die Anzeige.
 export async function ensureEngine(modelId, onProgress) {
   if (mock()) return mock();
@@ -69,14 +83,15 @@ export async function ensureEngine(modelId, onProgress) {
   if (loadingPromise) return loadingPromise;
 
   loadingPromise = (async () => {
+    const effectiveId = await resolveModelId(modelId);
     const webllm = await import(/* @vite-ignore */ WEBLLM_LIB);
-    const eng = await webllm.CreateMLCEngine(modelId, {
+    const eng = await webllm.CreateMLCEngine(effectiveId, {
       initProgressCallback: (r) => {
         if (onProgress) onProgress({ text: r.text || '', progress: r.progress || 0 });
       },
     });
     engine = eng;
-    loadedId = modelId;
+    loadedId = modelId; // unter der gewünschten ID merken (effectiveId ist Detail)
     return eng;
   })();
 
