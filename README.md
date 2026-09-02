@@ -109,3 +109,13 @@ erhalten alle Nutzer die Aktualisierung automatisch beim nächsten Öffnen.
 Optimiert für aktuelle mobile Browser (Chrome/Android, Safari/iOS). Teilen und
 Spracheingabe werden bei fehlender Unterstützung automatisch ausgeblendet bzw.
 durch einen Download ersetzt.
+
+---
+
+## Weitere App im Repo: Nahfunk (Android)
+
+Im Ordner [`nahfunk/`](nahfunk/README.md) liegt **Nahfunk**, eine native
+Android-App zum Anpingen von Kollegen in der Halle: kurze Pings per Bluetooth-Funk,
+ganze Sätze im eigenen WLAN-Netz, Kompass-Radar mit Entfernungsschätzung.
+Die APK wird von der CI gebaut und unter **Releases** (`nahfunk-latest`,
+`nahfunk-test`) bereitgestellt – siehe `.github/workflows/nahfunk-android.yml`.

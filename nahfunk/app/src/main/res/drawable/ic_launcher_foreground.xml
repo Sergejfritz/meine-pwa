@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Radar-Symbol: zwei Ringe, Blickkegel, eigener Punkt und ein Fund auf dem Ring -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Blickkegel -->
+    <path
+        android:fillColor="#4012E38C"
+        android:pathData="M54,54 L38,26 A32,32 0 0,1 70,26 Z" />
+    <!-- äußerer Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#12E38C"
+        android:strokeWidth="3.5"
+        android:pathData="M22,54 a32,32 0 1,0 64,0 a32,32 0 1,0 -64,0" />
+    <!-- innerer Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#8012E38C"
+        android:strokeWidth="2.5"
+        android:pathData="M37,54 a17,17 0 1,0 34,0 a17,17 0 1,0 -34,0" />
+    <!-- eigener Standort -->
+    <path
+        android:fillColor="#12E38C"
+        android:pathData="M48.5,54 a5.5,5.5 0 1,0 11,0 a5.5,5.5 0 1,0 -11,0" />
+    <!-- ein Fund auf dem Ring -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M72,33 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+</vector>
