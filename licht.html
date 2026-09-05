@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="description" content="Schlaflicht – stufenlos dimmbares Nachtlicht für das Handy. Bleibt stundenlang an, warme Farben, Einschlaf-Timer.">
+<meta name="theme-color" content="#000000">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Schlaflicht">
+<title>Schlaflicht</title>
+<link rel="manifest" href="./licht.webmanifest">
+<link rel="icon" href="./icon-licht-192.png">
+<link rel="apple-touch-icon" href="./icon-licht-192.png">
+<link rel="stylesheet" href="./css/licht.css">
+</head>
+<body>
+
+<!-- Die eigentliche Leuchtfläche (füllt den ganzen Bildschirm) -->
+<div id="light" aria-hidden="true"></div>
+
+<!-- Uhr (optional, sehr dezent) -->
+<div id="clock" class="hidden" aria-live="off"></div>
+
+<!-- Status oben: Bildschirmsperre, Akku, Timer -->
+<div id="status">
+  <span id="wakeState" title="Bildschirm bleibt an">🌙 Bildschirm bleibt an</span>
+  <span id="battery" class="hidden"></span>
+  <span id="timerState" class="hidden"></span>
+</div>
+
+<!-- Bedienung -->
+<div id="panel" role="group" aria-label="Licht einstellen">
+
+  <div class="row row-head">
+    <strong>Schlaflicht</strong>
+    <div class="head-btns">
+      <button id="fullscreenBtn" class="icon-btn" type="button" title="Vollbild" aria-label="Vollbild">⛶</button>
+      <button id="lockBtn" class="icon-btn" type="button" title="Bedienung sperren" aria-label="Bedienung sperren">🔓</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="brightness">Helligkeit <output id="brightnessOut">30 %</output></label>
+    <input id="brightness" type="range" min="0" max="100" step="1" value="30" aria-label="Helligkeit">
+    <div class="fine">
+      <button class="mini" type="button" data-bright="1">1 %</button>
+      <button class="mini" type="button" data-bright="3">3 %</button>
+      <button class="mini" type="button" data-bright="10">10 %</button>
+      <button class="mini" type="button" data-bright="30">30 %</button>
+      <button class="mini" type="button" data-bright="60">60 %</button>
+      <button class="mini" type="button" data-bright="100">100 %</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="kelvin">Lichtfarbe <output id="kelvinOut">2000 K</output></label>
+    <input id="kelvin" type="range" min="1200" max="6500" step="50" value="2000" aria-label="Farbtemperatur">
+    <div class="presets" id="presets">
+      <button class="chip" type="button" data-color="#ff2d00">Rot</button>
+      <button class="chip" type="button" data-kelvin="1500">Kerze</button>
+      <button class="chip" type="button" data-kelvin="2000">Bernstein</button>
+      <button class="chip" type="button" data-kelvin="2700">Warmweiß</button>
+      <button class="chip" type="button" data-kelvin="4000">Neutral</button>
+      <button class="chip" type="button" data-kelvin="6500">Tageslicht</button>
+      <button class="chip" type="button" data-color="#4f7bff">Mond</button>
+      <button class="chip" type="button" data-color="#37c26a">Grün</button>
+      <label class="chip chip-color">
+        Eigene <input id="colorPick" type="color" value="#ff9a3c" aria-label="Eigene Farbe">
+      </label>
+    </div>
+  </div>
+
+  <div class="row">
+    <label for="timer">Einschlaf-Timer</label>
+    <div class="presets" id="timers">
+      <button class="chip" type="button" data-min="0">Aus</button>
+      <button class="chip" type="button" data-min="15">15 min</button>
+      <button class="chip" type="button" data-min="30">30 min</button>
+      <button class="chip" type="button" data-min="60">1 h</button>
+      <button class="chip" type="button" data-min="120">2 h</button>
+      <button class="chip" type="button" data-min="480">8 h</button>
+    </div>
+    <label class="check">
+      <input id="fade" type="checkbox" checked>
+      <span>Langsam ausdimmen (letzte 10 Minuten)</span>
+    </label>
+  </div>
+
+  <div class="row row-opts">
+    <label class="check">
+      <input id="flicker" type="checkbox">
+      <span>Kerzen-Flackern</span>
+    </label>
+    <label class="check">
+      <input id="showClock" type="checkbox">
+      <span>Uhr anzeigen</span>
+    </label>
+  </div>
+
+  <p class="note" id="note">Tippen blendet die Bedienung aus und wieder ein. Der Bildschirm bleibt an, solange die App offen ist. Ganz unten (1–3 %) ist die dunkelste Stufe erreicht, die ein Display darstellen kann – für noch weniger Licht zusätzlich die System-Helligkeit des Handys herunterziehen.</p>
+</div>
+
+<!-- Hinweis beim Sperren / Entsperren -->
+<div id="toast" class="hidden"></div>
+
+<!-- Wenn der Timer abgelaufen ist -->
+<div id="offScreen" class="hidden">
+  <button id="restartBtn" type="button">Licht wieder einschalten</button>
+</div>
+
+<script src="./js/licht.js"></script>
+</body>
+</html>
