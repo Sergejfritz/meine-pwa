@@ -49,11 +49,44 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
 
 ---
 
+## 🌙 Schlaflicht (eigene Mini-App)
+
+Ein dimmbares **Nachtlicht** für das Handy – gedacht, um stundenlang neben dem
+Bett zu leuchten.
+
+🔗 **Live:** https://sergejfritz.github.io/meine-pwa/licht.html
+
+- **Bildschirm bleibt an** – über die Wake-Lock-API; nach dem Sperren/Wechseln
+  der App wird sie automatisch neu angefordert.
+- **Helligkeit stufenlos** – 0–100 %, mit feiner Auflösung im unteren Bereich
+  (dort wird ein Schlaflicht benutzt) und Schnellstufen 1 / 3 / 10 / 30 / 60 /
+  100 %. Unterhalb von ~1 % kann kein Display mehr dimmen – dann zusätzlich die
+  System-Helligkeit senken.
+- **Lichtfarbe frei wählbar** – Farbtemperatur von 1200 K bis 6500 K, Vorlagen
+  (Rot, Kerze, Bernstein, Warmweiß, Neutral, Tageslicht, Mond, Grün) und eine
+  eigene Farbe über den Farbwähler. Warme, blauarme Farben stören den Schlaf am
+  wenigsten.
+- **Einschlaf-Timer** – 15 min bis 8 h, auf Wunsch mit **sanftem Ausdimmen** in
+  den letzten 10 Minuten; danach schaltet das Licht aus und gibt den Bildschirm
+  wieder frei.
+- **Sperre** – ein Tipp auf das Schloss friert die Einstellungen ein
+  (2 Sekunden gedrückt halten entsperrt), damit nachts nichts versehentlich
+  verstellt wird.
+- **Extras** – Kerzen-Flackern, dezente Uhr, Vollbild, Akkuanzeige; alle
+  Einstellungen werden lokal gemerkt.
+- **Installierbar & offline** – eigenes Manifest (`licht.webmanifest`), also als
+  separate App „Schlaflicht“ auf dem Startbildschirm.
+
+---
+
 ## Projektstruktur
 
 ```
 index.html          App-Shell (Formular, Scan, Foto-Editor, Vorschau)
+licht.html          Schlaflicht – dimmbares Nachtlicht (eigenständige Seite)
+licht.webmanifest   PWA-Manifest des Schlaflichts (separat installierbar)
 css/styles.css      Design-System (Hell/Dunkel, responsiv, barrierearm)
+css/licht.css       Design des Schlaflichts
 js/app.js           Steuerung (Validierung, Fotos, Scan, Entwurf, Aktionen)
 js/pdf.js           PDF-Erstellung (jsPDF, mehrseitig)
 js/annotate.js      Foto-Markierung (Canvas)
@@ -63,6 +96,7 @@ js/store.js         localStorage: Einstellungen, Vorschläge, Entwurf
 js/chat.js          KI-Assistent: Chat-Fenster, Schnellaktionen auf die Bemerkung
 js/aiengine.js      Lokales Sprachmodell (WebLLM/WebGPU, on-demand vom CDN)
 js/aimemory.js      Gedächtnis des Assistenten (IndexedDB, „merke dir …“)
+js/licht.js         Schlaflicht (Helligkeit, Lichtfarbe, Timer, Wake Lock)
 sw.js               Service Worker (Offline-Cache; OCR-Dateien lazy gecacht)
 manifest.json       PWA-Manifest (installierbar)
 vendor/jspdf…       jsPDF (lokal gehostet, offline)

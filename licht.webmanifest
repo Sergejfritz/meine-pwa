@@ -1,0 +1,22 @@
+{
+  "name": "Schlaflicht – dimmbares Nachtlicht",
+  "short_name": "Schlaflicht",
+  "description": "Stufenlos dimmbares Nachtlicht: warme Lichtfarben, Einschlaf-Timer mit sanftem Ausdimmen, Bildschirm bleibt stundenlang an.",
+  "start_url": "./licht.html",
+  "scope": "./",
+  "id": "schlaflicht-sfritz",
+  "display": "standalone",
+  "display_override": ["standalone", "fullscreen", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "lang": "de",
+  "dir": "ltr",
+  "categories": ["utilities", "lifestyle", "health"],
+  "icons": [
+    { "src": "icon-licht-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-licht-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-licht-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "prefer_related_applications": false
+}

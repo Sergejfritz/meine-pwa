@@ -1,0 +1,257 @@
+/* ============================================================
+   Schlaflicht – dimmbares Nachtlicht (eigenständige Seite)
+   Bedienelemente sind bewusst dunkel gehalten, damit sie auf
+   der hellen Leuchtfläche nicht blenden.
+   ============================================================ */
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #f2ece2;
+  font-family: 'Segoe UI', system-ui, -apple-system, Roboto, 'Helvetica Neue', Arial, sans-serif;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Leuchtfläche ------------------------------------------------ */
+#light {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  transition: background-color .25s linear;
+  z-index: 0;
+}
+#light.instant { transition: none; }
+
+/* Uhr --------------------------------------------------------- */
+#clock {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(48px, 18vw, 160px);
+  font-weight: 200;
+  letter-spacing: .04em;
+  color: rgba(0, 0, 0, .32);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Status oben ------------------------------------------------- */
+#status {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .45);
+  color: rgba(255, 255, 255, .78);
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 3;
+  transition: opacity .3s ease;
+}
+
+/* Bedienfeld -------------------------------------------------- */
+#panel {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  transform: translate(-50%, 0);
+  width: min(520px, calc(100vw - 20px));
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 14px 16px calc(16px + env(safe-area-inset-bottom, 0px) / 2);
+  border-radius: 20px;
+  background: rgba(14, 12, 10, .82);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, .12);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .5);
+  z-index: 4;
+  transition: opacity .3s ease, transform .3s ease;
+}
+#panel.faded,
+#status.faded {
+  opacity: 0;
+  pointer-events: none;
+}
+#panel.faded { transform: translate(-50%, 16px); }
+
+.row { margin-bottom: 14px; }
+.row:last-of-type { margin-bottom: 8px; }
+
+.row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+  letter-spacing: .02em;
+}
+.head-btns { display: flex; gap: 8px; }
+
+.icon-btn {
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .06);
+  color: #f2ece2;
+  width: 38px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 16px;
+  cursor: pointer;
+}
+.icon-btn:active { background: rgba(255, 255, 255, .16); }
+
+label {
+  display: block;
+  font-size: 13px;
+  color: rgba(242, 236, 226, .72);
+  margin-bottom: 7px;
+}
+output { float: right; color: #ffb56b; font-variant-numeric: tabular-nums; }
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 30px;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4a3a2c, #ffb56b);
+}
+input[type="range"]::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4a3a2c, #ffb56b);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 30px;
+  height: 30px;
+  margin-top: -10px;
+  border-radius: 50%;
+  background: #fff3e4;
+  border: 2px solid #ffb56b;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .5);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #fff3e4;
+  border: 2px solid #ffb56b;
+}
+#kelvin::-webkit-slider-runnable-track,
+#kelvin::-moz-range-track {
+  background: linear-gradient(90deg, #ff7b28, #ffb56b, #fff0dd, #dceaff);
+}
+
+.fine, .presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.mini, .chip {
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(255, 255, 255, .05);
+  color: rgba(242, 236, 226, .9);
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.mini:active, .chip:active { background: rgba(255, 255, 255, .18); }
+.chip.active, .mini.active {
+  background: rgba(255, 181, 107, .22);
+  border-color: rgba(255, 181, 107, .6);
+  color: #ffd8ae;
+}
+.chip-color {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 4px 8px 4px 12px;
+}
+.chip-color input[type="color"] {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: rgba(242, 236, 226, .8);
+}
+.check input { width: 20px; height: 20px; accent-color: #ffb56b; }
+.row-opts { display: flex; gap: 18px; flex-wrap: wrap; }
+.row-opts .check { margin-top: 0; }
+
+.note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: rgba(242, 236, 226, .5);
+  margin-top: 4px;
+}
+
+/* Meldung ----------------------------------------------------- */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 26px);
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .68);
+  color: rgba(255, 255, 255, .85);
+  font-size: 13px;
+  z-index: 6;
+  pointer-events: none;
+}
+
+/* Aus-Bildschirm nach Timer ------------------------------------ */
+#offScreen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  z-index: 5;
+}
+#offScreen button {
+  border: 1px solid rgba(255, 255, 255, .16);
+  background: rgba(255, 255, 255, .06);
+  color: rgba(242, 236, 226, .75);
+  border-radius: 999px;
+  padding: 14px 22px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.hidden { display: none !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  #light, #panel, #status { transition: none; }
+}
