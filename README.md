@@ -118,9 +118,18 @@ Eigenes Imposter/Spion-Partyspiel ohne Werbung und ohne In-App-Käufe, komplett 
 
 - Web-App: [`imposter/`](imposter/) – auch im Browser spielbar: https://sergejfritz.github.io/meine-pwa/imposter/
 - Android-Hülle: [`android-imposter/`](android-imposter/) (WebView, Zurück-Taste, Vibration, Bildschirm bleibt an)
-- Features: 16 Kategorien (~480 Wörter) + eigene Wörter, Modi *Klassisch*, *Mit Hinweis* und *Undercover*,
-  mehrere Imposter, Karte gedrückt halten zum Aufdecken, Diskussions-Timer, offene oder geheime Abstimmung
-  mit Stichwahl, Imposter darf das Wort raten, Punktestand über mehrere Runden.
+- **Modi:** Klassisch (Imposter hat ein ähnliches Wort), Mysteriös (mit Mr. White ohne Wort), Chaos (zufällige
+  Anzahl & Rollen), Ahnungslos (Imposter weiß, dass er nichts weiß) – plus **Zeichenmodus**
+- **Ablauf wie im Original:** Karte gedrückt halten → Hinweise geben/malen → Abstimmung → Eliminierung mit
+  Rollen-Aufdeckung, bis alle Imposter raus sind oder nur noch ein Zivilist übrig ist. Eliminierte Imposter
+  dürfen das Wort raten; Imposter können sich auch jederzeit outen und raten.
+- **Punkte:** Zivilist 5, Imposter/Mr. White 15, richtig geraten 15 – über 1–20 Runden (oder ∞) mit Podest
+- **27 Packs** (~840 Wörter, inkl. Mystery-Paket und 18+), eigene Packs, Hinweis für Imposter, Timer,
+  geheime Abstimmung mit Stichwahl, Spieler-Avatare, Hintergrundmusik in Endlosschleife
 
-**APK bauen:** `cd android-imposter && gradle assembleRelease` (Android SDK nötig) – oder im GitHub-Workflow
-„Imposter APK“ das Artefakt herunterladen. Signiert mit `android-imposter/imposter.keystore` (nur für Sideload).
+**Eigene Gesichter / Logo / Musik:** `faces.js` (Liste von Bildern in `faces/`), `logo.jpg` und `music.mp3` im
+Web-Ordner ersetzen. Fehlen sie, nutzt das Spiel Emoji-Figuren und keine Musik.
+
+**APK bauen:** `cd android-imposter && gradle assembleRelease` (Android SDK nötig), mit eigenem Web-Ordner:
+`gradle assembleRelease -PwwwDir=/pfad/zum/ordner`. Oder im GitHub-Workflow „Imposter APK“ das Artefakt
+herunterladen. Signiert mit `android-imposter/imposter.keystore` (nur für Sideload).

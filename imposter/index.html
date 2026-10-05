@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#14111f">
+<meta name="theme-color" content="#0d0b14">
 <title>Imposter – Partyspiel</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -17,176 +17,291 @@
 
   <!-- HOME -->
   <section class="screen active" id="s-home">
-    <div class="home-hero">
-      <img class="logo" src="logo.jpg" alt="Logo">
-      <h1>IMPOSTER</h1>
-      <p class="sub">Wer kennt das geheime Wort nicht?</p>
+    <header class="bar">
+      <button class="icon" id="btnSettings" aria-label="Einstellungen">⚙️</button>
+      <span class="grow"></span>
+      <button class="icon" id="btnMusic" aria-label="Musik an/aus">🔊</button>
+      <button class="icon" data-help aria-label="Hilfe">?</button>
+    </header>
+    <div class="scroll home">
+      <div class="home-hero">
+        <img class="logo" src="logo.jpg" alt="Logo">
+        <h1>IMPOSTER</h1>
+        <p class="sub">Wie möchtest du spielen?</p>
+      </div>
+      <button class="play-card" id="btnNew">
+        <span class="pc-emoji">📱</span>
+        <b>Offline</b>
+        <small>Alle spielen auf demselben Gerät</small>
+        <span class="pc-btn">Spielen</span>
+      </button>
+      <div class="home-row">
+        <button class="pill-btn" id="btnPacks"><span>🃏</span> Packs</button>
+        <button class="pill-btn" data-help><span>📖</span> Regeln</button>
+      </div>
+      <p class="foot">Keine Werbung · Alle Packs gratis · Eigene Wörter · Offline</p>
     </div>
-    <div class="stack">
-      <button class="btn primary big" id="btnNew">▶ Neues Spiel</button>
-      <button class="btn" id="btnRules">📖 Spielregeln</button>
-    </div>
-    <p class="foot">Keine Werbung · Alles freigeschaltet · Offline</p>
   </section>
 
   <!-- SETUP -->
   <section class="screen" id="s-setup">
-    <header class="bar"><button class="icon" data-back>←</button><h2>Spiel einrichten</h2></header>
+    <header class="bar">
+      <button class="icon" data-home aria-label="Start">🏠</button>
+      <h2 class="center-title">Offline</h2>
+      <button class="icon" data-help aria-label="Hilfe">?</button>
+    </header>
     <div class="scroll">
-      <div class="card">
-        <div class="row-head"><h3>Spieler <span id="playerCount" class="pill">0</span></h3><button class="link" id="resetScores">Punkte zurücksetzen</button></div>
-        <ul id="playerList" class="players"></ul>
-        <form id="addPlayerForm" class="add-row">
-          <input id="playerInput" maxlength="16" placeholder="Name eingeben…" autocomplete="off">
-          <button class="btn primary" type="submit">+</button>
-        </form>
+      <p class="section">Spielmodi</p>
+      <div class="mode-strip" id="modes">
+        <button class="mode-card" data-mode="classic"><span class="mc-art">🕵️</span><b>Klassisch</b><small>Imposter hat ein ähnliches Wort</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="white"><span class="mc-art">🎩</span><b>Mysteriös</b><small>Mit Mr. White – kennt kein Wort</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="chaos"><span class="mc-art">🌀</span><b>Chaos</b><small>Zufällige Anzahl &amp; Rollen</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="blind"><span class="mc-art">🙈</span><b>Ahnungslos</b><small>Imposter weiß, dass er nichts weiß</small><i class="check"></i></button>
       </div>
 
-      <div class="card">
-        <h3>Imposter</h3>
-        <div class="stepper">
-          <button class="icon" id="impMinus">−</button>
-          <div><b id="impCount">1</b><small id="impHint"></small></div>
-          <button class="icon" id="impPlus">+</button>
-        </div>
-        <label class="toggle"><input type="checkbox" id="optRandomImp"><span>Zufällige Anzahl (1 bis eingestellt)</span></label>
-        <label class="toggle"><input type="checkbox" id="optKnow"><span>Imposter sehen sich gegenseitig</span></label>
+      <label class="feature-row">
+        <span class="fr-ico">🎨</span><span class="fr-txt"><b>Zeichenmodus</b><small>Hinweise malen statt sagen</small></span>
+        <span class="toggle"><input type="checkbox" id="optDraw"></span>
+      </label>
+
+      <p class="section">Spieleinstellungen</p>
+      <div class="list">
+        <button class="li" id="rowPlayers"><span class="li-ico">👥</span><span class="li-txt">Spieler</span><span class="li-val" id="playerCount">0</span><span class="chev">›</span></button>
+        <div class="li"><span class="li-ico">🕵️</span><span class="li-txt">Imposter<small id="impHint"></small></span>
+          <span class="stepper"><button class="round" id="impMinus" aria-label="Weniger">−</button><b id="impCount">1</b><button class="round" id="impPlus" aria-label="Mehr">+</button></span></div>
+        <label class="li"><span class="li-ico">🔎</span><span class="li-txt">Hinweis für Imposter<small>für alle, die kein Wort haben</small></span><span class="toggle"><input type="checkbox" id="optHint"></span></label>
+      </div>
+      <div class="list">
+        <div class="li col"><div class="li-head"><span class="li-ico">🏁</span><span class="li-txt">Runden</span></div>
+          <div class="seg" id="roundSeg"><button data-r="1">1</button><button data-r="3">3</button><button data-r="5">5</button><button data-r="10">10</button><button data-r="20">20</button><button data-r="0">∞</button></div></div>
+        <div class="li col"><div class="li-head"><span class="li-ico">⏱️</span><span class="li-txt">Dauer pro Diskussion</span></div>
+          <div class="seg" id="timerSeg"><button data-t="0">Aus</button><button data-t="60">1 min</button><button data-t="120">2 min</button><button data-t="180">3 min</button><button data-t="300">5 min</button></div></div>
+        <button class="li" id="rowPacks"><span class="li-ico">🃏</span><span class="li-txt">Packs</span><span class="li-val" id="packCount"></span><span class="chev">›</span></button>
       </div>
 
-      <div class="card">
-        <h3>Modus</h3>
-        <div class="modes" id="modes">
-          <button class="mode" data-mode="classic"><b>Klassisch</b><small>Imposter weiß nichts</small></button>
-          <button class="mode" data-mode="hint"><b>Mit Hinweis</b><small>Imposter bekommt einen Tipp</small></button>
-          <button class="mode" data-mode="undercover"><b>Undercover</b><small>Imposter hat ein ähnliches Wort – weiß es aber nicht!</small></button>
-        </div>
-        <label class="toggle"><input type="checkbox" id="optShowCat"><span>Kategorie allen anzeigen</span></label>
-      </div>
-
-      <div class="card">
-        <div class="row-head"><h3>Kategorien</h3><button class="link" id="catAll">Alle</button></div>
-        <div class="chips" id="catChips"></div>
-        <details class="custom">
-          <summary>✏️ Eigene Wörter</summary>
-          <textarea id="customWords" rows="3" placeholder="Wörter mit Komma trennen, z. B. Chef, Kantine, Gabelstapler"></textarea>
-        </details>
-      </div>
-
-      <div class="card">
-        <h3>Diskussionszeit</h3>
-        <div class="seg" id="timerSeg">
-          <button data-t="0">Aus</button><button data-t="60">1 min</button><button data-t="120">2 min</button><button data-t="180">3 min</button><button data-t="300">5 min</button>
-        </div>
-        <label class="toggle"><input type="checkbox" id="optSecretVote"><span>Geheime Abstimmung (Handy wird herumgereicht)</span></label>
-        <label class="toggle"><input type="checkbox" id="optGuess"><span>Erwischter Imposter darf das Wort raten</span></label>
-        <label class="toggle"><input type="checkbox" id="optSound"><span>Ton &amp; Vibration</span></label>
-      </div>
+      <details class="list more">
+        <summary class="li"><span class="li-ico">⚙️</span><span class="li-txt">Weitere Regeln</span><span class="chev">›</span></summary>
+        <label class="li"><span class="li-txt">Kategorie allen anzeigen</span><span class="toggle"><input type="checkbox" id="optShowCat"></span></label>
+        <label class="li"><span class="li-txt">Imposter sehen sich gegenseitig<small>nur Imposter ohne Wort</small></span><span class="toggle"><input type="checkbox" id="optKnow"></span></label>
+        <label class="li"><span class="li-txt">Geheime Abstimmung<small>Handy wird herumgereicht</small></span><span class="toggle"><input type="checkbox" id="optSecretVote"></span></label>
+        <label class="li"><span class="li-txt">Eliminierte dürfen Wort raten<small>richtig geraten = Rundensieg</small></span><span class="toggle"><input type="checkbox" id="optGuess"></span></label>
+      </details>
     </div>
-    <div class="bottom"><button class="btn primary big" id="btnStart">Los geht's</button></div>
+    <div class="bottom"><button class="btn go big" id="btnStart">Spiel starten</button></div>
+  </section>
+
+  <!-- PLAYERS -->
+  <section class="screen" id="s-players">
+    <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>Spieler <span id="playerCount2" class="badge">0</span></h2><button class="link" id="btnShuffle">🔀 Mischen</button></header>
+    <div class="scroll">
+      <ul id="playerList" class="players"></ul>
+      <form id="addPlayerForm" class="add-row">
+        <input id="playerInput" maxlength="16" placeholder="Name eingeben…" autocomplete="off" enterkeyhint="done">
+        <button class="btn primary" type="submit" aria-label="Hinzufügen">+</button>
+      </form>
+      <p class="tiny pad">Die Reihenfolge ist die Reihenfolge beim Weitergeben. Mit ▲▼ sortieren.</p>
+    </div>
+    <div class="bottom"><button class="btn go big" data-back>Fertig</button></div>
+  </section>
+
+  <!-- PACKS -->
+  <section class="screen" id="s-packs">
+    <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>Pakete auswählen</h2><button class="link" id="catAll">Alle</button></header>
+    <div class="scroll">
+      <div class="pack-grid" id="packGrid"></div>
+      <p class="section">Eigene Packs</p>
+      <div class="pack-grid" id="customPacks"></div>
+      <button class="btn dashed" id="btnNewPack">＋ Eigenes Pack erstellen</button>
+    </div>
+    <div class="bottom"><button class="btn go big" data-back>Weiter</button></div>
+  </section>
+
+  <!-- PACK EDITOR -->
+  <section class="screen" id="s-packedit">
+    <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>Eigenes Pack</h2><button class="link danger" id="btnDelPack">Löschen</button></header>
+    <div class="scroll">
+      <label class="lbl" for="packName">Name</label>
+      <input id="packName" maxlength="24" placeholder="z. B. Arbeit">
+      <label class="lbl" for="packWords">Wörter <small>(eins pro Zeile oder mit Komma getrennt)</small></label>
+      <textarea id="packWords" rows="10" placeholder="Chef&#10;Kantine&#10;Gabelstapler"></textarea>
+      <p class="tiny">Profi-Tipp: „Wort | Hinweis | ähnliches Wort“ pro Zeile legt Hinweis und Imposter-Wort selbst fest. Sonst bekommt der Imposter ein anderes Wort aus deinem Pack.</p>
+    </div>
+    <div class="bottom"><button class="btn go big" id="btnSavePack">Speichern</button></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="screen" id="s-settings">
+    <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>Einstellungen</h2></header>
+    <div class="scroll">
+      <div class="list">
+        <label class="li"><span class="li-ico">🎵</span><span class="li-txt">Hintergrundmusik<small>läuft in Endlosschleife</small></span><span class="toggle"><input type="checkbox" id="optMusic"></span></label>
+        <label class="li"><span class="li-ico">🔊</span><span class="li-txt">Spieltöne<small>Timer, Abstimmung, Sieg</small></span><span class="toggle"><input type="checkbox" id="optSound"></span></label>
+        <label class="li"><span class="li-ico">📳</span><span class="li-txt">Vibration</span><span class="toggle"><input type="checkbox" id="optVibrate"></span></label>
+        <label class="li"><span class="li-ico">✨</span><span class="li-txt">Startbildschirm mit Logo</span><span class="toggle"><input type="checkbox" id="optSplash"></span></label>
+      </div>
+      <div class="list">
+        <button class="li" id="btnResetWords"><span class="li-ico">♻️</span><span class="li-txt">Gespielte Wörter zurücksetzen<small>Wörter wiederholen sich erst, wenn alle durch sind</small></span></button>
+      </div>
+      <p class="tiny pad">Imposter · Version 2.0 · ohne Werbung, ohne Tracking, komplett offline</p>
+    </div>
   </section>
 
   <!-- PASS / REVEAL -->
   <section class="screen" id="s-reveal">
-    <header class="bar"><button class="icon" data-quit>✕</button><h2 id="revealProgress"></h2></header>
+    <header class="bar"><button class="icon" data-quit aria-label="Abbrechen">✕</button><h2 id="revealProgress"></h2></header>
     <div class="center">
       <p class="pass">Gib das Handy an</p>
       <h1 class="who" id="revealName"></h1>
       <div class="flip" id="flipCard">
-        <div class="face front"><div class="eye">👁️</div><b>Gedrückt halten</b><small>zum Aufdecken</small></div>
+        <div class="face front" id="cardFront"></div>
         <div class="face back" id="cardBack"></div>
       </div>
-      <p class="tiny" id="revealTip">Lass los, bevor du das Handy weitergibst.</p>
+      <p class="tiny">Lass los, bevor du das Handy weitergibst.</p>
     </div>
-    <div class="bottom"><button class="btn primary big" id="btnNextPlayer" disabled>Weiter</button></div>
+    <div class="bottom"><button class="btn go big" id="btnNextPlayer" disabled>Weiter</button></div>
+  </section>
+
+  <!-- DRAW -->
+  <section class="screen" id="s-draw">
+    <header class="bar"><button class="icon" data-quit aria-label="Abbrechen">✕</button><h2 id="drawTitle">Zeichnen</h2></header>
+    <div class="draw-wrap">
+      <p class="pass center-text" id="drawWho"></p>
+      <div class="canvas-box"><canvas id="canvas"></canvas></div>
+      <div class="row">
+        <button class="btn" id="btnUndo">↶ Rückgängig</button>
+        <button class="btn primary" id="btnDrawDone">Fertig – weiter</button>
+      </div>
+    </div>
   </section>
 
   <!-- DISCUSS -->
   <section class="screen" id="s-discuss">
-    <header class="bar"><button class="icon" data-quit>✕</button><h2>Diskussion</h2></header>
+    <header class="bar"><button class="icon" data-quit aria-label="Abbrechen">✕</button><h2 id="discussTitle">Diskussion</h2></header>
     <div class="center">
       <p class="pass" id="discussCat"></p>
       <h2 class="starter" id="starter"></h2>
       <p class="tiny" id="direction"></p>
+      <img id="drawingImg" class="drawing-img" alt="Gemeinsame Zeichnung" hidden>
       <div class="timer" id="timerWrap">
         <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="prog" id="timerProg"/></svg>
         <div class="time" id="timerText">0:00</div>
       </div>
-      <div class="row">
+      <div class="row" id="timerBtns">
         <button class="btn" id="btnPause">⏸ Pause</button>
         <button class="btn" id="btnPlus30">+30 s</button>
       </div>
+      <p class="tiny" id="aliveInfo"></p>
+      <button class="link" id="btnClaim">🕵️ Imposter? Jetzt das Wort raten!</button>
     </div>
-    <div class="bottom"><button class="btn primary big" id="btnToVote">Zur Abstimmung</button></div>
+    <div class="bottom"><button class="btn go big" id="btnToVote">Zur Abstimmung</button></div>
   </section>
 
   <!-- VOTE -->
   <section class="screen" id="s-vote">
-    <header class="bar"><button class="icon" data-quit>✕</button><h2 id="voteTitle">Abstimmung</h2></header>
+    <header class="bar"><button class="icon" data-quit aria-label="Abbrechen">✕</button><h2 id="voteTitle">Abstimmung</h2></header>
     <div class="scroll">
-      <p class="pass center-text" id="voteSub">Wer ist der Imposter?</p>
+      <p class="pass center-text" id="voteSub"></p>
       <div class="vote-grid" id="voteGrid"></div>
     </div>
-    <div class="bottom"><button class="btn primary big" id="btnVote" disabled>Abstimmen</button></div>
+    <div class="bottom"><button class="btn go big" id="btnVote" disabled>Eliminieren</button></div>
+  </section>
+
+  <!-- ELIMINATED -->
+  <section class="screen" id="s-elim">
+    <div class="center">
+      <div class="elim-av" id="elimAv"></div>
+      <h1 class="who" id="elimName"></h1>
+      <p class="pass">wurde eliminiert und war …</p>
+      <div class="role-reveal" id="elimRole"></div>
+    </div>
+    <div class="bottom"><button class="btn go big" id="btnElimNext">Weiter</button></div>
   </section>
 
   <!-- GUESS -->
   <section class="screen" id="s-guess">
     <header class="bar"><h2>Letzte Chance</h2></header>
     <div class="scroll">
-      <p class="pass center-text"><b id="guessName"></b>, du wurdest erwischt!<br>Errätst du das geheime Wort?</p>
+      <p class="pass center-text"><b id="guessName"></b>, errätst du das Wort der Zivilisten?<br><small>Richtig geraten = du gewinnst die Runde!</small></p>
       <div class="vote-grid words" id="guessGrid"></div>
     </div>
   </section>
 
-  <!-- RESULT -->
+  <!-- ROUND RESULT -->
   <section class="screen" id="s-result">
     <div class="scroll">
       <div class="result-hero" id="resultHero"></div>
       <div class="card">
-        <div class="kv"><span>Geheimes Wort</span><b id="resWord"></b></div>
-        <div class="kv" id="resUcRow"><span>Imposter-Wort</span><b id="resUcWord"></b></div>
-        <div class="kv"><span>Imposter</span><b id="resImps"></b></div>
-        <div class="kv"><span>Beschuldigt</span><b id="resAccused"></b></div>
+        <div class="kv"><span>Wort der Zivilisten</span><b id="resWord"></b></div>
+        <div class="kv" id="resUcRow"><span>Wort der Imposter</span><b id="resUcWord"></b></div>
+        <div id="resRoles"></div>
       </div>
       <div class="card">
-        <h3>Punktestand</h3>
+        <h3 id="scoreTitle">Punktestand</h3>
         <ol class="score" id="scoreList"></ol>
       </div>
     </div>
     <div class="bottom two">
-      <button class="btn" id="btnMenu">Menü</button>
-      <button class="btn primary big" id="btnAgain">Nächste Runde</button>
+      <button class="btn" id="btnEndGame">Beenden</button>
+      <button class="btn go big" id="btnNextRound">Nächste Runde</button>
     </div>
   </section>
 
-  <!-- RULES -->
-  <section class="screen" id="s-rules">
-    <header class="bar"><button class="icon" data-back>←</button><h2>Spielregeln</h2></header>
+  <!-- FINAL -->
+  <section class="screen" id="s-final">
+    <div class="scroll">
+      <div class="result-hero crew"><div class="em">🏆</div><h1 id="finalWinner"></h1><p id="finalSub"></p></div>
+      <div class="podium" id="podium"></div>
+      <div class="card"><h3>Endstand</h3><ol class="score" id="finalList"></ol></div>
+    </div>
+    <div class="bottom two">
+      <button class="btn" data-home>Menü</button>
+      <button class="btn go big" id="btnRematch">Revanche</button>
+    </div>
+  </section>
+
+  <!-- HELP -->
+  <section class="screen" id="s-help">
+    <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>So wird gespielt</h2></header>
     <div class="scroll rules">
-      <div class="card">
-        <h3>🎯 Ziel</h3>
-        <p>Alle Spieler bekommen dasselbe geheime Wort – außer dem <b>Imposter</b>. Die Crew muss den Imposter entlarven, der Imposter muss unentdeckt bleiben.</p>
+      <div class="seg help-tabs" id="helpTabs">
+        <button data-h="classic" class="on">Klassisch</button><button data-h="white">Mysteriös</button><button data-h="chaos">Chaos</button><button data-h="blind">Ahnungslos</button>
       </div>
-      <div class="card">
-        <h3>🔄 Ablauf</h3>
-        <ol>
-          <li>Handy reihum weitergeben. Jeder hält die Karte gedrückt und sieht seine Rolle.</li>
-          <li>Der Startspieler beginnt: Reihum sagt jeder <b>ein Wort</b>, das zum geheimen Wort passt – nicht zu offensichtlich!</li>
-          <li>Diskutiert, wer verdächtig ist.</li>
-          <li>Stimmt ab. Wird ein Imposter erwischt, darf er das Wort raten.</li>
-        </ol>
+      <div class="step"><span class="st-n">Schritt 1</span><div class="st-e">🎭</div><h3>Finde deine Rolle</h3>
+        <p>Jeder bekommt geheim eine Rolle: Karte gedrückt halten, ansehen, loslassen, weitergeben.</p>
+        <p>🔵 <b>Zivilist:</b> bekommt das geheime Wort – dasselbe wie die anderen Zivilisten.</p>
+        <p data-hm="classic white chaos">🔴 <b>Imposter:</b> bekommt ein <i>ähnliches</i>, aber anderes Wort – und weiß nicht, dass er der Imposter ist!</p>
+        <p data-hm="blind chaos">🔴 <b>Imposter (ahnungslos):</b> bekommt kein Wort, weiß aber, dass er Imposter ist. Optional mit Hinweis.</p>
+        <p data-hm="white chaos">⚪ <b>Mr. White:</b> bekommt gar kein Wort und muss bluffen. Optional mit Hinweis.</p>
+        <p data-hm="chaos">🌀 Im Chaos-Modus sind Anzahl und Art der Imposter zufällig – niemand kann sich sicher sein.</p>
+        <p>Die Rollen sind geheim. Niemand weiß, wer wer ist.</p>
       </div>
-      <div class="card">
-        <h3>🎭 Modi</h3>
-        <p><b>Klassisch:</b> Der Imposter weiß nur, dass er Imposter ist.</p>
-        <p><b>Mit Hinweis:</b> Der Imposter bekommt einen vagen Tipp zum Wort.</p>
-        <p><b>Undercover:</b> Der Imposter bekommt ein <i>ähnliches</i> Wort und weiß nicht, dass er der Imposter ist. Sehr gemein!</p>
+      <div class="step"><span class="st-n">Schritt 2</span><div class="st-e">💬</div><h3>Hinweise geben</h3>
+        <p>Nacheinander sagt jeder ein Wort oder einen Ausdruck, der mit dem geheimen Wort zu tun hat.</p>
+        <p>• <b>Beispiel:</b> Ist das Wort „Banane“, passen „gelb“ oder „Frucht“.</p>
+        <p>🎨 <b>Zeichenmodus:</b> Statt zu reden malt jeder reihum etwas auf dasselbe Bild.</p>
       </div>
-      <div class="card">
-        <h3>🏆 Punkte</h3>
-        <p>Crew erwischt den Imposter: <b>+1</b> für jeden aus der Crew.<br>Imposter bleibt unentdeckt: <b>+2</b> für jeden Imposter.<br>Imposter erwischt, rät aber das Wort: <b>+1</b> für den Imposter.</p>
+      <div class="step"><span class="st-n">Schritt 3</span><div class="st-e">👀</div><h3>Achtung</h3>
+        <p>🔵 <b>Zivilisten:</b> echte Hinweise geben, ohne das Wort zu verraten.</p>
+        <p>🔴 <b>Imposter:</b> sich anpassen und nicht entdeckt werden.</p>
+      </div>
+      <div class="step"><span class="st-n">Schritt 4</span><div class="st-e">🗳️</div><h3>Abstimmung</h3>
+        <p>Besprecht, wer der Imposter sein könnte, und stimmt als Gruppe (oder geheim) ab. Wer die meisten Stimmen hat, wird eliminiert und seine Rolle aufgedeckt.</p>
+        <p>Wird ein Imposter oder Mr. White eliminiert, darf er das Wort raten – richtig geraten gewinnt er die Runde!</p>
+        <p>Ist die Runde noch nicht entschieden, geht es mit den Übrigen weiter.</p>
+        <p>🕵️ <b>Mutig?</b> Ein Imposter oder Mr. White kann sich während der Diskussion jederzeit outen und das Wort raten: richtig = Sieg, falsch = raus.</p>
+      </div>
+      <div class="step"><span class="st-n">Schritt 5</span><div class="st-e">🎭</div><h3>Gewinnen</h3>
+        <p>🔵 <b>Zivilisten gewinnen</b> → alle Imposter und Mr. White sind eliminiert.</p>
+        <p>🔴 <b>Imposter gewinnen</b> → es ist nur noch ein Zivilist übrig.</p>
+      </div>
+      <div class="step"><span class="st-n">Punktesystem</span><div class="st-e">🏆</div><h3>Punkte = Sieg!</h3>
+        <p>🔵 <b>Zivilist:</b> 5 Punkte</p>
+        <p>🔴 <b>Imposter / Mr. White:</b> 15 Punkte</p>
+        <p>🧠 <b>Wort richtig geraten:</b> 15 Punkte</p>
+        <p>Die Punkte zählen jede Runde zusammen und bestimmen den Sieger. 🏆</p>
       </div>
     </div>
+    <div class="bottom"><button class="btn go big" id="btnHelpPlay">Jetzt spielen</button></div>
   </section>
 
   <div class="modal" id="modal" hidden>
@@ -194,6 +309,7 @@
   </div>
   <div class="toast" id="toast"></div>
 </div>
+<script src="faces.js"></script>
 <script src="words.js"></script>
 <script src="game.js"></script>
 </body>
