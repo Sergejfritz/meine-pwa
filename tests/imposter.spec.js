@@ -126,3 +126,33 @@ test('Imposter: Imposter outet sich und rät falsch -> eliminiert', async ({ pag
     await expect(page.locator('#s-result')).toBeVisible(); // zufällig richtig geraten
   }
 });
+
+test('Imposter: Fragen-Modus 18+ mit Aufdecken der echten Frage', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await open(page);
+  await page.click('#btnNew');
+  await page.click('[data-mode=questions]');
+  await expect(page.locator('#rowQAdult')).toBeVisible();
+  await page.locator('#rowQAdult').click();
+  await page.click('#modalYes');
+  await expect(page.locator('#optQAdult')).toBeChecked();
+  await page.click('#btnStart');
+  const cards = [];
+  for (let i = 0; i < 4; i++) {
+    cards.push(await hold(page));
+    await page.click('#btnNextPlayer');
+  }
+  expect(cards.every((c) => /deine frage/i.test(c))).toBe(true);
+  expect(new Set(cards.map((c) => c.split('\n')[1])).size).toBe(2); // genau zwei verschiedene Fragen
+  await expect(page.locator('#btnClaim')).toBeHidden();
+  await page.click('#btnRealQ');
+  await page.click('#modalYes');
+  await expect(page.locator('#realQ')).toBeVisible();
+  await page.click('#btnToVote');
+  await page.locator('#voteGrid .vote-btn').first().click();
+  await page.click('#btnVote');
+  await page.click('#btnElimNext');
+  await expect(page.locator('#s-guess')).toBeHidden();
+  expect(errors).toEqual([]);
+});

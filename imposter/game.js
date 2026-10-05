@@ -19,6 +19,9 @@
     const [word, hint, uc] = w.split('|').map((p) => (p || '').trim());
     return { word, hint: hint || catName, uc: uc || '', cat: catName };
   }).filter((w) => w.word);
+  const QUESTIONS = (window.IMPOSTER_QUESTIONS || []).map((q) => ({ ...q, list: q.words.split(';').map((x) => {
+    const [word, uc] = x.split('|').map((t) => t.trim()); return { word, uc, hint: '', cat: q.name };
+  }) }));
   const BUILTIN = window.IMPOSTER_CATEGORIES.map((c) => ({ ...c, list: c.mystery ? [] : parseList(c.words, c.name) }));
 
   // ---------- Persistenz ----------
@@ -26,7 +29,7 @@
     players: ['Spieler 1', 'Spieler 2', 'Spieler 3', 'Spieler 4'], avatars: {},
     impCount: 1, mode: 'classic', hint: false, draw: false, rounds: 5, timer: 180,
     cats: BUILTIN.filter((c) => !c.adult && !c.mystery).map((c) => c.id), customPacks: [],
-    showCat: true, know: false, secretVote: false, guess: true, sound: true, music: true, vibrate: true, splash: true,
+    showCat: true, know: false, secretVote: false, guess: true, qAdult: false, sound: true, music: true, vibrate: true, splash: true,
   };
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { /* privat/blockiert */ }
@@ -114,7 +117,12 @@
     $$('#roundSeg button').forEach((b) => b.classList.toggle('on', +b.dataset.r === S.rounds));
     $$('#timerSeg button').forEach((b) => b.classList.toggle('on', +b.dataset.t === S.timer));
     const n = allPacks().filter((p) => S.cats.includes(p.id)).length;
-    $('#packCount').textContent = n ? `${n} gewählt` : 'keins';
+    const Q = S.mode === 'questions';
+    $('#packCount').textContent = Q ? 'Fragen-Modus' : n ? `${n} gewählt` : 'keins';
+    $('#rowQAdult').style.display = Q ? '' : 'none';
+    $('#rowHint').style.display = Q ? 'none' : '';
+    $('label.feature-row').style.display = Q ? 'none' : '';
+    $('#optQAdult').checked = S.qAdult;
   }
   $('#modes').addEventListener('click', (e) => { const m = e.target.closest('.mode-card'); if (!m) return; S.mode = m.dataset.mode; buzz(10); renderSetup(); persist(); });
   $('#impMinus').onclick = () => { S.impCount = Math.max(1, S.impCount - 1); renderSetup(); persist(); };
@@ -123,7 +131,10 @@
   $('#timerSeg').addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S.timer = +b.dataset.t; renderSetup(); persist(); });
   $('#rowPlayers').onclick = () => { renderPlayers(); show('s-players'); };
   $('#rowPacks').onclick = $('#btnPacks').onclick = () => { renderPacks(); show('s-packs'); };
-  const toggles = { optDraw: 'draw', optHint: 'hint', optShowCat: 'showCat', optKnow: 'know', optSecretVote: 'secretVote', optGuess: 'guess', optSound: 'sound', optVibrate: 'vibrate', optSplash: 'splash' };
+  const toggles = { optQAdult: 'qAdult', optDraw: 'draw', optHint: 'hint', optShowCat: 'showCat', optKnow: 'know', optSecretVote: 'secretVote', optGuess: 'guess', optSound: 'sound', optVibrate: 'vibrate', optSplash: 'splash' };
+  $('#optQAdult').addEventListener('change', async (e) => {
+    if (e.target.checked && !(await confirmBox('18+ Fragen sind frech und nur für Erwachsene. Aktivieren?', 'Ja, 18+'))) { e.target.checked = false; S.qAdult = false; persist(); }
+  });
   Object.entries(toggles).forEach(([id, key]) => {
     const el = $('#' + id); el.checked = !!S[key];
     el.addEventListener('change', () => { S[key] = el.checked; persist(); });
@@ -235,7 +246,9 @@
   let M = null; // Match über mehrere Runden
   let R = null; // aktuelle Runde
 
+  const isQ = () => S.mode === 'questions';
   function pool() {
+    if (isQ()) { const q = QUESTIONS.find((x) => x.id === (S.qAdult ? 'q-adult' : 'q-normal')); return q ? q.list.map((w) => ({ ...w, pack: q })) : []; }
     const packs = allPacks();
     const mystery = S.cats.includes('mystery');
     const chosen = packs.filter((p) => !p.mystery && (S.cats.includes(p.id) || (mystery && !p.adult)));
@@ -260,7 +273,7 @@
       specials = Array.from({ length: k }, () => pick(['uc', 'uc', 'blind', 'white']));
     } else {
       const k = Math.min(S.impCount, maxImp());
-      specials = Array(k).fill(S.mode === 'blind' ? 'blind' : 'uc');
+      specials = Array(k).fill(S.mode === 'blind' ? 'blind' : 'uc'); // Fragen-Modus: andere Frage wie 'uc'
       if (S.mode === 'white') {
         if (k + 1 > maxImp() && k > 1) specials.pop(); // Platz für Mr. White schaffen
         specials.push('white');
@@ -273,6 +286,7 @@
   function startMatch() {
     if (S.players.length < 3) { toast('Mindestens 3 Spieler'); return; }
     if (!pool().length) { toast('Wähle mindestens ein Pack'); renderPacks(); show('s-packs'); return; }
+    R = null;
     M = { round: 0, scores: Object.fromEntries(S.players.map((p) => [p, 0])) };
     startRound();
   }
@@ -297,6 +311,7 @@
     const sizeOf = (t) => (t.length > 14 ? ' xs' : t.length > 10 ? ' sm' : '');
     if (role === 'civ' || role === 'uc') {
       const word = role === 'uc' ? w.uc : w.word;
+      if (isQ()) return { cls: '', html: `<div class="role">Deine Frage</div><div class="word q">${esc(word)}</div><div class="meta">Antworte gleich laut – aber ehrlich!</div>` };
       return { cls: '', html: `<div class="role">Dein geheimes Wort</div><div class="word${sizeOf(word)}">${esc(word)}</div>${cat}` };
     }
     const hint = S.hint ? `<div class="meta">Hinweis: <b>${esc(w.hint)}</b></div>` : '';
@@ -349,7 +364,7 @@
     R.cycle++;
     R.starter = pick(R.alive);
     R.dirCw = Math.random() < 0.5;
-    if (S.draw) startDraw(); else startDiscuss();
+    if (S.draw && !isQ()) startDraw(); else startDiscuss();
   }
   function turnOrder() {
     const i = R.alive.indexOf(R.starter), a = R.alive.slice(i).concat(R.alive.slice(0, i));
@@ -413,9 +428,13 @@
   const CIRC = 2 * Math.PI * 52;
   function startDiscuss() {
     $('#discussTitle').textContent = `${roundLabel()} · Durchgang ${R.cycle}`;
-    $('#discussCat').textContent = S.showCat ? `Kategorie: ${R.word.cat}` : (S.draw ? 'Wer hat komisch gemalt?' : 'Jeder sagt reihum ein Wort');
+    $('#discussCat').textContent = isQ() ? (R.cycle === 1 ? 'Jeder beantwortet reihum laut seine Frage' : 'Neue Runde: nochmal antworten oder diskutieren') : S.showCat ? `Kategorie: ${R.word.cat}` : (S.draw ? 'Wer hat komisch gemalt?' : 'Jeder sagt reihum ein Wort');
+    $('#realQ').hidden = !(isQ() && R.qShown);
+    $('#realQ').innerHTML = `<small>Die echte Frage lautet:</small>${esc(R.word.word)}`;
+    $('#btnRealQ').hidden = !isQ() || !!R.qShown;
+    $('#btnClaim').hidden = isQ();
     $('#starter').innerHTML = `<span style="color:${color(R.starter)}">${esc(R.starter)}</span> beginnt`;
-    $('#direction').textContent = S.draw ? 'Besprecht die Zeichnung!' : `Weiter ${R.dirCw ? 'im Uhrzeigersinn ↻' : 'gegen den Uhrzeigersinn ↺'} · ${turnOrder().join(' → ')}`;
+    $('#direction').textContent = S.draw && !isQ() ? 'Besprecht die Zeichnung!' : `Weiter ${R.dirCw ? 'im Uhrzeigersinn ↻' : 'gegen den Uhrzeigersinn ↺'} · ${turnOrder().join(' → ')}`;
     const img = $('#drawingImg');
     img.hidden = !(S.draw && R.drawing); if (S.draw && R.drawing) img.src = R.drawing;
     $('#s-discuss').classList.toggle('has-drawing', !!(S.draw && R.drawing));
@@ -432,6 +451,10 @@
     show('s-discuss', false);
     beep(660, 0.12); beep(990, 0.18, 0.13);
   }
+  $('#btnRealQ').onclick = async () => {
+    if (!(await confirmBox('Haben alle ihre Frage beantwortet? Dann wird jetzt die echte Frage gezeigt.', 'Aufdecken'))) return;
+    R.qShown = true; $('#realQ').hidden = false; $('#btnRealQ').hidden = true; buzz(40);
+  };
   function drawTimer() {
     const m = Math.floor(tLeft / 60), s = tLeft % 60;
     $('#timerText').textContent = `${m}:${String(s).padStart(2, '0')}`;
@@ -516,14 +539,14 @@
     $('#elimAv').outerHTML = `<div class="elim-av" id="elimAv">${avatar(name, 'elim-face')}</div>`;
     $('#elimName').textContent = name;
     $('#elimRole').className = 'role-reveal ' + role.cls;
-    const extra = R.roles[name] === 'uc' ? `<small>Sein Wort war „${esc(R.word.uc)}“</small>` : '';
+    const extra = R.roles[name] === 'uc' ? `<small>${isQ() ? 'Seine Frage' : 'Sein Wort'} war „${esc(R.word.uc)}“</small>` : '';
     $('#elimRole').innerHTML = `${role.emoji} ${role.name}${extra}`;
     show('s-elim', false);
     if (nonCiv(name)) { beep(523, 0.15); beep(784, 0.25, 0.15); buzz(60); } else { beep(330, 0.3); buzz([80, 60, 80]); }
   }
   $('#btnElimNext').onclick = () => {
     const name = R.last;
-    if (nonCiv(name) && S.guess && !R.guessed.includes(name)) return startGuess(name);
+    if (nonCiv(name) && S.guess && !isQ() && !R.guessed.includes(name)) return startGuess(name);
     checkEnd();
   };
   function checkEnd() {
@@ -568,6 +591,8 @@
     $('#resultHero').className = 'result-hero ' + (outcome === 'civ' ? 'crew' : 'imp');
     $('#resultHero').innerHTML = `<div class="em">${t[0]}</div><h1>${t[1]}</h1><p>${t[2]}</p>`;
     $('#resWord').textContent = R.word.word;
+    $('#resWord').previousElementSibling.textContent = isQ() ? 'Frage der Zivilisten' : 'Wort der Zivilisten';
+    $('#resUcWord').previousElementSibling.textContent = isQ() ? 'Frage der Imposter' : 'Wort der Imposter';
     const anyUc = S.players.some((p) => R.roles[p] === 'uc');
     $('#resUcRow').style.display = anyUc ? '' : 'none';
     $('#resUcWord').textContent = R.word.uc;

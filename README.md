@@ -118,7 +118,7 @@ Eigenes Imposter/Spion-Partyspiel ohne Werbung und ohne In-App-Käufe, komplett 
 
 - Web-App: [`imposter/`](imposter/) – auch im Browser spielbar: https://sergejfritz.github.io/meine-pwa/imposter/
 - Android-Hülle: [`android-imposter/`](android-imposter/) (WebView, Zurück-Taste, Vibration, Bildschirm bleibt an)
-- **Modi:** Klassisch (Imposter hat ein ähnliches Wort), Mysteriös (mit Mr. White ohne Wort), Chaos (zufällige
+- **Modi:** Klassisch (Imposter hat ein ähnliches Wort), Mysteriös (mit Mr. White ohne Wort), Fragen (Imposter hat eine andere Frage, auch als 18+), Chaos (zufällige
   Anzahl & Rollen), Ahnungslos (Imposter weiß, dass er nichts weiß) – plus **Zeichenmodus**
 - **Ablauf wie im Original:** Karte gedrückt halten → Hinweise geben/malen → Abstimmung → Eliminierung mit
   Rollen-Aufdeckung, bis alle Imposter raus sind oder nur noch ein Zivilist übrig ist. Eliminierte Imposter

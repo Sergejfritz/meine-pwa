@@ -275,3 +275,8 @@ details.more .li:not(summary) { padding-left: 62px; }
 @keyframes splashUp { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes beat { 30% { transform: scale(1.07); } }
 @media (prefers-reduced-motion: reduce) { .splash img, .logo { animation: none; } }
+
+/* Fragen-Modus */
+.back .word.q { font-size: 23px; line-height: 1.25; }
+.realq { background: var(--card); border: 2px solid var(--orange); border-radius: 18px; padding: 14px 16px; font-weight: 800; font-size: 18px; max-width: 420px; line-height: 1.35; }
+.realq small { display: block; color: var(--muted); font-weight: 600; font-size: 13px; margin-bottom: 4px; }

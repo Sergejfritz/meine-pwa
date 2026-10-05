@@ -56,6 +56,7 @@
         <button class="mode-card" data-mode="classic"><span class="mc-art">🕵️</span><b>Klassisch</b><small>Imposter hat ein ähnliches Wort</small><i class="check"></i></button>
         <button class="mode-card" data-mode="white"><span class="mc-art">🎩</span><b>Mysteriös</b><small>Mit Mr. White – kennt kein Wort</small><i class="check"></i></button>
         <button class="mode-card" data-mode="chaos"><span class="mc-art">🌀</span><b>Chaos</b><small>Zufällige Anzahl &amp; Rollen</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="questions"><span class="mc-art">💬</span><b>Fragen</b><small>Imposter hat eine andere Frage</small><i class="check"></i></button>
         <button class="mode-card" data-mode="blind"><span class="mc-art">🙈</span><b>Ahnungslos</b><small>Imposter weiß, dass er nichts weiß</small><i class="check"></i></button>
       </div>
 
@@ -69,7 +70,8 @@
         <button class="li" id="rowPlayers"><span class="li-ico">👥</span><span class="li-txt">Spieler</span><span class="li-val" id="playerCount">0</span><span class="chev">›</span></button>
         <div class="li"><span class="li-ico">🕵️</span><span class="li-txt">Imposter<small id="impHint"></small></span>
           <span class="stepper"><button class="round" id="impMinus" aria-label="Weniger">−</button><b id="impCount">1</b><button class="round" id="impPlus" aria-label="Mehr">+</button></span></div>
-        <label class="li"><span class="li-ico">🔎</span><span class="li-txt">Hinweis für Imposter<small>für alle, die kein Wort haben</small></span><span class="toggle"><input type="checkbox" id="optHint"></span></label>
+        <label class="li" id="rowQAdult"><span class="li-ico">🌶️</span><span class="li-txt">18+ Fragen<small>freche Fragen nur für Erwachsene</small></span><span class="toggle"><input type="checkbox" id="optQAdult"></span></label>
+        <label class="li" id="rowHint"><span class="li-ico">🔎</span><span class="li-txt">Hinweis für Imposter<small>für alle, die kein Wort haben</small></span><span class="toggle"><input type="checkbox" id="optHint"></span></label>
       </div>
       <div class="list">
         <div class="li col"><div class="li-head"><span class="li-ico">🏁</span><span class="li-txt">Runden</span></div>
@@ -142,7 +144,7 @@
       <div class="list">
         <button class="li" id="btnResetWords"><span class="li-ico">♻️</span><span class="li-txt">Gespielte Wörter zurücksetzen<small>Wörter wiederholen sich erst, wenn alle durch sind</small></span></button>
       </div>
-      <p class="tiny pad">Imposter · Version 2.0 · ohne Werbung, ohne Tracking, komplett offline</p>
+      <p class="tiny pad">Imposter · Version 2.1 · ohne Werbung, ohne Tracking, komplett offline</p>
     </div>
   </section>
 
@@ -181,6 +183,8 @@
       <p class="pass" id="discussCat"></p>
       <h2 class="starter" id="starter"></h2>
       <p class="tiny" id="direction"></p>
+      <div class="realq" id="realQ" hidden></div>
+      <button class="btn" id="btnRealQ" hidden>👀 Echte Frage aufdecken</button>
       <img id="drawingImg" class="drawing-img" alt="Gemeinsame Zeichnung" hidden>
       <div class="timer" id="timerWrap">
         <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="track"/><circle cx="60" cy="60" r="52" class="prog" id="timerProg"/></svg>
@@ -264,7 +268,7 @@
     <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>So wird gespielt</h2></header>
     <div class="scroll rules">
       <div class="seg help-tabs" id="helpTabs">
-        <button data-h="classic" class="on">Klassisch</button><button data-h="white">Mysteriös</button><button data-h="chaos">Chaos</button><button data-h="blind">Ahnungslos</button>
+        <button data-h="classic" class="on">Klassisch</button><button data-h="white">Mysteriös</button><button data-h="chaos">Chaos</button><button data-h="blind">Ahnungslos</button><button data-h="questions">Fragen</button>
       </div>
       <div class="step"><span class="st-n">Schritt 1</span><div class="st-e">🎭</div><h3>Finde deine Rolle</h3>
         <p>Jeder bekommt geheim eine Rolle: Karte gedrückt halten, ansehen, loslassen, weitergeben.</p>
@@ -272,12 +276,14 @@
         <p data-hm="classic white chaos">🔴 <b>Imposter:</b> bekommt ein <i>ähnliches</i>, aber anderes Wort – und weiß nicht, dass er der Imposter ist!</p>
         <p data-hm="blind chaos">🔴 <b>Imposter (ahnungslos):</b> bekommt kein Wort, weiß aber, dass er Imposter ist. Optional mit Hinweis.</p>
         <p data-hm="white chaos">⚪ <b>Mr. White:</b> bekommt gar kein Wort und muss bluffen. Optional mit Hinweis.</p>
+        <p data-hm="questions">💬 <b>Fragen-Modus:</b> Zivilisten bekommen dieselbe Frage, der Imposter eine ähnliche andere Frage – und weiß es nicht. Mit „18+ Fragen“ wird es frech.</p>
         <p data-hm="chaos">🌀 Im Chaos-Modus sind Anzahl und Art der Imposter zufällig – niemand kann sich sicher sein.</p>
         <p>Die Rollen sind geheim. Niemand weiß, wer wer ist.</p>
       </div>
       <div class="step"><span class="st-n">Schritt 2</span><div class="st-e">💬</div><h3>Hinweise geben</h3>
         <p>Nacheinander sagt jeder ein Wort oder einen Ausdruck, der mit dem geheimen Wort zu tun hat.</p>
         <p>• <b>Beispiel:</b> Ist das Wort „Banane“, passen „gelb“ oder „Frucht“.</p>
+        <p data-hm="questions">💬 <b>Fragen-Modus:</b> Jeder beantwortet reihum laut seine Frage. Danach wird die echte Frage aufgedeckt – wessen Antwort passt nicht?</p>
         <p>🎨 <b>Zeichenmodus:</b> Statt zu reden malt jeder reihum etwas auf dasselbe Bild.</p>
       </div>
       <div class="step"><span class="st-n">Schritt 3</span><div class="st-e">👀</div><h3>Achtung</h3>
