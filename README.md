@@ -109,3 +109,18 @@ erhalten alle Nutzer die Aktualisierung automatisch beim nächsten Öffnen.
 Optimiert für aktuelle mobile Browser (Chrome/Android, Safari/iOS). Teilen und
 Spracheingabe werden bei fehlender Unterstützung automatisch ausgeblendet bzw.
 durch einen Download ersetzt.
+
+---
+
+## 🕵️ Imposter – Partyspiel (Android-APK)
+
+Eigenes Imposter/Spion-Partyspiel ohne Werbung und ohne In-App-Käufe, komplett offline.
+
+- Web-App: [`imposter/`](imposter/) – auch im Browser spielbar: https://sergejfritz.github.io/meine-pwa/imposter/
+- Android-Hülle: [`android-imposter/`](android-imposter/) (WebView, Zurück-Taste, Vibration, Bildschirm bleibt an)
+- Features: 16 Kategorien (~480 Wörter) + eigene Wörter, Modi *Klassisch*, *Mit Hinweis* und *Undercover*,
+  mehrere Imposter, Karte gedrückt halten zum Aufdecken, Diskussions-Timer, offene oder geheime Abstimmung
+  mit Stichwahl, Imposter darf das Wort raten, Punktestand über mehrere Runden.
+
+**APK bauen:** `cd android-imposter && gradle assembleRelease` (Android SDK nötig) – oder im GitHub-Workflow
+„Imposter APK“ das Artefakt herunterladen. Signiert mit `android-imposter/imposter.keystore` (nur für Sideload).
