@@ -25,8 +25,8 @@
     </header>
     <div class="scroll home">
       <div class="home-hero">
-        <img class="logo" src="logo.jpg" alt="Logo">
-        <h1>IMPOSTER</h1>
+        <img class="hero-img" src="img/hero.jpg" alt="">
+        <h1 class="title">IMPOSTER</h1>
         <p class="sub">Wie möchtest du spielen?</p>
       </div>
       <button class="play-card" id="btnNew">
@@ -53,9 +53,9 @@
     <div class="scroll">
       <p class="section">Spielmodi</p>
       <div class="mode-strip" id="modes">
-        <button class="mode-card" data-mode="classic"><span class="mc-art">🕵️</span><b>Klassisch</b><small>Imposter hat ein ähnliches Wort</small><i class="check"></i></button>
-        <button class="mode-card" data-mode="white"><span class="mc-art">🎩</span><b>Mysteriös</b><small>Mit Mr. White – kennt kein Wort</small><i class="check"></i></button>
-        <button class="mode-card" data-mode="chaos"><span class="mc-art">🌀</span><b>Chaos</b><small>Zufällige Anzahl &amp; Rollen</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="classic"><span class="mc-art"><img src="img/faces/imposter.jpg" alt=""></span><b>Klassisch</b><small>Imposter hat ein ähnliches Wort</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="white"><span class="mc-art"><img src="img/faces/white.jpg" alt=""></span><b>Mysteriös</b><small>Mit Mr. White – kennt kein Wort</small><i class="check"></i></button>
+        <button class="mode-card" data-mode="chaos"><span class="mc-art"><img src="img/chaos.jpg" alt=""></span><b>Chaos</b><small>Zufällige Anzahl &amp; Rollen</small><i class="check"></i></button>
         <button class="mode-card" data-mode="questions"><span class="mc-art">💬</span><b>Fragen</b><small>Imposter hat eine andere Frage</small><i class="check"></i></button>
         <button class="mode-card" data-mode="blind"><span class="mc-art">🙈</span><b>Ahnungslos</b><small>Imposter weiß, dass er nichts weiß</small><i class="check"></i></button>
       </div>
@@ -144,7 +144,7 @@
       <div class="list">
         <button class="li" id="btnResetWords"><span class="li-ico">♻️</span><span class="li-txt">Gespielte Wörter zurücksetzen<small>Wörter wiederholen sich erst, wenn alle durch sind</small></span></button>
       </div>
-      <p class="tiny pad">Imposter · Version 2.1 · ohne Werbung, ohne Tracking, komplett offline</p>
+      <p class="tiny pad">Imposter · Version 3.0 · ohne Werbung, ohne Tracking, komplett offline</p>
     </div>
   </section>
 
@@ -265,13 +265,14 @@
 
   <!-- HELP -->
   <section class="screen" id="s-help">
-    <header class="bar"><button class="icon" data-back aria-label="Zurück">←</button><h2>So wird gespielt</h2></header>
+   <div class="sheet">
+    <div class="sheet-head"><h2>Spielanleitung</h2><p>Finde heraus, wer lügt – oder lüg dich aus der Affäre.</p></div>
     <div class="scroll rules">
       <div class="seg help-tabs" id="helpTabs">
         <button data-h="classic" class="on">Klassisch</button><button data-h="white">Mysteriös</button><button data-h="chaos">Chaos</button><button data-h="blind">Ahnungslos</button><button data-h="questions">Fragen</button>
       </div>
-      <div class="step"><span class="st-n">Schritt 1</span><div class="st-e">🎭</div><h3>Finde deine Rolle</h3>
-        <p>Jeder bekommt geheim eine Rolle: Karte gedrückt halten, ansehen, loslassen, weitergeben.</p>
+      <div class="step"><span class="st-n">Schritt 1</span><div class="st-e"><img src="img/faces/imposter.jpg" alt="" class="round-art"></div><h3>Finde deine Rolle</h3>
+        <p>Jeder bekommt geheim eine Rolle: Karte hochwischen (oder gedrückt halten), ansehen, loslassen, weitergeben.</p>
         <p>🔵 <b>Zivilist:</b> bekommt das geheime Wort – dasselbe wie die anderen Zivilisten.</p>
         <p data-hm="classic white chaos">🔴 <b>Imposter:</b> bekommt ein <i>ähnliches</i>, aber anderes Wort – und weiß nicht, dass er der Imposter ist!</p>
         <p data-hm="blind chaos">🔴 <b>Imposter (ahnungslos):</b> bekommt kein Wort, weiß aber, dass er Imposter ist. Optional mit Hinweis.</p>
@@ -307,7 +308,8 @@
         <p>Die Punkte zählen jede Runde zusammen und bestimmen den Sieger. 🏆</p>
       </div>
     </div>
-    <div class="bottom"><button class="btn go big" id="btnHelpPlay">Jetzt spielen</button></div>
+    <div class="bottom two"><button class="btn grey big" data-back>Schließen</button><button class="btn go big" id="btnHelpPlay">Jetzt spielen</button></div>
+   </div>
   </section>
 
   <div class="modal" id="modal" hidden>

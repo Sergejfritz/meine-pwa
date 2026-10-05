@@ -127,8 +127,8 @@ Eigenes Imposter/Spion-Partyspiel ohne Werbung und ohne In-App-Käufe, komplett 
 - **27 Packs** (~840 Wörter, inkl. Mystery-Paket und 18+), eigene Packs, Hinweis für Imposter, Timer,
   geheime Abstimmung mit Stichwahl, Spieler-Avatare, Hintergrundmusik in Endlosschleife
 
-**Eigene Gesichter / Logo / Musik:** `faces.js` (Liste von Bildern in `faces/`), `logo.jpg` und `music.mp3` im
-Web-Ordner ersetzen. Fehlen sie, nutzt das Spiel Emoji-Figuren und keine Musik.
+**Grafiken:** Comic-Figuren im 3D-Stil (`imposter/img/`, Liste in `faces.js`), Logo `logo.jpg`.
+**Musik:** `music.mp3` in den Web-Ordner legen (nicht im Repo) – fehlt sie, läuft das Spiel ohne Musik.
 
 **APK bauen:** `cd android-imposter && gradle assembleRelease` (Android SDK nötig), mit eigenem Web-Ordner:
 `gradle assembleRelease -PwwwDir=/pfad/zum/ordner`. Oder im GitHub-Workflow „Imposter APK“ das Artefakt

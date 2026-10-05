@@ -316,11 +316,11 @@
     }
     const hint = S.hint ? `<div class="meta">Hinweis: <b>${esc(w.hint)}</b></div>` : '';
     if (role === 'white') {
-      return { cls: 'white', html: `<div class="big-emoji">🎩</div><div class="role">Du bist</div><div class="word">Mr. White</div><div class="meta">Du kennst das Wort nicht – bluffe!</div>${cat}${hint}` };
+      return { cls: 'white', html: `<img class="role-art" src="img/faces/white.jpg" alt=""><div class="role">Du bist</div><div class="word">Mr. White</div><div class="meta">Du kennst das Wort nicht – bluffe!</div>${cat}${hint}` };
     }
     const mates = S.know ? S.players.filter((p) => p !== name && R.roles[p] === 'blind') : [];
     const team = mates.length ? `<div class="meta">Mit-Imposter: <b>${mates.map(esc).join(', ')}</b></div>` : '';
-    return { cls: 'imp', html: `<div class="big-emoji">🕵️</div><div class="role">Du bist der</div><div class="word">IMPOSTER</div>${cat}${hint}${team}` };
+    return { cls: 'imp', html: `<img class="role-art" src="img/faces/imposter.jpg" alt=""><div class="role">Du bist der</div><div class="word">IMPOSTER</div>${cat}${hint}${team}` };
   }
   function facesTrio(name) {
     const others = shuffle([...Array(Math.max(FACES.length, FACE_EMOJI.length)).keys()]);
@@ -336,7 +336,7 @@
     $('#revealName').textContent = name;
     $('#revealName').style.color = color(name);
     $('#revealProgress').textContent = `${roundLabel()} · Spieler ${R.idx + 1}/${S.players.length}`;
-    $('#cardFront').innerHTML = `${facesTrio(name)}<b>Gedrückt halten</b><small>oder hochwischen, um dein Wort zu sehen.<br>Halte dich von Impostern fern! 👀</small>`;
+    $('#cardFront').innerHTML = `<span class="swipe-hint">⬆️</span>${facesTrio(name)}<b>Hochwischen</b><small>um ${isQ() ? 'deine Frage' : 'dein Wort'} zu sehen (oder gedrückt halten).<br>Halte dich von Impostern fern! 👀</small>`;
     const c = cardHTML(name);
     $('#cardBack').innerHTML = c.html;
     $('#cardBack').className = 'face back ' + c.cls;
@@ -345,14 +345,31 @@
     $('#btnNextPlayer').disabled = true;
     $('#btnNextPlayer').textContent = R.idx === S.players.length - 1 ? 'Alle bereit – los!' : 'Weiter';
   }
-  const card = $('#flipCard');
-  const open = (e) => { if (e) e.preventDefault(); if (!R) return; card.classList.add('open'); if (!R.seen) buzz(30); R.seen = true; };
-  const close = () => { card.classList.remove('open'); if (R && R.seen) $('#btnNextPlayer').disabled = false; };
-  card.addEventListener('pointerdown', open);
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => card.addEventListener(ev, close));
+  // Hochwischen (wie im Original) – oder gedrückt halten
+  const card = $('#flipCard'), front = () => $('#cardFront');
+  let drag = null;
+  const reveal = () => { if (!R) return; if (!R.seen) buzz(30); R.seen = true; };
+  card.addEventListener('pointerdown', (e) => {
+    if (!R) return; e.preventDefault();
+    try { card.setPointerCapture(e.pointerId); } catch (err) { /* egal */ }
+    drag = { y: e.clientY, moved: false, h: card.offsetHeight };
+    drag.hold = setTimeout(() => { if (drag && !drag.moved) { card.classList.add('open'); reveal(); } }, 280);
+  });
+  card.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dy = Math.min(0, e.clientY - drag.y);
+    if (dy < -8) { drag.moved = true; clearTimeout(drag.hold); card.classList.add('dragging'); card.classList.remove('open'); }
+    if (drag.moved) { front().style.transform = `translateY(${Math.max(dy, -drag.h * 0.8)}px)`; if (-dy > drag.h * 0.3) reveal(); }
+  });
+  const release = () => {
+    if (!drag) return; clearTimeout(drag.hold); drag = null;
+    card.classList.remove('dragging', 'open'); front().style.transform = '';
+    if (R && R.seen) $('#btnNextPlayer').disabled = false;
+  };
+  ['pointerup', 'pointercancel'].forEach((ev) => card.addEventListener(ev, release));
   card.addEventListener('contextmenu', (e) => e.preventDefault());
-  card.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') open(e); });
-  card.addEventListener('keyup', close);
+  card.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); card.classList.add('open'); reveal(); } });
+  card.addEventListener('keyup', () => { card.classList.remove('open'); if (R && R.seen) $('#btnNextPlayer').disabled = false; });
   card.tabIndex = 0;
   $('#btnNextPlayer').onclick = () => {
     if (R.idx < S.players.length - 1) { R.idx++; showReveal(); buzz(15); }
@@ -540,7 +557,8 @@
     $('#elimName').textContent = name;
     $('#elimRole').className = 'role-reveal ' + role.cls;
     const extra = R.roles[name] === 'uc' ? `<small>${isQ() ? 'Seine Frage' : 'Sein Wort'} war „${esc(R.word.uc)}“</small>` : '';
-    $('#elimRole').innerHTML = `${role.emoji} ${role.name}${extra}`;
+    const art = { imp: 'img/faces/imposter.jpg', white: 'img/faces/white.jpg' }[role.cls];
+    $('#elimRole').innerHTML = `${art ? `<img class="role-art" src="${art}" alt="">` : ''}${role.emoji} ${role.name}${extra}`;
     show('s-elim', false);
     if (nonCiv(name)) { beep(523, 0.15); beep(784, 0.25, 0.15); buzz(60); } else { beep(330, 0.3); buzz([80, 60, 80]); }
   }
