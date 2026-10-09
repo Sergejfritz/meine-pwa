@@ -532,11 +532,17 @@ void main(){
 
   view.addEventListener('pointerdown', e => {
     ptr = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId);
-    if (state === 'play') squelch(0.5);
+    initWipeAudio(); lastMoveT = performance.now();
   });
   view.addEventListener('pointermove', e => {
     if (!ptr) return;
-    if (state === 'play' || state === 'menu') wipeSegment(ptr.x, ptr.y, e.clientX, e.clientY);
+    const now = performance.now(), dt = Math.max(4, now - lastMoveT);
+    if (state === 'play' || state === 'menu') {
+      const dist = Math.hypot(e.clientX - ptr.x, e.clientY - ptr.y);
+      wipeSegment(ptr.x, ptr.y, e.clientX, e.clientY);
+      wipeSound(dist / dt);
+    }
+    lastMoveT = now;
     ptr.x = e.clientX; ptr.y = e.clientY;
   });
   const up = () => { ptr = null; load *= .5; };
@@ -545,6 +551,53 @@ void main(){
   /* =================== Sound =================== */
   let actx = null, lastSq = 0;
   const ac = () => (actx = actx || new (window.AudioContext || window.webkitAudioContext)());
+  /* ---- Wisch-Geräusch: nasses Schmieren + Quietschen auf Glas, folgt Tempo und Dreckmenge ---- */
+  let wa = null, lastMoveT = 0;
+  function initWipeAudio() {
+    if (wa) return;
+    try {
+      const a = ac(); if (a.state === 'suspended') a.resume();
+      const len = a.sampleRate * 2, buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
+      let l = 0; for (let i = 0; i < len; i++) { const w = Math.random() * 2 - 1; l = (l + .05 * w) / 1.05; d[i] = l * 3.2 + w * .22; }
+      const src = a.createBufferSource(); src.buffer = buf; src.loop = true;
+      const mkG = () => { const g = a.createGain(); g.gain.value = 0; return g; };
+      // 1) Reiben der Haut/Tuch auf Glas: Rauschen, Bandpass folgt dem Tempo
+      const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = .8; bp.frequency.value = 900;
+      const gRub = mkG(); src.connect(bp).connect(gRub);
+      // 2) Nasses Schmatzen: tiefes Rauschen, pulsierend (Stick-Slip der Schmiere)
+      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 520; lp.Q.value = 2.5;
+      const gWet = mkG(); const wob = a.createOscillator(), wg = a.createGain(); wob.type = 'sine'; wob.frequency.value = 17; wg.gain.value = .5;
+      const tr = a.createGain(); tr.gain.value = .5; wob.connect(wg).connect(tr.gain);
+      src.connect(lp).connect(tr).connect(gWet);
+      // 3) Quietschen: Sinus mit Stick-Slip-Zittern, nur bei wenig Schmiere
+      const sq = a.createOscillator(), sg = mkG(); sq.type = 'triangle'; sq.frequency.value = 1700;
+      const jit = a.createOscillator(), jg = a.createGain(); jit.type = 'sawtooth'; jit.frequency.value = 43; jg.gain.value = 140; jit.connect(jg).connect(sq.frequency);
+      sq.connect(sg);
+      const master = a.createGain(); master.gain.value = .9;
+      const comp = a.createDynamicsCompressor();
+      [gRub, gWet, sg].forEach(g => g.connect(master)); master.connect(comp).connect(a.destination);
+      src.start(); wob.start(); sq.start(); jit.start();
+      wa = { a, bp, gRub, gWet, sg, sq, wob };
+    } catch (e) { wa = null; }
+  }
+  function wipeSound(speed) {
+    if (!wa) return;
+    const t = wa.a.currentTime, lv = Math.min(1, speed / 1.7), wet = Math.min(1, load * 1.3);
+    wa.gRub.gain.setTargetAtTime(lv * (.22 + .3 * (1 - wet * .5)), t, .02);
+    wa.bp.frequency.setTargetAtTime(450 + lv * 2400, t, .03);
+    wa.gWet.gain.setTargetAtTime(lv * wet * .8, t, .03);
+    wa.wob.frequency.setTargetAtTime(9 + lv * 16, t, .05);
+    wa.sg.gain.setTargetAtTime(speed > .25 ? lv * (1 - wet) * .06 : 0, t, .015);
+    wa.sq.frequency.setTargetAtTime(1500 + lv * 1000 + rnd(-80, 80), t, .02);
+    wipeSoundT = performance.now();
+  }
+  let wipeSoundT = 0;
+  function wipeSoundIdle() {   // ohne Bewegung ausblenden
+    if (!wa || performance.now() - wipeSoundT < 70) return;
+    const t = wa.a.currentTime;
+    [wa.gRub, wa.gWet, wa.sg].forEach(g => g.gain.setTargetAtTime(0, t, .03));
+  }
+
   function squelch(v) {
     try {
       const now = performance.now(); if (now - lastSq < 90) return; lastSq = now;
@@ -656,6 +709,7 @@ void main(){
       if (state === 'play') countdown(dt);
       if (score > best) bestEl.textContent = score;
     }
+    wipeSoundIdle();
     draw();
     requestAnimationFrame(frame);
   }
