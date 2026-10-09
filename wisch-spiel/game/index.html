@@ -59,7 +59,7 @@
   <div id="poop">💩</div>
   <h1>Wisch weg!</h1>
   <p>Der Bildschirm wird von innen zugeschissen.<br>Wisch den Dreck weg – schnell genug, dann steigst du ein Level auf. Verlierst du, geht’s wieder bei Level 1 los!</p>
-  <p>10 Level – jedes mit neuer Sorte: vom Hundehaufen bis zur Einhorn-Kacke.</p>
+  <p>10 Level – jedes mit neuer Sorte: vom Hundehaufen bis zum Fuchskot.</p>
   <p>Rekord: <b id="startbest">0</b></p>
   <button id="go">Los geht’s</button>
 </div>
@@ -253,22 +253,6 @@ void main(){
   setBG(1);
   let bgS = [1, 1];
 
-  // Echte Kamera als Hintergrund (falls erlaubt), sonst Raum
-  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
-  let camOn = false;
-  function tryCamera() {
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
-      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(st => {
-        video.srcObject = st; video.play().catch(() => {});
-        video.addEventListener('loadedmetadata', () => {
-          const sa = W / H, va = video.videoWidth / video.videoHeight;
-          bgS = va > sa ? [sa / va, 1] : [1, va / sa]; camOn = true;
-        });
-      }).catch(() => {});
-    } catch (e) {}
-  }
-
   function resize() {
     W = innerWidth; H = innerHeight;
     S = Math.min(devicePixelRatio || 1, 1.25);
@@ -293,9 +277,9 @@ void main(){
     bird: { hi: '#fffdf4', base: '#ece8d8', dark: '#9a947e' },
     runny:{ hi: '#c9953f', base: '#94601c', dark: '#442808' },
     eleph:{ hi: '#948568', base: '#62553f', dark: '#262016' },
-    alien:{ hi: '#c8ff6a', base: '#58c61e', dark: '#1d650c' },
-    gold: { hi: '#fff6b0', base: '#e2b422', dark: '#8c5c00' },
-    uni:  { hi: '#ffd6f0', base: '#f08ad0', dark: '#9a3f8a' }
+    sheep:{ hi: '#6b5a48', base: '#3a2d22', dark: '#171009' },
+    baby: { hi: '#d9b25a', base: '#a67b2e', dark: '#4e3510' },
+    fox:  { hi: '#8a7662', base: '#54443a', dark: '#211912' }
   };
   Object.values(P).forEach(p => { for (const k in p) p[k] = hex(p[k]); });
   const rgb = (a, j) => 'rgb(' + [0, 1, 2].map(i => Math.max(0, Math.min(255, a[i] * (j || 1) | 0))).join(',') + ')';
@@ -305,8 +289,8 @@ void main(){
     { n: 'Hundehaufen', k: 'dog', m: 1.0 }, { n: 'Katzenkötel', k: 'cat', m: 0.8 },
     { n: 'Kuhfladen', k: 'cow', m: 1.3 }, { n: 'Pferdeäpfel', k: 'horse', m: 1.05 },
     { n: 'Vogelschiss', k: 'bird', m: 0.8 }, { n: 'Dünnpfiff', k: 'runny', m: 1.25 },
-    { n: 'Elefantenhaufen', k: 'eleph', m: 1.5 }, { n: 'Alien-Schleim', k: 'alien', m: 1.1 },
-    { n: 'Goldscheiße', k: 'gold', m: 1.0 }, { n: 'Einhorn-Kacke', k: 'uni', m: 1.1 }
+    { n: 'Elefantenhaufen', k: 'eleph', m: 1.5 }, { n: 'Schafsköttel', k: 'sheep', m: 1.0 },
+    { n: 'Babykacke', k: 'baby', m: 0.9 }, { n: 'Fuchskot', k: 'fox', m: 0.9 }
   ];
   
   // Ein Klumpen = Farbe (flach) + Höhenprofil (Halbkugel) + Dellen/Rillen
@@ -415,16 +399,25 @@ void main(){
       ball(x, y, r * .7, r * .62, 0, P.eleph, { grain: 2, h: 1 });
       drops(x, y, r, P.eleph, 4, 1.7);
     },
-    alien(x, y, r) {
-      ball(x, y, r * 1.05, r * .9, rnd(0, 3), P.alien, { grain: .3, h: .7, creases: 1 });
-      for (let i = 0; i < 6; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .6); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.08, .2), r * rnd(.08, .2), 0, { hi: [234, 255, 176], base: [139, 232, 74], dark: [47, 138, 16] }, { grain: 0, h: 1, creases: 0 }); }
-      drops(x, y, r, P.alien, 8, 2.1);
+    sheep(x, y, r) {
+      for (let i = 0; i < 16; i++) { const a = rnd(0, 6.28), d = Math.sqrt(Math.random()) * r * .9;
+        ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.17, .25), r * rnd(.14, .21), rnd(0, 3), P.sheep, { grain: .4, h: .95, creases: 0 }); }
     },
-    gold(x, y, r) { pile(x, y, r, P.gold, { grain: .6 }); drops(x, y, r, P.gold, 4, 1.8); },
-    uni(x, y, r) {
-      const cols = [P.uni, { hi: [216, 240, 255], base: [108, 196, 242], dark: [42, 106, 160] }, { hi: [241, 220, 255], base: [179, 132, 238], dark: [90, 58, 154] }];
-      cols.forEach((p, i) => ball(x + (i - 1) * r * .55, y + (i === 1 ? -r * .3 : r * .2), r * .62, r * .5, rnd(-.3, .3), p, { grain: .5, h: .9 }));
-      drops(x, y, r, P.uni, 5, 1.8);
+    baby(x, y, r) {
+      for (let i = 0; i < 5; i++) { const a = rnd(0, 6.28); ball(x + Math.cos(a) * r * .75, y + Math.sin(a) * r * .65, r * rnd(.3, .5), r * rnd(.25, .4), a, P.baby, { grain: .5, h: .3, creases: 0 }); }
+      ball(x, y, r * 1.0, r * .8, rnd(0, 3), P.baby, { grain: .6, h: .42, creases: 2 });
+      drops(x, y, r, P.baby, 8, 2.0);
+    },
+    fox(x, y, r) {
+      const a0 = rnd(0, 3);
+      for (let i = 0; i < 2; i++) { const a = a0 + rnd(-.3, .3), o = (i - .5) * r * .6;
+        ball(x + Math.cos(a0 + 1.57) * o, y + Math.sin(a0 + 1.57) * o, r * .95, r * .27, a, P.fox, { h: .9 });
+        ball(x + Math.cos(a0 + 1.57) * o + Math.cos(a) * r * .9, y + Math.sin(a0 + 1.57) * o + Math.sin(a) * r * .9, r * .12, r * .1, a, P.fox, { grain: 0, h: .7, creases: 0 }); }
+      dctx.save(); dctx.strokeStyle = 'rgba(190,180,160,.7)'; dctx.lineWidth = 1.1;      // Haare
+      hctx.save(); hctx.strokeStyle = 'rgba(255,255,255,.18)'; hctx.lineWidth = 1.3;
+      for (let i = 0; i < 18; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .7), l = rnd(8, 16), b = rnd(0, 6.28);
+        for (const c of [dctx, hctx]) { c.beginPath(); c.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); c.lineTo(x + Math.cos(a) * d + Math.cos(b) * l, y + Math.sin(a) * d + Math.sin(b) * l); c.stroke(); } }
+      dctx.restore(); hctx.restore();
     }
   };
 
@@ -436,7 +429,7 @@ void main(){
     const r = fr || rnd(34, 50) * T.m * (1 + Math.min(.3, level * .02)) * (Math.min(W, H) / 400);
     const x = fx || rnd(r * 1.1, W - r * 1.1), y = fy || rnd(r * 1.1 + 60, H - r * 1.1);
     DRAW[T.k](x, y, r);
-    if (Math.random() < .55 && T.k !== 'alien' && T.k !== 'uni')
+    if (Math.random() < .55)
       drips.push({ x: x + rnd(-r * .5, r * .5), y: y + r * .5, w: rnd(3, 8), len: rnd(40, 150), c: rgb(P[T.k].base) });
   }
 
@@ -594,19 +587,20 @@ void main(){
   // Letzte Sekunden: ab 88 % der Grenze läuft 3-2-1, jede Zahl mit Furz. Wegwischen bricht ab.
   let cd = -1, cdLast = 0;
   const cdEl = $('count');
+  function farts(n) {            // n Fürze hintereinander, jeder etwas anders
+    for (let i = 0; i < n; i++) setTimeout(() => { fart(rnd(.14, .22) + (i === n - 1 ? .08 : 0), i === n - 1 && n >= 3); if (navigator.vibrate) navigator.vibrate(40); }, i * 240);
+  }
   function countdown(dt) {
     const k = coverage / LIMIT;
     if (cd < 0) {
-      if (k >= 0.88) { cd = 3; cdLast = 4; }
-      else return;
+      if (k >= 0.88) { cd = 4; cdLast = 5; } else return;
     } else if (k < 0.78) {
       cd = -1; cdEl.classList.remove('on'); return;
     } else cd -= dt;
     const n = Math.ceil(cd);
     if (n !== cdLast && n >= 1) {
       cdLast = n; cdEl.textContent = n; cdEl.classList.remove('on'); void cdEl.offsetWidth; cdEl.classList.add('on');
-      fart(n === 1 ? .55 : n === 2 ? .38 : .28, n === 1);
-      if (navigator.vibrate) navigator.vibrate(n === 1 ? 120 : 50);
+      farts(5 - n);              // 4 -> 1 Furz, 3 -> 2, 2 -> 3, 1 -> 4
     }
     if (cd <= 0) { cdEl.classList.remove('on'); cd = -1; fart(1.1, true); gameOver(); }
   }
@@ -635,7 +629,6 @@ void main(){
   $('again').addEventListener('click', startGame);
 
   function draw() {
-    if (camOn && video.readyState >= 2) upload(0, video);
     if (dirty) { upload(1, dirt); upload(2, hgt); upload(3, film); dirty = false; }
     gl.uniform2f(U('uBGs'), bgS[0], bgS[1]);
     gl.uniform1f(U('uK'), Math.min(1, coverage / LIMIT));
@@ -666,7 +659,7 @@ void main(){
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__game = { startGame, setLevel, splat, setState(v) { state = v; }, tryCamera, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
+  window.__game = { startGame, setLevel, splat, setState(v) { state = v; }, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
 })();
 </script>
 </body>
