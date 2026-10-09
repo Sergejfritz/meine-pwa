@@ -19,6 +19,7 @@
   #lvlbar i { display: block; height: 100%; width: 0; background: #ffd54a; }
   #lvl { font-size: 15px; padding-top: 6px; letter-spacing: .08em; }
   #count { position: fixed; left: 0; right: 0; top: 38%; text-align: center; font-size: 150px; font-weight: 900; color: #fff; text-shadow: 0 4px 14px rgba(0,0,0,.8); opacity: 0; pointer-events: none; }
+  #count small { display: block; font-size: 34px; letter-spacing: .12em; color: #ffd54a; }
   #count.on { animation: cnt .95s ease-out; }
   @keyframes cnt { 0% { opacity: 0; transform: scale(2); } 20% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(.8); } }
   #banner { position: fixed; left: 0; right: 0; top: 30%; text-align: center; font-size: 30px; font-weight: 900; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.7); opacity: 0; pointer-events: none; }
@@ -593,14 +594,14 @@ void main(){
   function countdown(dt) {
     const k = coverage / LIMIT;
     if (cd < 0) {
-      if (k >= 0.88) { cd = 4; cdLast = 5; } else return;
-    } else if (k < 0.78) {
+      if (k >= 0.88) { cd = 3; cdLast = 4; } else return;
+    } else if (k < 0.8) {
       cd = -1; cdEl.classList.remove('on'); return;
     } else cd -= dt;
     const n = Math.ceil(cd);
     if (n !== cdLast && n >= 1) {
-      cdLast = n; cdEl.textContent = n; cdEl.classList.remove('on'); void cdEl.offsetWidth; cdEl.classList.add('on');
-      farts(5 - n);              // 4 -> 1 Furz, 3 -> 2, 2 -> 3, 1 -> 4
+      cdLast = n; cdEl.innerHTML = n + '<small>PUTZEN!</small>'; cdEl.classList.remove('on'); void cdEl.offsetWidth; cdEl.classList.add('on');
+      farts(4 - n);              // 3 -> 1 Furz, 2 -> 2, 1 -> 3
     }
     if (cd <= 0) { cdEl.classList.remove('on'); cd = -1; fart(1.1, true); gameOver(); }
   }
