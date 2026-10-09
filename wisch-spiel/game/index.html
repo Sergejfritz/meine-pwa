@@ -14,6 +14,10 @@
     color: #3b2412; text-shadow: 0 1px 0 rgba(255,255,255,.55); font-weight: 800; }
   #hud small { display: block; font-size: 11px; letter-spacing: .12em; opacity: .7; }
   #score { font-size: 38px; line-height: 1; }
+  #lvl { font-size: 15px; padding-top: 6px; letter-spacing: .08em; }
+  #banner { position: fixed; left: 0; right: 0; top: 30%; text-align: center; font-size: 30px; font-weight: 900; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.7); opacity: 0; pointer-events: none; }
+  #banner.show { animation: ban 2s ease-out; }
+  @keyframes ban { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1.1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
   #best { font-size: 20px; text-align: right; }
   #bar { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
     height: 10px; border-radius: 6px; background: rgba(0,0,0,.18); overflow: hidden; pointer-events: none; }
@@ -38,14 +42,17 @@
 <canvas id="c"></canvas>
 <div id="hud">
   <div><small>PUNKTE</small><span id="score">0</span></div>
+  <div id="lvl">LEVEL 1</div>
   <div id="best"><small>REKORD</small><span id="bestv">0</span></div>
 </div>
+<div id="banner"></div>
 <div id="bar"><i></i></div>
 
 <div class="panel" id="start">
   <div id="poop">💩</div>
   <h1>Wisch weg!</h1>
   <p>Der Bildschirm wird von innen zugeschissen.<br>Wisch den Dreck mit dem Finger weg – bevor alles braun ist!</p>
+  <p>10 Level – jedes mit neuer Sorte: vom Hundehaufen bis zur Einhorn-Kacke.</p>
   <p>Rekord: <b id="startbest">0</b></p>
   <button id="go">Los geht’s</button>
 </div>
@@ -63,8 +70,10 @@
   const vctx = view.getContext('2d');
   const dirt = document.createElement('canvas');   // Schmutzschicht (transparent)
   const dctx = dirt.getContext('2d', { willReadFrequently: false });
+  const film = document.createElement('canvas');   // bleibende Schmierspuren
+  const fctx = film.getContext('2d');
   const tmp = document.createElement('canvas');    // Pinsel-Puffer zum Verschmieren
-  const tctx = tmp.getContext('2d');
+  const tctx = tmp.getContext('2d', { willReadFrequently: true });
   const grid = document.createElement('canvas');   // Mini-Raster zum Messen
   const GW = 24, GH = 42;
   grid.width = GW; grid.height = GH;
@@ -89,61 +98,192 @@
     W = innerWidth; H = innerHeight;
     S = Math.min(devicePixelRatio || 1, 1.5);
     R = Math.max(30, Math.min(W, H) * 0.095);
-    view.width = dirt.width = Math.round(W * S);
-    view.height = dirt.height = Math.round(H * S);
+    view.width = dirt.width = film.width = Math.round(W * S);
+    view.height = dirt.height = film.height = Math.round(H * S);
     tmp.width = tmp.height = Math.ceil(R * 2 * S) + 2;
-    dctx.setTransform(S, 0, 0, S, 0, 0);
+    dctx.setTransform(S, 0, 0, S, 0, 0); fctx.setTransform(S, 0, 0, S, 0, 0);
     vctx.setTransform(1, 0, 0, 1, 0, 0);
   }
   addEventListener('resize', resize);
   resize();
 
   const rnd = (a, b) => a + Math.random() * (b - a);
-  const BROWNS = ['#5a3416', '#6b3f1a', '#4b2a10', '#7a4a20', '#3f230d'];
+  const pick = a => a[(Math.random() * a.length) | 0];
 
-  function splat(x, y, r) {
-    const c = BROWNS[(Math.random() * BROWNS.length) | 0];
-    dctx.save();
-    dctx.fillStyle = c;
-    dctx.beginPath();
-    dctx.arc(x, y, r, 0, 7);
-    dctx.fill();
-    // unregelmäßiger Rand + Spritzer
-    const n = 7 + ((Math.random() * 6) | 0);
+  /* ---------- Sorten (je Level eine neue) ---------- */
+  const P = {
+    dog:  { hi: '#a9774a', base: '#6b4423', dark: '#33200f' },
+    cat:  { hi: '#85593a', base: '#4e3018', dark: '#22130a' },
+    cow:  { hi: '#9a8a42', base: '#5f5426', dark: '#2c2810' },
+    horse:{ hi: '#b09a5c', base: '#7a6432', dark: '#40341a' },
+    bird: { hi: '#fffdf4', base: '#ddd9c8', dark: '#8f8a76' },
+    runny:{ hi: '#c9953f', base: '#8c5a1a', dark: '#472b08' },
+    eleph:{ hi: '#948568', base: '#5f5340', dark: '#2a241b' },
+    alien:{ hi: '#c8ff6a', base: '#4fbf1c', dark: '#1d650c' },
+    gold: { hi: '#fff6b0', base: '#e2b422', dark: '#8c5c00' },
+    uni:  { hi: '#ffd6f0', base: '#f08ad0', dark: '#9a3f8a' }
+  };
+  const LEVELS = [
+    { n: 'Hundehaufen',    k: 'dog',   m: 1.0 },
+    { n: 'Katzenkötel',    k: 'cat',   m: 0.8 },
+    { n: 'Kuhfladen',      k: 'cow',   m: 1.3 },
+    { n: 'Pferdeäpfel',    k: 'horse', m: 1.05 },
+    { n: 'Vogelschiss',    k: 'bird',  m: 0.8 },
+    { n: 'Dünnpfiff',      k: 'runny', m: 1.25 },
+    { n: 'Elefantenhaufen',k: 'eleph', m: 1.5 },
+    { n: 'Alien-Schleim',  k: 'alien', m: 1.1 },
+    { n: 'Goldscheiße',    k: 'gold',  m: 1.0 },
+    { n: 'Einhorn-Kacke',  k: 'uni',   m: 1.1 }
+  ];
+  const LVL_POINTS = 25;
+
+  // Glänzende, plastische Kugel/Ellipse mit Licht von links oben, Speckles und Glanzpunkt
+  function ball(x, y, rx, ry, rot, p, o) {
+    o = o || {};
+    const c = dctx;
+    c.save();
+    c.translate(x, y); c.rotate(rot); c.scale(1, ry / rx);
+    c.shadowColor = o.glow || 'rgba(25,10,0,.5)';
+    c.shadowBlur = (o.glow ? rx * .7 : rx * .35) * S; c.shadowOffsetY = (o.glow ? 0 : rx * .12) * S * (rx / ry);
+    const g = c.createRadialGradient(-rx * .35, -rx * .4, rx * .08, 0, 0, rx * 1.08);
+    g.addColorStop(0, p.hi); g.addColorStop(.42, p.base); g.addColorStop(1, p.dark);
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, rx, 0, 7); c.fill();
+    c.shadowColor = 'transparent';
+    c.save(); c.beginPath(); c.arc(0, 0, rx, 0, 7); c.clip();
+    // Körnung
+    const n = Math.round(rx * (o.grain || 1.3));
     for (let i = 0; i < n; i++) {
-      const a = rnd(0, 6.283), d = rnd(r * 0.6, r * 1.25), rr = rnd(r * 0.18, r * 0.45);
-      dctx.beginPath(); dctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, 0, 7); dctx.fill();
+      const a = rnd(0, 6.283), d = Math.sqrt(Math.random()) * rx, rr = rnd(.6, 2.4);
+      c.fillStyle = Math.random() < .55 ? p.dark : p.hi; c.globalAlpha = rnd(.12, .35);
+      c.beginPath(); c.arc(Math.cos(a) * d, Math.sin(a) * d, rr, 0, 7); c.fill();
     }
-    for (let i = 0; i < 6; i++) {
-      const a = rnd(0, 6.283), d = rnd(r * 1.2, r * 2.1), rr = rnd(2, r * 0.14);
-      dctx.beginPath(); dctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, 0, 7); dctx.fill();
+    c.globalAlpha = .22; c.strokeStyle = p.dark; c.lineWidth = 1.2;     // feine Rillen
+    for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(rnd(-.3, .3) * rx, rnd(-.3, .3) * rx, rx * rnd(.45, .95), rnd(0, 6), rnd(0, 6) + 1.4); c.stroke(); }
+    c.restore();
+    if (!o.matt) {   // nasser Glanz
+      c.globalAlpha = 1;
+      const h = c.createRadialGradient(-rx * .38, -rx * .45, 0, -rx * .38, -rx * .45, rx * .34);
+      h.addColorStop(0, 'rgba(255,255,255,.85)'); h.addColorStop(.5, 'rgba(255,255,255,.25)'); h.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = h; c.beginPath(); c.ellipse(-rx * .38, -rx * .45, rx * .34, rx * .2, -.6, 0, 7); c.fill();
+      c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.arc(rx * .3, rx * .35, rx * .06, 0, 7); c.fill();
     }
-    // Glanz
-    const g = dctx.createRadialGradient(x - r * .3, y - r * .35, 1, x - r * .3, y - r * .35, r * .7);
-    g.addColorStop(0, 'rgba(255,230,190,.35)'); g.addColorStop(1, 'rgba(255,230,190,0)');
-    dctx.fillStyle = g; dctx.beginPath(); dctx.arc(x, y, r * .9, 0, 7); dctx.fill();
-    dctx.restore();
-    if (Math.random() < 0.7) drips.push({ x: x + rnd(-r * .5, r * .5), y: y + r * .6, w: rnd(3, 7), len: rnd(40, 140), c });
+    c.restore();
+  }
+
+  function sparkle(x, y, r, col) {
+    dctx.save(); dctx.fillStyle = col || '#fff'; dctx.shadowColor = col || '#fff'; dctx.shadowBlur = 6 * S;
+    dctx.beginPath();
+    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, d = i % 2 ? r * .22 : r; dctx.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d); }
+    dctx.closePath(); dctx.fill(); dctx.restore();
+  }
+
+  function drops(x, y, r, p, n, far) {
+    for (let i = 0; i < n; i++) {
+      const a = rnd(0, 6.283), d = rnd(r * 1.1, r * far), rr = rnd(1.5, r * .12);
+      ball(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, rr * rnd(.7, 1), rnd(0, 3), p, { grain: 0 });
+    }
+  }
+
+  function pile(x, y, r, p, o) {
+    const rot = rnd(-.25, .25), k = [[1, 0], [.8, .46], [.58, .85], [.34, 1.15]];
+    ball(x, y + r * .2, r * 1.15, r * .5, 0, p, { matt: true });
+    k.forEach(([s, up]) => ball(x + Math.sin(rot) * up * r * .5, y - up * r * .5 + r * .2, r * s, r * s * .55, rot * .6, p, o));
+    ball(x + Math.sin(rot) * r * .65, y - r * 1.38, r * .14, r * .14, 0, p, { grain: 0 }); // Spitze
+  }
+
+  const DRAW = {
+    dog(x, y, r) { pile(x, y, r, P.dog); drops(x, y, r, P.dog, 3, 1.7); },
+    cat(x, y, r) {
+      const a0 = rnd(0, 3);
+      for (let i = 0; i < 3; i++) {
+        const a = a0 + rnd(-.5, .5), ox = (i - 1) * r * .55 * Math.cos(a0 + 1.6), oy = (i - 1) * r * .55 * Math.sin(a0 + 1.6);
+        ball(x + ox, y + oy, r * rnd(.8, 1.0), r * .3, a, P.cat);
+        ball(x + ox + Math.cos(a) * r * .85, y + oy + Math.sin(a) * r * .85, r * .22, r * .2, a, P.cat, { grain: 0 });
+      }
+    },
+    cow(x, y, r) {
+      for (let i = 0; i < 6; i++) { const a = i * 1.05 + rnd(-.3, .3); ball(x + Math.cos(a) * r * .95, y + Math.sin(a) * r * .8, r * rnd(.35, .6), r * rnd(.3, .5), rnd(0, 3), P.cow, { matt: true }); }
+      ball(x, y, r * 1.15, r * .95, rnd(-.3, .3), P.cow);
+      dctx.save(); dctx.strokeStyle = 'rgba(30,25,5,.28)'; dctx.lineWidth = 2;
+      for (let i = 1; i <= 3; i++) { dctx.beginPath(); dctx.ellipse(x, y, r * (.25 + i * .24), r * (.2 + i * .19), 0, 0, 7); dctx.stroke(); }
+      dctx.strokeStyle = 'rgba(255,245,170,.22)';
+      for (let i = 1; i <= 3; i++) { dctx.beginPath(); dctx.ellipse(x - 1.5, y - 1.5, r * (.25 + i * .24), r * (.2 + i * .19), 0, 0, 7); dctx.stroke(); }
+      dctx.restore();
+      drops(x, y, r, P.cow, 5, 1.8);
+    },
+    horse(x, y, r) {
+      const n = 6;
+      for (let i = 0; i < n; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .75); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.32, .45), r * rnd(.3, .42), rnd(0, 3), P.horse, { grain: 3, matt: Math.random() < .5 }); }
+      dctx.save(); dctx.strokeStyle = 'rgba(210,190,110,.8)'; dctx.lineWidth = 1.2;      // Strohhalme
+      for (let i = 0; i < 14; i++) { const a = rnd(0, 6.28), d = rnd(0, r), l = rnd(6, 14), b = rnd(0, 6.28);
+        dctx.beginPath(); dctx.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); dctx.lineTo(x + Math.cos(a) * d + Math.cos(b) * l, y + Math.sin(a) * d + Math.sin(b) * l); dctx.stroke(); }
+      dctx.restore();
+    },
+    bird(x, y, r) {
+      for (let i = 0; i < 5; i++) { const a = rnd(0, 6.28); ball(x + Math.cos(a) * r * .7, y + Math.sin(a) * r * .7, r * rnd(.25, .5), r * rnd(.2, .4), a, P.bird, { grain: .2 }); }
+      ball(x, y, r * .95, r * .8, rnd(0, 3), P.bird, { grain: .2 });
+      ball(x + rnd(-4, 4), y + rnd(-4, 4), r * .42, r * .36, rnd(0, 3), { hi: '#6a5a46', base: '#3b3024', dark: '#1a140d' }, { grain: 1 });
+      drops(x, y, r, P.bird, 7, 2.2);
+    },
+    runny(x, y, r) {
+      for (let i = 0; i < 9; i++) {      // Spritzstrahlen
+        const a = rnd(0, 6.28), l = rnd(r * 1.2, r * 2.4);
+        dctx.save(); dctx.shadowColor = 'rgba(25,10,0,.4)'; dctx.shadowBlur = 4 * S;
+        const g = dctx.createLinearGradient(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l);
+        g.addColorStop(0, P.runny.base); g.addColorStop(1, 'rgba(140,90,26,.5)');
+        dctx.strokeStyle = g; dctx.lineCap = 'round'; dctx.lineWidth = rnd(3, 9);
+        dctx.beginPath(); dctx.moveTo(x, y); dctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); dctx.stroke(); dctx.restore();
+      }
+      ball(x, y, r * 1.1, r * .9, rnd(0, 3), P.runny, { grain: .4 });
+      drops(x, y, r, P.runny, 16, 2.6);
+    },
+    eleph(x, y, r) {
+      for (let i = 0; i < 4; i++) { const a = i * 1.57 + rnd(-.4, .4); ball(x + Math.cos(a) * r * .55, y + Math.sin(a) * r * .5, r * rnd(.5, .65), r * rnd(.45, .6), rnd(0, 3), P.eleph, { grain: 2 }); }
+      ball(x, y, r * .7, r * .62, 0, P.eleph, { grain: 2 });
+      drops(x, y, r, P.eleph, 4, 1.7);
+    },
+    alien(x, y, r) {
+      const gl = 'rgba(120,255,40,.75)';
+      ball(x, y, r * 1.05, r * .9, rnd(0, 3), P.alien, { glow: gl, grain: .3 });
+      for (let i = 0; i < 6; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .6); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.08, .2), r * rnd(.08, .2), 0, { hi: '#eaffb0', base: '#8be84a', dark: '#2f8a10' }, { grain: 0 }); }
+      drops(x, y, r, P.alien, 8, 2.1);
+    },
+    gold(x, y, r) {
+      pile(x, y, r, P.gold, { grain: .6 });
+      for (let i = 0; i < 5; i++) sparkle(x + rnd(-r, r), y + rnd(-r * 1.3, r * .4), rnd(5, 11), '#fff6b0');
+    },
+    uni(x, y, r) {
+      const cols = [P.uni, { hi: '#d8f0ff', base: '#6cc4f2', dark: '#2a6aa0' }, { hi: '#f1dcff', base: '#b384ee', dark: '#5a3a9a' }];
+      cols.forEach((p, i) => ball(x + (i - 1) * r * .55, y + (i === 1 ? -r * .3 : r * .2), r * .62, r * .5, rnd(-.3, .3), p, { grain: .5 }));
+      for (let i = 0; i < 5; i++) sparkle(x + rnd(-r, r), y + rnd(-r, r), rnd(5, 10), pick(['#fff', '#ffd6f0', '#d8f0ff']));
+    }
+  };
+
+  let level = 1, lastLevelShown = 0;
+  function splat(fi, fx, fy, fr) {
+    const lv = Math.min(level, LEVELS.length);
+    const idx = fi != null ? fi : Math.random() < .5 ? lv - 1 : (Math.random() * lv) | 0;
+    const T = LEVELS[idx];
+    const r = fr || rnd(34, 50) * T.m * (1 + Math.min(.3, level * .02)) * (Math.min(W, H) / 400);
+    const x = fx || rnd(r * 1.1, W - r * 1.1), y = fy || rnd(r * 1.1 + 60, H - r * 1.1);
+    DRAW[T.k](x, y, r);
+    if (Math.random() < .55 && T.k !== 'alien' && T.k !== 'uni')
+      drips.push({ x: x + rnd(-r * .5, r * .5), y: y + r * .5, w: rnd(3, 8), len: rnd(40, 150), c: P[T.k].base });
   }
 
   function stepDrips(dt) {
     drips = drips.filter(d => {
       const v = 38 * dt; d.len -= v;
       dctx.fillStyle = d.c; dctx.fillRect(d.x - d.w / 2, d.y, d.w, v + 1);
-      dctx.beginPath(); dctx.arc(d.x, d.y + v, d.w / 2, 0, 7); dctx.fill();
+      dctx.fillStyle = 'rgba(255,255,255,.18)'; dctx.fillRect(d.x - d.w / 2 + 1, d.y, 1.5, v + 1);
+      dctx.fillStyle = d.c; dctx.beginPath(); dctx.arc(d.x, d.y + v, d.w / 2 + .5, 0, 7); dctx.fill();
       d.y += v;
       return d.len > 0 && d.y < H;
     });
   }
 
-  function spawn() {
-    const k = Math.min(1, elapsed / 90);
-    const r = rnd(38, 62) * (1 + k * .5) * (Math.min(W, H) / 400);
-    splat(rnd(r * .4, W - r * .4), rnd(r * .4 + 50, H - r * .4), r);
-  }
-
   /* ---------- Wischen / Verschmieren ---------- */
-  let ptr = null;
+  let ptr = null, load = 0, loadCol = [100, 60, 28];
   function wipeSegment(x0, y0, x1, y1) {
     const dx = x1 - x0, dy = y1 - y0, dist = Math.hypot(dx, dy);
     if (dist < 0.5) return;
@@ -154,6 +294,10 @@
       // 1) Farbe an der alten Stelle aufnehmen …
       tctx.clearRect(0, 0, tmp.width, tmp.height);
       tctx.drawImage(dirt, (qx - R) * S, (qy - R) * S, R * 2 * S, R * 2 * S, 0, 0, R * 2 * S, R * 2 * S);
+      // Farbe/Menge, die der Finger gerade trägt
+      const m = tctx.getImageData(tmp.width >> 1, tmp.height >> 1, 1, 1).data;
+      if (m[3] > 40) { loadCol = [m[0], m[1], m[2]]; load = Math.min(1, load + m[3] / 255 * .45); }
+      else load *= 0.9;
       // 2) … an der Stelle teilweise abwischen …
       dctx.save();
       dctx.globalCompositeOperation = 'destination-out';
@@ -169,15 +313,31 @@
       dctx.restore();
       scoreCell(px, py);
     }
-    // feine Wisch-Schlieren hinterlassen
-    const ang = Math.atan2(dy, dx), nx = -Math.sin(ang), ny = Math.cos(ang);
-    dctx.save();
-    dctx.strokeStyle = 'rgba(80,46,18,.10)'; dctx.lineWidth = 1.5; dctx.lineCap = 'round';
-    for (let k = -2; k <= 2; k++) {
-      const o = k * R * 0.28 + rnd(-3, 3);
-      dctx.beginPath(); dctx.moveTo(x0 + nx * o, y0 + ny * o); dctx.lineTo(x1 + nx * o, y1 + ny * o); dctx.stroke();
+    smearTrail(x0, y0, x1, y1);
+  }
+
+  // bleibender Schmierfilm: man sieht immer, wo gewischt wurde
+  function smearTrail(x0, y0, x1, y1) {
+    if (load < 0.05) return;
+    const ang = Math.atan2(y1 - y0, x1 - x0), nx = -Math.sin(ang), ny = Math.cos(ang);
+    const r = Math.min(255, loadCol[0] * 1.25 + 20), g = Math.min(255, loadCol[1] * 1.2 + 14), b = Math.min(255, loadCol[2] * 1.2 + 6), a = Math.min(.5, load * .5);
+    const c = fctx;
+    c.save(); c.lineCap = 'round';
+    c.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + a * .16 + ')'; c.lineWidth = R * 1.4;   // Grundfilm
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    for (let k = -3; k <= 3; k++) {                   // Fingerspuren
+      const o = k * R * .2 + rnd(-2, 2), w = rnd(1, 4);
+      c.strokeStyle = 'rgba(' + (r * .7 | 0) + ',' + (g * .7 | 0) + ',' + (b * .7 | 0) + ',' + a * rnd(.08, .22) + ')'; c.lineWidth = w;
+      c.beginPath(); c.moveTo(x0 + nx * o, y0 + ny * o); c.lineTo(x1 + nx * o, y1 + ny * o); c.stroke();
+      c.strokeStyle = 'rgba(255,246,225,' + a * .2 + ')'; c.lineWidth = 1;                    // feuchter Glanz daneben
+      c.beginPath(); c.moveTo(x0 + nx * (o + w), y0 + ny * (o + w)); c.lineTo(x1 + nx * (o + w), y1 + ny * (o + w)); c.stroke();
     }
-    dctx.restore();
+    // Wulst am Rand der Wischbahn
+    for (const side of [-1, 1]) {
+      c.strokeStyle = 'rgba(' + (r * .6 | 0) + ',' + (g * .6 | 0) + ',' + (b * .6 | 0) + ',' + a * .22 + ')'; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(x0 + nx * side * R * .75, y0 + ny * side * R * .75); c.lineTo(x1 + nx * side * R * .75, y1 + ny * side * R * .75); c.stroke();
+    }
+    c.restore();
   }
 
   function scoreCell(x, y) {
@@ -189,6 +349,20 @@
       score += 1; cellCool[i] = 0.35; scoreEl.textContent = score;
       cells[i] *= 0.6;
       if (navigator.vibrate && Math.random() < 0.15) navigator.vibrate(8);
+      updateLevel();
+    }
+  }
+
+  function updateLevel() {
+    level = 1 + Math.floor(score / LVL_POINTS);
+    $('lvl').textContent = 'LEVEL ' + level;
+    if (level !== lastLevelShown) {
+      lastLevelShown = level;
+      const T = LEVELS[(level - 1) % LEVELS.length];
+      if (level > 1) {
+        const b = $('banner'); b.textContent = 'LEVEL ' + level + ' · ' + T.n; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+        if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
+      }
     }
   }
 
@@ -201,7 +375,7 @@
     if (state === 'play' || state === 'menu') wipeSegment(ptr.x, ptr.y, e.clientX, e.clientY);
     ptr.x = e.clientX; ptr.y = e.clientY;
   });
-  const up = () => { ptr = null; };
+  const up = () => { ptr = null; load *= .5; };
   view.addEventListener('pointerup', up); view.addEventListener('pointercancel', up);
 
   /* ---------- Sound (kleines Quietschen/Schmatzen) ---------- */
@@ -230,11 +404,12 @@
 
   /* ---------- Spielablauf ---------- */
   function startGame() {
-    dctx.clearRect(0, 0, W, H);
+    dctx.clearRect(0, 0, W, H); fctx.clearRect(0, 0, W, H); load = 0;
+    level = 1; lastLevelShown = 0; updateLevel();
     drips = []; score = 0; elapsed = 0; spawnT = 0; coverage = 0; cells.fill(0); cellCool.fill(0);
     scoreEl.textContent = '0'; state = 'play';
     $('start').hidden = true; $('over').hidden = true;
-    spawn();
+    splat();
   }
   function gameOver() {
     state = 'over';
@@ -258,6 +433,7 @@
     for (let x = 0; x < view.width; x += T) { vctx.moveTo(x, 0); vctx.lineTo(x, view.height); }
     for (let y = 0; y < view.height; y += T) { vctx.moveTo(0, y); vctx.lineTo(view.width, y); }
     vctx.stroke();
+    vctx.drawImage(film, 0, 0);
     vctx.drawImage(dirt, 0, 0);
     // „von innen braun“: der Rand läuft zu, je mehr Dreck
     const k = Math.min(1, coverage / LIMIT);
@@ -274,9 +450,9 @@
     const dt = Math.min(0.05, (ts - last) / 1000 || 0); last = ts;
     if (state === 'play') {
       elapsed += dt;
-      const interval = Math.max(0.28, 1.25 - elapsed * 0.012);
+      const interval = Math.max(0.3, 1.3 - level * 0.07 - elapsed * 0.004);
       spawnT += dt;
-      if (spawnT >= interval) { spawnT = 0; spawn(); if (elapsed > 40 && Math.random() < .3) spawn(); }
+      if (spawnT >= interval) { spawnT = 0; splat(); if (level > 8 && Math.random() < .3) splat(); }
       stepDrips(dt);
       for (let i = 0; i < cellCool.length; i++) if (cellCool[i] > 0) cellCool[i] -= dt;
       measureT += dt;
@@ -294,7 +470,7 @@
   }
   requestAnimationFrame(frame);
   // Test-/Debug-Zugriff
-  window.__game = { startGame, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
+  window.__game = { startGame, splat, setState(v) { state = v; }, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
 })();
 </script>
 </body>
