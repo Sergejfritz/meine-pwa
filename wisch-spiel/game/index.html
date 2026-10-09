@@ -569,15 +569,21 @@ void main(){
       const gWet = mkG(); const wob = a.createOscillator(), wg = a.createGain(); wob.type = 'sine'; wob.frequency.value = 17; wg.gain.value = .5;
       const tr = a.createGain(); tr.gain.value = .5; wob.connect(wg).connect(tr.gain);
       src.connect(lp).connect(tr).connect(gWet);
-      // 3) Quietschen: Sinus mit Stick-Slip-Zittern, nur bei wenig Schmiere
-      const sq = a.createOscillator(), sg = mkG(); sq.type = 'triangle'; sq.frequency.value = 1700;
-      const jit = a.createOscillator(), jg = a.createGain(); jit.type = 'sawtooth'; jit.frequency.value = 43; jg.gain.value = 140; jit.connect(jg).connect(sq.frequency);
-      sq.connect(sg);
+      // 3) Quietschen wie ein Finger auf Glas: Stick-Slip (Sägezahn, in schnellen Pulsen) durch scharfe Resonanz + pfeifendes Rauschen
+      const sq = a.createOscillator(), sg = mkG(); sq.type = 'sawtooth'; sq.frequency.value = 2100;
+      const jit = a.createOscillator(), jg = a.createGain(); jit.type = 'sawtooth'; jit.frequency.value = 47; jg.gain.value = 260; jit.connect(jg).connect(sq.frequency);
+      const sbp = a.createBiquadFilter(); sbp.type = 'bandpass'; sbp.Q.value = 18; sbp.frequency.value = 2400;
+      const pulse = a.createGain(); pulse.gain.value = .5;
+      const pl = a.createOscillator(), plg = a.createGain(); pl.type = 'square'; pl.frequency.value = 55; plg.gain.value = .5; pl.connect(plg).connect(pulse.gain);
+      sq.connect(sbp).connect(pulse).connect(sg);
+      const nbp = a.createBiquadFilter(); nbp.type = 'bandpass'; nbp.Q.value = 40; nbp.frequency.value = 3100;
+      const gSq2 = mkG(); src.connect(nbp).connect(gSq2); gSq2.connect(sg);
+      sg.gain.value = 0;
       const master = a.createGain(); master.gain.value = .9;
       const comp = a.createDynamicsCompressor();
       [gRub, gWet, sg].forEach(g => g.connect(master)); master.connect(comp).connect(a.destination);
-      src.start(); wob.start(); sq.start(); jit.start();
-      wa = { a, bp, gRub, gWet, sg, sq, wob };
+      src.start(); wob.start(); sq.start(); jit.start(); pl.start();
+      wa = { a, bp, gRub, gWet, sg, sq, wob, sbp, nbp, gSq2, pl };
     } catch (e) { wa = null; }
   }
   function wipeSound(speed) {
@@ -587,15 +593,23 @@ void main(){
     wa.bp.frequency.setTargetAtTime(450 + lv * 2400, t, .03);
     wa.gWet.gain.setTargetAtTime(lv * wet * .8, t, .03);
     wa.wob.frequency.setTargetAtTime(9 + lv * 16, t, .05);
-    wa.sg.gain.setTargetAtTime(speed > .25 ? lv * (1 - wet) * .06 : 0, t, .015);
-    wa.sq.frequency.setTargetAtTime(1500 + lv * 1000 + rnd(-80, 80), t, .02);
+    const f = 1900 + lv * 1500 + rnd(-120, 120);                     // Tonhöhe folgt dem Tempo
+    wa.sg.gain.setTargetAtTime(speed > .12 ? Math.min(1, lv * 1.6) * (1 - wet * .45) * .55 : 0, t, .012);
+    wa.gSq2.gain.setTargetAtTime(speed > .12 ? 1.4 : 0, t, .02);
+    wa.sq.frequency.setTargetAtTime(f, t, .02); wa.sbp.frequency.setTargetAtTime(f * 1.15, t, .02);
+    wa.nbp.frequency.setTargetAtTime(f * 1.45, t, .03);
+    wa.pl.frequency.setTargetAtTime(30 + lv * 50 + rnd(-8, 8), t, .02);
+    if (Math.random() < .07 && speed > .3) {                          // kurzer Quietscher nach oben/unten
+      wa.sq.frequency.cancelScheduledValues(t); wa.sq.frequency.setValueAtTime(f, t);
+      wa.sq.frequency.linearRampToValueAtTime(f * rnd(.7, 1.45), t + .09);
+    }
     wipeSoundT = performance.now();
   }
   let wipeSoundT = 0;
   function wipeSoundIdle() {   // ohne Bewegung ausblenden
     if (!wa || performance.now() - wipeSoundT < 70) return;
     const t = wa.a.currentTime;
-    [wa.gRub, wa.gWet, wa.sg].forEach(g => g.gain.setTargetAtTime(0, t, .03));
+    [wa.gRub, wa.gWet, wa.sg, wa.gSq2].forEach(g => g.gain.setTargetAtTime(0, t, .03));
   }
 
   function squelch(v) {
