@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Wisch weg!</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #e9e4d6; overflow: hidden;
+    touch-action: none; -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent; font-family: system-ui, sans-serif; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { position: fixed; top: 0; left: 0; right: 0; padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 0;
+    display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none;
+    color: #3b2412; text-shadow: 0 1px 0 rgba(255,255,255,.55); font-weight: 800; }
+  #hud small { display: block; font-size: 11px; letter-spacing: .12em; opacity: .7; }
+  #score { font-size: 38px; line-height: 1; }
+  #best { font-size: 20px; text-align: right; }
+  #bar { position: fixed; left: 16px; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    height: 10px; border-radius: 6px; background: rgba(0,0,0,.18); overflow: hidden; pointer-events: none; }
+  #bar i { display: block; height: 100%; width: 0; background: #7b4a1e; transition: width .15s; }
+  #bar.hot i { background: #b3261e; }
+  .panel { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; padding: 24px; color: #fff;
+    background: rgba(40,22,8,.78); }
+  .panel[hidden] { display: none; }
+  .panel h1 { font-size: 40px; margin: 0 0 6px; line-height: 1.05; }
+  .panel p { margin: 6px 0; font-size: 17px; opacity: .92; max-width: 320px; }
+  .big { font-size: 64px; font-weight: 900; margin: 8px 0; }
+  .rec { color: #ffd54a; font-weight: 900; font-size: 22px; letter-spacing: .05em; animation: pulse .7s infinite alternate; }
+  @keyframes pulse { from { transform: scale(1); } to { transform: scale(1.12); } }
+  button { margin-top: 18px; font: inherit; font-size: 20px; font-weight: 800; padding: 14px 34px;
+    border: 0; border-radius: 28px; background: #ffd54a; color: #3b2412; }
+  button:active { transform: scale(.96); }
+  #poop { font-size: 72px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div><small>PUNKTE</small><span id="score">0</span></div>
+  <div id="best"><small>REKORD</small><span id="bestv">0</span></div>
+</div>
+<div id="bar"><i></i></div>
+
+<div class="panel" id="start">
+  <div id="poop">💩</div>
+  <h1>Wisch weg!</h1>
+  <p>Der Bildschirm wird von innen zugeschissen.<br>Wisch den Dreck mit dem Finger weg – bevor alles braun ist!</p>
+  <p>Rekord: <b id="startbest">0</b></p>
+  <button id="go">Los geht’s</button>
+</div>
+<div class="panel" id="over" hidden>
+  <h1>Alles braun! 🤢</h1>
+  <div class="big" id="finalscore">0</div>
+  <div class="rec" id="newrec" hidden>🏆 NEUER REKORD!</div>
+  <p>Rekord: <b id="overbest">0</b></p>
+  <button id="again">Nochmal</button>
+</div>
+
+<script>
+(() => {
+  const view = document.getElementById('c');
+  const vctx = view.getContext('2d');
+  const dirt = document.createElement('canvas');   // Schmutzschicht (transparent)
+  const dctx = dirt.getContext('2d', { willReadFrequently: false });
+  const tmp = document.createElement('canvas');    // Pinsel-Puffer zum Verschmieren
+  const tctx = tmp.getContext('2d');
+  const grid = document.createElement('canvas');   // Mini-Raster zum Messen
+  const GW = 24, GH = 42;
+  grid.width = GW; grid.height = GH;
+  const gctx = grid.getContext('2d', { willReadFrequently: true });
+
+  const $ = id => document.getElementById(id);
+  const scoreEl = $('score'), bestEl = $('bestv'), bar = $('bar'), barI = bar.querySelector('i');
+  let best = 0;
+  try { best = +localStorage.getItem('wisch_best') || 0; } catch (e) {}
+  const showBest = () => { bestEl.textContent = best; $('startbest').textContent = best; };
+  showBest();
+
+  let W = 0, H = 0, S = 1, R = 38;
+  let state = 'menu';              // menu | play | over
+  let score = 0, coverage = 0, elapsed = 0, spawnT = 0, last = 0, measureT = 0;
+  const cells = new Float32Array(GW * GH);
+  const cellCool = new Float32Array(GW * GH);
+  let drips = [];
+  const LIMIT = 0.42;              // ab dieser Verschmutzung ist Schluss
+
+  function resize() {
+    W = innerWidth; H = innerHeight;
+    S = Math.min(devicePixelRatio || 1, 1.5);
+    R = Math.max(30, Math.min(W, H) * 0.095);
+    view.width = dirt.width = Math.round(W * S);
+    view.height = dirt.height = Math.round(H * S);
+    tmp.width = tmp.height = Math.ceil(R * 2 * S) + 2;
+    dctx.setTransform(S, 0, 0, S, 0, 0);
+    vctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  const BROWNS = ['#5a3416', '#6b3f1a', '#4b2a10', '#7a4a20', '#3f230d'];
+
+  function splat(x, y, r) {
+    const c = BROWNS[(Math.random() * BROWNS.length) | 0];
+    dctx.save();
+    dctx.fillStyle = c;
+    dctx.beginPath();
+    dctx.arc(x, y, r, 0, 7);
+    dctx.fill();
+    // unregelmäßiger Rand + Spritzer
+    const n = 7 + ((Math.random() * 6) | 0);
+    for (let i = 0; i < n; i++) {
+      const a = rnd(0, 6.283), d = rnd(r * 0.6, r * 1.25), rr = rnd(r * 0.18, r * 0.45);
+      dctx.beginPath(); dctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, 0, 7); dctx.fill();
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = rnd(0, 6.283), d = rnd(r * 1.2, r * 2.1), rr = rnd(2, r * 0.14);
+      dctx.beginPath(); dctx.arc(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, 0, 7); dctx.fill();
+    }
+    // Glanz
+    const g = dctx.createRadialGradient(x - r * .3, y - r * .35, 1, x - r * .3, y - r * .35, r * .7);
+    g.addColorStop(0, 'rgba(255,230,190,.35)'); g.addColorStop(1, 'rgba(255,230,190,0)');
+    dctx.fillStyle = g; dctx.beginPath(); dctx.arc(x, y, r * .9, 0, 7); dctx.fill();
+    dctx.restore();
+    if (Math.random() < 0.7) drips.push({ x: x + rnd(-r * .5, r * .5), y: y + r * .6, w: rnd(3, 7), len: rnd(40, 140), c });
+  }
+
+  function stepDrips(dt) {
+    drips = drips.filter(d => {
+      const v = 38 * dt; d.len -= v;
+      dctx.fillStyle = d.c; dctx.fillRect(d.x - d.w / 2, d.y, d.w, v + 1);
+      dctx.beginPath(); dctx.arc(d.x, d.y + v, d.w / 2, 0, 7); dctx.fill();
+      d.y += v;
+      return d.len > 0 && d.y < H;
+    });
+  }
+
+  function spawn() {
+    const k = Math.min(1, elapsed / 90);
+    const r = rnd(38, 62) * (1 + k * .5) * (Math.min(W, H) / 400);
+    splat(rnd(r * .4, W - r * .4), rnd(r * .4 + 50, H - r * .4), r);
+  }
+
+  /* ---------- Wischen / Verschmieren ---------- */
+  let ptr = null;
+  function wipeSegment(x0, y0, x1, y1) {
+    const dx = x1 - x0, dy = y1 - y0, dist = Math.hypot(dx, dy);
+    if (dist < 0.5) return;
+    const step = R * 0.32, n = Math.max(1, Math.ceil(dist / step));
+    for (let i = 1; i <= n; i++) {
+      const t = i / n, px = x0 + dx * t, py = y0 + dy * t;
+      const qx = x0 + dx * (i - 1) / n, qy = y0 + dy * (i - 1) / n;
+      // 1) Farbe an der alten Stelle aufnehmen …
+      tctx.clearRect(0, 0, tmp.width, tmp.height);
+      tctx.drawImage(dirt, (qx - R) * S, (qy - R) * S, R * 2 * S, R * 2 * S, 0, 0, R * 2 * S, R * 2 * S);
+      // 2) … an der Stelle teilweise abwischen …
+      dctx.save();
+      dctx.globalCompositeOperation = 'destination-out';
+      const g = dctx.createRadialGradient(px, py, R * .15, px, py, R);
+      g.addColorStop(0, 'rgba(0,0,0,.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      dctx.fillStyle = g; dctx.beginPath(); dctx.arc(px, py, R, 0, 7); dctx.fill();
+      dctx.restore();
+      // 3) … und ein Stück weiter verschmiert wieder auftragen
+      dctx.save();
+      dctx.globalAlpha = 0.5;
+      dctx.beginPath(); dctx.arc(px, py, R * .8, 0, 7); dctx.clip();
+      dctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, px - R, py - R, R * 2, R * 2);
+      dctx.restore();
+      scoreCell(px, py);
+    }
+    // feine Wisch-Schlieren hinterlassen
+    const ang = Math.atan2(dy, dx), nx = -Math.sin(ang), ny = Math.cos(ang);
+    dctx.save();
+    dctx.strokeStyle = 'rgba(80,46,18,.10)'; dctx.lineWidth = 1.5; dctx.lineCap = 'round';
+    for (let k = -2; k <= 2; k++) {
+      const o = k * R * 0.28 + rnd(-3, 3);
+      dctx.beginPath(); dctx.moveTo(x0 + nx * o, y0 + ny * o); dctx.lineTo(x1 + nx * o, y1 + ny * o); dctx.stroke();
+    }
+    dctx.restore();
+  }
+
+  function scoreCell(x, y) {
+    if (state !== 'play') return;
+    const cx = Math.floor(x / W * GW), cy = Math.floor(y / H * GH);
+    if (cx < 0 || cy < 0 || cx >= GW || cy >= GH) return;
+    const i = cy * GW + cx;
+    if (cells[i] > 0.3 && cellCool[i] <= 0) {
+      score += 1; cellCool[i] = 0.35; scoreEl.textContent = score;
+      cells[i] *= 0.6;
+      if (navigator.vibrate && Math.random() < 0.15) navigator.vibrate(8);
+    }
+  }
+
+  view.addEventListener('pointerdown', e => {
+    ptr = { x: e.clientX, y: e.clientY }; view.setPointerCapture(e.pointerId);
+    if (state === 'play') squelch(0.5);
+  });
+  view.addEventListener('pointermove', e => {
+    if (!ptr) return;
+    if (state === 'play' || state === 'menu') wipeSegment(ptr.x, ptr.y, e.clientX, e.clientY);
+    ptr.x = e.clientX; ptr.y = e.clientY;
+  });
+  const up = () => { ptr = null; };
+  view.addEventListener('pointerup', up); view.addEventListener('pointercancel', up);
+
+  /* ---------- Sound (kleines Quietschen/Schmatzen) ---------- */
+  let actx = null, lastSq = 0;
+  function squelch(v) {
+    try {
+      const now = performance.now(); if (now - lastSq < 90) return; lastSq = now;
+      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(rnd(90, 160), actx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(rnd(40, 70), actx.currentTime + .12);
+      g.gain.setValueAtTime(.07 * v, actx.currentTime); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + .14);
+      o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + .15);
+    } catch (e) {}
+  }
+
+  /* ---------- Messen ---------- */
+  function measure() {
+    gctx.clearRect(0, 0, GW, GH);
+    gctx.drawImage(dirt, 0, 0, GW, GH);
+    const d = gctx.getImageData(0, 0, GW, GH).data;
+    let sum = 0;
+    for (let i = 0; i < GW * GH; i++) { const a = d[i * 4 + 3] / 255; cells[i] = a; sum += a; }
+    coverage = sum / (GW * GH);
+  }
+
+  /* ---------- Spielablauf ---------- */
+  function startGame() {
+    dctx.clearRect(0, 0, W, H);
+    drips = []; score = 0; elapsed = 0; spawnT = 0; coverage = 0; cells.fill(0); cellCool.fill(0);
+    scoreEl.textContent = '0'; state = 'play';
+    $('start').hidden = true; $('over').hidden = true;
+    spawn();
+  }
+  function gameOver() {
+    state = 'over';
+    const rec = score > best;
+    if (rec) { best = score; try { localStorage.setItem('wisch_best', best); } catch (e) {} }
+    showBest();
+    $('finalscore').textContent = score; $('overbest').textContent = best;
+    $('newrec').hidden = !rec;
+    if (navigator.vibrate) navigator.vibrate(rec ? [60, 40, 60, 40, 120] : 200);
+    setTimeout(() => { $('over').hidden = false; }, 700);
+  }
+  $('go').addEventListener('click', startGame);
+  $('again').addEventListener('click', startGame);
+
+  function draw() {
+    // Hintergrund: helle Kacheln
+    vctx.fillStyle = '#ece7da'; vctx.fillRect(0, 0, view.width, view.height);
+    vctx.strokeStyle = 'rgba(0,0,0,.06)'; vctx.lineWidth = 1;
+    const T = 70 * S;
+    vctx.beginPath();
+    for (let x = 0; x < view.width; x += T) { vctx.moveTo(x, 0); vctx.lineTo(x, view.height); }
+    for (let y = 0; y < view.height; y += T) { vctx.moveTo(0, y); vctx.lineTo(view.width, y); }
+    vctx.stroke();
+    vctx.drawImage(dirt, 0, 0);
+    // „von innen braun“: der Rand läuft zu, je mehr Dreck
+    const k = Math.min(1, coverage / LIMIT);
+    if (k > 0.02) {
+      const cx = view.width / 2, cy = view.height / 2, rad = Math.hypot(cx, cy);
+      const g = vctx.createRadialGradient(cx, cy, rad * (1 - k * 0.75), cx, cy, rad);
+      g.addColorStop(0, 'rgba(70,40,14,0)'); g.addColorStop(1, 'rgba(70,40,14,' + (0.25 + k * 0.6) + ')');
+      vctx.fillStyle = g; vctx.fillRect(0, 0, view.width, view.height);
+      vctx.fillStyle = 'rgba(90,52,20,' + (k * k * 0.35) + ')'; vctx.fillRect(0, 0, view.width, view.height);
+    }
+  }
+
+  function frame(ts) {
+    const dt = Math.min(0.05, (ts - last) / 1000 || 0); last = ts;
+    if (state === 'play') {
+      elapsed += dt;
+      const interval = Math.max(0.28, 1.25 - elapsed * 0.012);
+      spawnT += dt;
+      if (spawnT >= interval) { spawnT = 0; spawn(); if (elapsed > 40 && Math.random() < .3) spawn(); }
+      stepDrips(dt);
+      for (let i = 0; i < cellCool.length; i++) if (cellCool[i] > 0) cellCool[i] -= dt;
+      measureT += dt;
+      if (measureT > 0.12) {
+        measureT = 0; measure();
+        barI.style.width = Math.min(100, coverage / LIMIT * 100) + '%';
+        bar.classList.toggle('hot', coverage / LIMIT > 0.75);
+        if (coverage >= LIMIT) gameOver();
+      }
+      if (elapsed - Math.floor(elapsed) < dt) { score += 0; }
+      if (score > best) bestEl.textContent = score;
+    }
+    draw();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // Test-/Debug-Zugriff
+  window.__game = { startGame, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
+})();
+</script>
+</body>
+</html>
