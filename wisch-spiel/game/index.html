@@ -15,6 +15,9 @@
   #hud small { display: block; font-size: 11px; letter-spacing: .12em; opacity: .7; }
   #score { font-size: 38px; line-height: 1; }
   #lvl { font-size: 15px; padding-top: 6px; letter-spacing: .08em; }
+  #count { position: fixed; left: 0; right: 0; top: 38%; text-align: center; font-size: 150px; font-weight: 900; color: #fff; text-shadow: 0 4px 14px rgba(0,0,0,.8); opacity: 0; pointer-events: none; }
+  #count.on { animation: cnt .95s ease-out; }
+  @keyframes cnt { 0% { opacity: 0; transform: scale(2); } 20% { opacity: 1; transform: scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: scale(.8); } }
   #banner { position: fixed; left: 0; right: 0; top: 30%; text-align: center; font-size: 30px; font-weight: 900; color: #fff; text-shadow: 0 2px 6px rgba(0,0,0,.7); opacity: 0; pointer-events: none; }
   #banner.show { animation: ban 2s ease-out; }
   @keyframes ban { 0% { opacity: 0; transform: scale(.6); } 15% { opacity: 1; transform: scale(1.1); } 75% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
@@ -46,6 +49,7 @@
   <div id="best"><small>REKORD</small><span id="bestv">0</span></div>
 </div>
 <div id="banner"></div>
+<div id="count"></div>
 <div id="bar"><i></i></div>
 
 <div class="panel" id="start">
@@ -67,16 +71,14 @@
 <script>
 (() => {
   const view = document.getElementById('c');
-  const vctx = view.getContext('2d');
-  const dirt = document.createElement('canvas');   // Schmutzschicht (transparent)
-  const dctx = dirt.getContext('2d', { willReadFrequently: false });
-  const film = document.createElement('canvas');   // bleibende Schmierspuren
-  const fctx = film.getContext('2d');
-  const tmp = document.createElement('canvas');    // Pinsel-Puffer zum Verschmieren
-  const tctx = tmp.getContext('2d', { willReadFrequently: true });
-  const grid = document.createElement('canvas');   // Mini-Raster zum Messen
-  const GW = 24, GH = 42;
-  grid.width = GW; grid.height = GH;
+  const gl = view.getContext('webgl', { antialias: false, alpha: false, preserveDrawingBuffer: true });
+  const mk = () => document.createElement('canvas');
+  const dirt = mk(), dctx = dirt.getContext('2d');     // Farbe (Alpha = Abdeckung)
+  const hgt = mk(),  hctx = hgt.getContext('2d');      // Höhe (Alpha = Dicke)
+  const film = mk(), fctx = film.getContext('2d');     // bleibende Schmierspuren
+  const tmp = mk(),  tctx = tmp.getContext('2d', { willReadFrequently: true });
+  const tmpH = mk(), tctxH = tmpH.getContext('2d');
+  const grid = mk(); const GW = 24, GH = 42; grid.width = GW; grid.height = GH;
   const gctx = grid.getContext('2d', { willReadFrequently: true });
 
   const $ = id => document.getElementById(id);
@@ -87,108 +89,265 @@
   showBest();
 
   let W = 0, H = 0, S = 1, R = 38;
-  let state = 'menu';              // menu | play | over
+  let state = 'menu';
   let score = 0, coverage = 0, elapsed = 0, spawnT = 0, last = 0, measureT = 0;
-  const cells = new Float32Array(GW * GH);
-  const cellCool = new Float32Array(GW * GH);
+  const cells = new Float32Array(GW * GH), cellCool = new Float32Array(GW * GH);
   let drips = [];
-  const LIMIT = 0.42;              // ab dieser Verschmutzung ist Schluss
-
-  function resize() {
-    W = innerWidth; H = innerHeight;
-    S = Math.min(devicePixelRatio || 1, 1.5);
-    R = Math.max(30, Math.min(W, H) * 0.095);
-    view.width = dirt.width = film.width = Math.round(W * S);
-    view.height = dirt.height = film.height = Math.round(H * S);
-    tmp.width = tmp.height = Math.ceil(R * 2 * S) + 2;
-    dctx.setTransform(S, 0, 0, S, 0, 0); fctx.setTransform(S, 0, 0, S, 0, 0);
-    vctx.setTransform(1, 0, 0, 1, 0, 0);
-  }
-  addEventListener('resize', resize);
-  resize();
+  const LIMIT = 0.42;
+  let dirty = true;
 
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = a => a[(Math.random() * a.length) | 0];
 
-  /* ---------- Sorten (je Level eine neue) ---------- */
+  /* =================== WebGL: Linse mit nassem, plastischem Dreck =================== */
+  const VS = 'attribute vec2 a;varying vec2 v;void main(){v=a*.5+.5;gl_Position=vec4(a,0.,1.);}';
+  const FS = `
+#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+varying vec2 v;
+uniform sampler2D uBG, uC, uH, uF, uN;
+uniform vec2 uRes, uBGs;
+uniform float uK;
+vec2 bgUV(vec2 p){ return (p-.5)*uBGs+.5; }
+float Hh(vec2 p){ return texture2D(uH,p).a; }
+vec3 bgBlur(vec2 p, vec2 px, float r){
+  vec3 s=vec3(0.);
+  for(int i=0;i<14;i++){ float a=float(i)*2.39996; float d=sqrt((float(i)+.5)/14.)*r;
+    s+=texture2D(uBG,bgUV(p+vec2(cos(a),sin(a))*d*px)).rgb; }
+  return s/14.;
+}
+void main(){
+  vec2 p=v, px=1./uRes;
+  vec4 Cc=texture2D(uC,p); float cov=Cc.a; vec3 alb=cov>.003?Cc.rgb/cov:vec3(0.);
+  float h=Hh(p);
+  vec4 Ff=texture2D(uF,p); float fa=Ff.a; vec3 fcol=fa>.003?Ff.rgb/fa:vec3(1.);
+
+  // Höhenfeld -> Normale (zwei Skalen) + feine Oberflächenstruktur
+  vec2 g=vec2(0.);
+  for(int k=0;k<2;k++){
+    float d = k==0 ? 2.0 : 6.0; float w = k==0 ? .55 : .9;
+    g += w*vec2(Hh(p+vec2(d*px.x,0.))-Hh(p-vec2(d*px.x,0.)), Hh(p+vec2(0.,d*px.y))-Hh(p-vec2(0.,d*px.y)))/(2.*d);
+  }
+  vec2 nuv=p*uRes/120.; float e=1./256.;
+  vec4 n0=texture2D(uN,nuv), nx=texture2D(uN,nuv+vec2(e,0.)), ny=texture2D(uN,nuv+vec2(0.,e));
+  vec2 gR=vec2(nx.r-n0.r, ny.r-n0.r)/(e*120.), gG=vec2(nx.g-n0.g, ny.g-n0.g)/(e*120.);
+  vec2 gn=(gR*.55+gG*.35);
+  float rough=smoothstep(.05,.5,h);
+  vec3 N=normalize(vec3(-(g*26.+gn*rough*2.2),1.));
+
+  vec3 L=normalize(vec3(-.45,.55,.7)), V=vec3(0.,0.,1.);
+  vec3 Hv=normalize(L+V);
+  vec3 L2=normalize(vec3(.55,.35,.75)); vec3 H2=normalize(L2+V);
+  float diff=max(dot(N,L),0.);
+  float spec=pow(max(dot(N,Hv),0.),110.)*1.5 + pow(max(dot(N,Hv),0.),22.)*.22;
+  float spec2=pow(max(dot(N,H2),0.),60.)*.7;
+  float fres=pow(1.-N.z,3.);
+  vec3 lit = alb*(.26+.95*diff) + vec3(1.,.97,.9)*spec + vec3(.85,.92,1.)*spec2 + vec3(.55,.6,.65)*fres*.35;
+  lit *= mix(.8,1.,smoothstep(.0,.35,h));
+
+  // Hintergrund (Kamera / Raum), durch den Dreck unscharf und gefärbt
+  vec3 bg=texture2D(uBG,bgUV(p)).rgb;
+  vec3 blur=bgBlur(p-g*px*60.,px,16.);
+  vec3 trans=blur*alb*1.7+alb*.07;
+  float thick=smoothstep(.03,.4,h);
+  vec3 surf=mix(trans,lit,thick);
+
+  // weicher Schatten des Drecks auf der Linse
+  float sh=(Hh(p+L.xy*px*9.)+Hh(p+L.xy*px*20.))*.5;
+  bg*=1.-.5*smoothstep(0.,.55,sh)*(1.-cov);
+
+  // bleibender Schmierfilm: getönter Schleier + glänzende Wischspuren
+  vec2 gf=vec2(texture2D(uF,p+vec2(px.x*1.5,0.)).a-texture2D(uF,p-vec2(px.x*1.5,0.)).a, texture2D(uF,p+vec2(0.,px.y*1.5)).a-texture2D(uF,p-vec2(0.,px.y*1.5)).a)/3.;
+  vec3 fN=normalize(vec3(-gf*70.,1.));
+  bg=mix(bg, mix(bg,blur,.6)*fcol*1.25+fcol*.04, fa*.9);
+  bg+=vec3(1.,.95,.85)*(pow(max(dot(fN,Hv),0.),30.)*.7+pow(max(dot(fN,H2),0.),40.)*.4)*fa;
+
+  vec3 col=mix(bg,surf,cov);
+
+  // "von innen braun"
+  vec2 q=(p-.5)*vec2(1.,uRes.y/uRes.x)*1.5;
+  float vg=smoothstep(.15,1.05,length(q));
+  col=mix(col,vec3(.24,.13,.05),clamp(uK*vg*.9+uK*uK*.28,0.,.92));
+  gl_FragColor=vec4(col,1.);
+}`;
+  function sh(t, src) { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o);
+    if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(o)); return o; }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS));
+  gl.linkProgram(prog); gl.useProgram(prog);
+  const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+  const al = gl.getAttribLocation(prog, 'a'); gl.enableVertexAttribArray(al); gl.vertexAttribPointer(al, 2, gl.FLOAT, false, 0, 0);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
+  const U = n => gl.getUniformLocation(prog, n);
+  const tex = [];
+  ['uBG', 'uC', 'uH', 'uF', 'uN'].forEach((n, i) => {
+    const t = gl.createTexture(); tex.push(t);
+    gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const wrap = n === 'uN' ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
+    gl.uniform1i(U(n), i);
+  });
+  const upload = (i, src) => { gl.activeTexture(gl.TEXTURE0 + i); gl.bindTexture(gl.TEXTURE_2D, tex[i]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src); };
+
+  // Rausch-Textur: R grob, G fein
+  (function () {
+    const n = mk(); n.width = n.height = 256; const c = n.getContext('2d');
+    const layer = (cells, ch) => {
+      const s = mk(); s.width = s.height = cells; const sc = s.getContext('2d'); const im = sc.createImageData(cells, cells);
+      for (let i = 0; i < cells * cells; i++) { im.data[i * 4 + ch] = Math.random() * 255; im.data[i * 4 + 3] = 255; }
+      sc.putImageData(im, 0, 0); return s;
+    };
+    const a = layer(16, 0), b = layer(64, 1);
+    c.imageSmoothingEnabled = true; c.imageSmoothingQuality = 'high';
+    c.drawImage(a, 0, 0, 256, 256); c.globalCompositeOperation = 'lighter'; c.drawImage(b, 0, 0, 256, 256);
+    upload(4, n);
+  })();
+
+  // Hintergrund: Raum mit Fenster (Ersatz, wenn keine Kamera da ist)
+  const bgCanvas = mk(); bgCanvas.width = 256; bgCanvas.height = 512;
+  (function () {
+    const c = bgCanvas.getContext('2d'), w = 256, h = 512;
+    let g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#d9cdb6'); g.addColorStop(.6, '#a89a82'); g.addColorStop(1, '#5d5240');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    c.filter = 'blur(5px)';
+    g = c.createLinearGradient(0, 40, 0, 220); g.addColorStop(0, '#fffdf4'); g.addColorStop(1, '#bcd9f2');
+    c.fillStyle = g; c.fillRect(120, 40, 110, 170);
+    c.fillStyle = 'rgba(80,60,40,.8)'; c.fillRect(172, 40, 6, 170); c.fillRect(120, 120, 110, 6);
+    c.fillStyle = '#4a3c2c'; c.fillRect(0, 330, 150, 120);
+    c.fillStyle = '#7a5a3a'; c.fillRect(150, 380, 106, 132);
+    c.fillStyle = '#2e5a34'; c.beginPath(); c.arc(40, 250, 34, 0, 7); c.fill();
+    c.fillStyle = 'rgba(255,240,200,.55)'; for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(rnd(10, 246), rnd(250, 500), rnd(8, 20), 0, 7); c.fill(); }
+    c.filter = 'none';
+  })();
+  upload(0, bgCanvas);
+  let bgS = [1, 1];
+
+  // Echte Kamera als Hintergrund (falls erlaubt), sonst Raum
+  const video = document.createElement('video'); video.muted = true; video.playsInline = true; video.setAttribute('playsinline', '');
+  let camOn = false;
+  function tryCamera() {
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false }).then(st => {
+        video.srcObject = st; video.play().catch(() => {});
+        video.addEventListener('loadedmetadata', () => {
+          const sa = W / H, va = video.videoWidth / video.videoHeight;
+          bgS = va > sa ? [sa / va, 1] : [1, va / sa]; camOn = true;
+        });
+      }).catch(() => {});
+    } catch (e) {}
+  }
+
+  function resize() {
+    W = innerWidth; H = innerHeight;
+    S = Math.min(devicePixelRatio || 1, 1.25);
+    R = Math.max(30, Math.min(W, H) * 0.095);
+    const pw = Math.round(W * S), ph = Math.round(H * S);
+    view.width = dirt.width = hgt.width = film.width = pw;
+    view.height = dirt.height = hgt.height = film.height = ph;
+    tmp.width = tmp.height = tmpH.width = tmpH.height = Math.ceil(R * 2 * S) + 2;
+    [dctx, hctx, fctx].forEach(c => c.setTransform(S, 0, 0, S, 0, 0));
+    gl.viewport(0, 0, pw, ph); gl.uniform2f(U('uRes'), pw, ph); dirty = true;
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  /* =================== Sorten =================== */
+  const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   const P = {
-    dog:  { hi: '#a9774a', base: '#6b4423', dark: '#33200f' },
-    cat:  { hi: '#85593a', base: '#4e3018', dark: '#22130a' },
-    cow:  { hi: '#9a8a42', base: '#5f5426', dark: '#2c2810' },
-    horse:{ hi: '#b09a5c', base: '#7a6432', dark: '#40341a' },
-    bird: { hi: '#fffdf4', base: '#ddd9c8', dark: '#8f8a76' },
-    runny:{ hi: '#c9953f', base: '#8c5a1a', dark: '#472b08' },
-    eleph:{ hi: '#948568', base: '#5f5340', dark: '#2a241b' },
-    alien:{ hi: '#c8ff6a', base: '#4fbf1c', dark: '#1d650c' },
+    dog:  { hi: '#a9774a', base: '#6e4724', dark: '#2e1b0b' },
+    cat:  { hi: '#85593a', base: '#4a2f17', dark: '#1d1008' },
+    cow:  { hi: '#9a8a42', base: '#5c5224', dark: '#262210' },
+    horse:{ hi: '#b09a5c', base: '#7a6432', dark: '#3a2f16' },
+    bird: { hi: '#fffdf4', base: '#ece8d8', dark: '#9a947e' },
+    runny:{ hi: '#c9953f', base: '#94601c', dark: '#442808' },
+    eleph:{ hi: '#948568', base: '#62553f', dark: '#262016' },
+    alien:{ hi: '#c8ff6a', base: '#58c61e', dark: '#1d650c' },
     gold: { hi: '#fff6b0', base: '#e2b422', dark: '#8c5c00' },
     uni:  { hi: '#ffd6f0', base: '#f08ad0', dark: '#9a3f8a' }
   };
+  Object.values(P).forEach(p => { for (const k in p) p[k] = hex(p[k]); });
+  const rgb = (a, j) => 'rgb(' + [0, 1, 2].map(i => Math.max(0, Math.min(255, a[i] * (j || 1) | 0))).join(',') + ')';
+  const mix = (a, b, t) => a.map((x, i) => x + (b[i] - x) * t);
+
   const LEVELS = [
-    { n: 'Hundehaufen',    k: 'dog',   m: 1.0 },
-    { n: 'Katzenkötel',    k: 'cat',   m: 0.8 },
-    { n: 'Kuhfladen',      k: 'cow',   m: 1.3 },
-    { n: 'Pferdeäpfel',    k: 'horse', m: 1.05 },
-    { n: 'Vogelschiss',    k: 'bird',  m: 0.8 },
-    { n: 'Dünnpfiff',      k: 'runny', m: 1.25 },
-    { n: 'Elefantenhaufen',k: 'eleph', m: 1.5 },
-    { n: 'Alien-Schleim',  k: 'alien', m: 1.1 },
-    { n: 'Goldscheiße',    k: 'gold',  m: 1.0 },
-    { n: 'Einhorn-Kacke',  k: 'uni',   m: 1.1 }
+    { n: 'Hundehaufen', k: 'dog', m: 1.0 }, { n: 'Katzenkötel', k: 'cat', m: 0.8 },
+    { n: 'Kuhfladen', k: 'cow', m: 1.3 }, { n: 'Pferdeäpfel', k: 'horse', m: 1.05 },
+    { n: 'Vogelschiss', k: 'bird', m: 0.8 }, { n: 'Dünnpfiff', k: 'runny', m: 1.25 },
+    { n: 'Elefantenhaufen', k: 'eleph', m: 1.5 }, { n: 'Alien-Schleim', k: 'alien', m: 1.1 },
+    { n: 'Goldscheiße', k: 'gold', m: 1.0 }, { n: 'Einhorn-Kacke', k: 'uni', m: 1.1 }
   ];
   const LVL_POINTS = 25;
 
-  // Glänzende, plastische Kugel/Ellipse mit Licht von links oben, Speckles und Glanzpunkt
+  // Ein Klumpen = Farbe (flach) + Höhenprofil (Halbkugel) + Dellen/Rillen
   function ball(x, y, rx, ry, rot, p, o) {
     o = o || {};
-    const c = dctx;
-    c.save();
-    c.translate(x, y); c.rotate(rot); c.scale(1, ry / rx);
-    c.shadowColor = o.glow || 'rgba(25,10,0,.5)';
-    c.shadowBlur = (o.glow ? rx * .7 : rx * .35) * S; c.shadowOffsetY = (o.glow ? 0 : rx * .12) * S * (rx / ry);
-    const g = c.createRadialGradient(-rx * .35, -rx * .4, rx * .08, 0, 0, rx * 1.08);
-    g.addColorStop(0, p.hi); g.addColorStop(.42, p.base); g.addColorStop(1, p.dark);
-    c.fillStyle = g; c.beginPath(); c.arc(0, 0, rx, 0, 7); c.fill();
-    c.shadowColor = 'transparent';
-    c.save(); c.beginPath(); c.arc(0, 0, rx, 0, 7); c.clip();
-    // Körnung
-    const n = Math.round(rx * (o.grain || 1.3));
+    const hh = o.h == null ? .75 : o.h, j = rnd(.88, 1.12), grain = o.grain == null ? 1.4 : o.grain;
+    dctx.save(); dctx.translate(x, y); dctx.rotate(rot); dctx.scale(1, ry / rx);
+    const g = dctx.createRadialGradient(0, 0, rx * .1, 0, 0, rx);
+    g.addColorStop(0, rgb(p.base, j)); g.addColorStop(1, rgb(mix(p.base, p.dark, .5), j));
+    dctx.fillStyle = g; dctx.beginPath(); dctx.arc(0, 0, rx, 0, 7); dctx.fill();
+    dctx.save(); dctx.beginPath(); dctx.arc(0, 0, rx, 0, 7); dctx.clip();
+    const n = Math.round(rx * grain);
     for (let i = 0; i < n; i++) {
-      const a = rnd(0, 6.283), d = Math.sqrt(Math.random()) * rx, rr = rnd(.6, 2.4);
-      c.fillStyle = Math.random() < .55 ? p.dark : p.hi; c.globalAlpha = rnd(.12, .35);
-      c.beginPath(); c.arc(Math.cos(a) * d, Math.sin(a) * d, rr, 0, 7); c.fill();
+      const a = rnd(0, 6.283), d = Math.sqrt(Math.random()) * rx;
+      dctx.fillStyle = rgb(Math.random() < .6 ? p.dark : p.hi); dctx.globalAlpha = rnd(.1, .3);
+      dctx.beginPath(); dctx.arc(Math.cos(a) * d, Math.sin(a) * d, rnd(.7, 2.6), 0, 7); dctx.fill();
     }
-    c.globalAlpha = .22; c.strokeStyle = p.dark; c.lineWidth = 1.2;     // feine Rillen
-    for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(rnd(-.3, .3) * rx, rnd(-.3, .3) * rx, rx * rnd(.45, .95), rnd(0, 6), rnd(0, 6) + 1.4); c.stroke(); }
-    c.restore();
-    if (!o.matt) {   // nasser Glanz
-      c.globalAlpha = 1;
-      const h = c.createRadialGradient(-rx * .38, -rx * .45, 0, -rx * .38, -rx * .45, rx * .34);
-      h.addColorStop(0, 'rgba(255,255,255,.85)'); h.addColorStop(.5, 'rgba(255,255,255,.25)'); h.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = h; c.beginPath(); c.ellipse(-rx * .38, -rx * .45, rx * .34, rx * .2, -.6, 0, 7); c.fill();
-      c.fillStyle = 'rgba(255,255,255,.35)'; c.beginPath(); c.arc(rx * .3, rx * .35, rx * .06, 0, 7); c.fill();
+    dctx.globalAlpha = .35; dctx.strokeStyle = rgb(p.dark); dctx.lineWidth = 1.6;
+    const creases = [];
+    for (let i = 0; i < (o.creases == null ? 4 : o.creases); i++) {
+      const c = [rnd(-.35, .35) * rx, rnd(-.35, .35) * rx, rx * rnd(.35, .95), rnd(0, 6.3), 0]; c[4] = c[3] + rnd(.9, 2.0); creases.push(c);
+      dctx.beginPath(); dctx.arc(c[0], c[1], c[2], c[3], c[4]); dctx.stroke();
     }
-    c.restore();
+    dctx.restore(); dctx.restore();
+
+    hctx.save(); hctx.translate(x, y); hctx.rotate(rot); hctx.scale(1, ry / rx);
+    const hg = hctx.createRadialGradient(0, 0, 0, 0, 0, rx);
+    for (let i = 0; i <= 8; i++) { const t = i / 8; hg.addColorStop(t, 'rgba(255,255,255,' + hh * Math.sqrt(1 - t * t * .94) + ')'); }
+    hctx.fillStyle = hg; hctx.beginPath(); hctx.arc(0, 0, rx, 0, 7); hctx.fill();
+    const nb = Math.round(rx / 5);                       // kleine Beulen
+    for (let i = 0; i < nb; i++) {
+      const a = rnd(0, 6.283), d = Math.sqrt(Math.random()) * rx * .75, r2 = rx * rnd(.07, .16);
+      const bg = hctx.createRadialGradient(Math.cos(a) * d, Math.sin(a) * d, 0, Math.cos(a) * d, Math.sin(a) * d, r2);
+      bg.addColorStop(0, 'rgba(255,255,255,.28)'); bg.addColorStop(1, 'rgba(255,255,255,0)');
+      hctx.fillStyle = bg; hctx.beginPath(); hctx.arc(Math.cos(a) * d, Math.sin(a) * d, r2, 0, 7); hctx.fill();
+    }
+    hctx.globalCompositeOperation = 'destination-out'; hctx.lineWidth = rx * .06 + 1; hctx.strokeStyle = 'rgba(0,0,0,.32)';
+    hctx.beginPath(); hctx.arc(0, 0, rx, 0, 7); hctx.clip();
+    creases.forEach(c => { hctx.beginPath(); hctx.arc(c[0], c[1], c[2], c[3], c[4]); hctx.stroke(); });
+    hctx.restore();
+    dirty = true;
   }
 
-  function sparkle(x, y, r, col) {
-    dctx.save(); dctx.fillStyle = col || '#fff'; dctx.shadowColor = col || '#fff'; dctx.shadowBlur = 6 * S;
-    dctx.beginPath();
-    for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, d = i % 2 ? r * .22 : r; dctx.lineTo(x + Math.cos(a) * d, y + Math.sin(a) * d); }
-    dctx.closePath(); dctx.fill(); dctx.restore();
+  function tube(x0, y0, x1, y1, w, p, hh) {
+    dctx.save(); dctx.lineCap = 'round'; dctx.strokeStyle = rgb(p.base); dctx.lineWidth = w;
+    dctx.beginPath(); dctx.moveTo(x0, y0); dctx.lineTo(x1, y1); dctx.stroke(); dctx.restore();
+    hctx.save(); hctx.lineCap = 'round';
+    for (let i = 0; i < 4; i++) { hctx.strokeStyle = 'rgba(255,255,255,' + hh * .3 + ')'; hctx.lineWidth = w * (1 - i * .25);
+      hctx.beginPath(); hctx.moveTo(x0, y0); hctx.lineTo(x1, y1); hctx.stroke(); }
+    hctx.restore();
   }
 
   function drops(x, y, r, p, n, far) {
     for (let i = 0; i < n; i++) {
-      const a = rnd(0, 6.283), d = rnd(r * 1.1, r * far), rr = rnd(1.5, r * .12);
-      ball(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, rr * rnd(.7, 1), rnd(0, 3), p, { grain: 0 });
+      const a = rnd(0, 6.283), d = rnd(r * 1.1, r * far), rr = rnd(1.6, Math.max(2, r * .13));
+      ball(x + Math.cos(a) * d, y + Math.sin(a) * d, rr, rr * rnd(.7, 1), rnd(0, 3), p, { grain: 0, h: .8, creases: 0 });
     }
   }
 
   function pile(x, y, r, p, o) {
-    const rot = rnd(-.25, .25), k = [[1, 0], [.8, .46], [.58, .85], [.34, 1.15]];
-    ball(x, y + r * .2, r * 1.15, r * .5, 0, p, { matt: true });
-    k.forEach(([s, up]) => ball(x + Math.sin(rot) * up * r * .5, y - up * r * .5 + r * .2, r * s, r * s * .55, rot * .6, p, o));
-    ball(x + Math.sin(rot) * r * .65, y - r * 1.38, r * .14, r * .14, 0, p, { grain: 0 }); // Spitze
+    const rot = rnd(-.25, .25), k = [[1, 0, .5], [.8, .46, .65], [.58, .85, .8], [.34, 1.15, .95]];
+    k.forEach(([s, up, h]) => ball(x + Math.sin(rot) * up * r * .5, y - up * r * .5 + r * .2, r * s, r * s * .55, rot * .6, p, Object.assign({ h }, o)));
+    ball(x + Math.sin(rot) * r * .65, y - r * 1.38, r * .14, r * .14, 0, p, { grain: 0, h: 1, creases: 0 });
   }
 
   const DRAW = {
@@ -197,65 +356,53 @@
       const a0 = rnd(0, 3);
       for (let i = 0; i < 3; i++) {
         const a = a0 + rnd(-.5, .5), ox = (i - 1) * r * .55 * Math.cos(a0 + 1.6), oy = (i - 1) * r * .55 * Math.sin(a0 + 1.6);
-        ball(x + ox, y + oy, r * rnd(.8, 1.0), r * .3, a, P.cat);
-        ball(x + ox + Math.cos(a) * r * .85, y + oy + Math.sin(a) * r * .85, r * .22, r * .2, a, P.cat, { grain: 0 });
+        ball(x + ox, y + oy, r * rnd(.8, 1.0), r * .3, a, P.cat, { h: .9 });
+        ball(x + ox + Math.cos(a) * r * .85, y + oy + Math.sin(a) * r * .85, r * .22, r * .2, a, P.cat, { grain: 0, h: .7, creases: 0 });
       }
     },
     cow(x, y, r) {
-      for (let i = 0; i < 6; i++) { const a = i * 1.05 + rnd(-.3, .3); ball(x + Math.cos(a) * r * .95, y + Math.sin(a) * r * .8, r * rnd(.35, .6), r * rnd(.3, .5), rnd(0, 3), P.cow, { matt: true }); }
-      ball(x, y, r * 1.15, r * .95, rnd(-.3, .3), P.cow);
-      dctx.save(); dctx.strokeStyle = 'rgba(30,25,5,.28)'; dctx.lineWidth = 2;
-      for (let i = 1; i <= 3; i++) { dctx.beginPath(); dctx.ellipse(x, y, r * (.25 + i * .24), r * (.2 + i * .19), 0, 0, 7); dctx.stroke(); }
-      dctx.strokeStyle = 'rgba(255,245,170,.22)';
-      for (let i = 1; i <= 3; i++) { dctx.beginPath(); dctx.ellipse(x - 1.5, y - 1.5, r * (.25 + i * .24), r * (.2 + i * .19), 0, 0, 7); dctx.stroke(); }
-      dctx.restore();
-      drops(x, y, r, P.cow, 5, 1.8);
+      for (let i = 0; i < 6; i++) { const a = i * 1.05 + rnd(-.3, .3); ball(x + Math.cos(a) * r * .95, y + Math.sin(a) * r * .8, r * rnd(.35, .6), r * rnd(.3, .5), rnd(0, 3), P.cow, { h: .35 }); }
+      ball(x, y, r * 1.15, r * .95, rnd(-.3, .3), P.cow, { h: .45 });
+      hctx.save(); hctx.strokeStyle = 'rgba(255,255,255,.22)'; hctx.lineWidth = 4;
+      for (let i = 1; i <= 3; i++) { hctx.beginPath(); hctx.ellipse(x, y, r * (.25 + i * .24), r * (.2 + i * .19), 0, 0, 7); hctx.stroke(); }
+      hctx.restore(); dctx.save(); dctx.strokeStyle = 'rgba(30,25,5,.3)'; dctx.lineWidth = 2;
+      for (let i = 1; i <= 3; i++) { dctx.beginPath(); dctx.ellipse(x, y + 2, r * (.25 + i * .24), r * (.2 + i * .19), 0, 0, 7); dctx.stroke(); }
+      dctx.restore(); drops(x, y, r, P.cow, 5, 1.8);
     },
     horse(x, y, r) {
-      const n = 6;
-      for (let i = 0; i < n; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .75); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.32, .45), r * rnd(.3, .42), rnd(0, 3), P.horse, { grain: 3, matt: Math.random() < .5 }); }
-      dctx.save(); dctx.strokeStyle = 'rgba(210,190,110,.8)'; dctx.lineWidth = 1.2;      // Strohhalme
+      for (let i = 0; i < 6; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .75); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.32, .45), r * rnd(.3, .42), rnd(0, 3), P.horse, { grain: 3, h: .85 }); }
+      dctx.save(); dctx.strokeStyle = 'rgba(214,194,112,.85)'; dctx.lineWidth = 1.3;
+      hctx.save(); hctx.strokeStyle = 'rgba(255,255,255,.2)'; hctx.lineWidth = 1.6;
       for (let i = 0; i < 14; i++) { const a = rnd(0, 6.28), d = rnd(0, r), l = rnd(6, 14), b = rnd(0, 6.28);
-        dctx.beginPath(); dctx.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); dctx.lineTo(x + Math.cos(a) * d + Math.cos(b) * l, y + Math.sin(a) * d + Math.sin(b) * l); dctx.stroke(); }
-      dctx.restore();
+        for (const c of [dctx, hctx]) { c.beginPath(); c.moveTo(x + Math.cos(a) * d, y + Math.sin(a) * d); c.lineTo(x + Math.cos(a) * d + Math.cos(b) * l, y + Math.sin(a) * d + Math.sin(b) * l); c.stroke(); } }
+      dctx.restore(); hctx.restore();
     },
     bird(x, y, r) {
-      for (let i = 0; i < 5; i++) { const a = rnd(0, 6.28); ball(x + Math.cos(a) * r * .7, y + Math.sin(a) * r * .7, r * rnd(.25, .5), r * rnd(.2, .4), a, P.bird, { grain: .2 }); }
-      ball(x, y, r * .95, r * .8, rnd(0, 3), P.bird, { grain: .2 });
-      ball(x + rnd(-4, 4), y + rnd(-4, 4), r * .42, r * .36, rnd(0, 3), { hi: '#6a5a46', base: '#3b3024', dark: '#1a140d' }, { grain: 1 });
+      for (let i = 0; i < 5; i++) { const a = rnd(0, 6.28); ball(x + Math.cos(a) * r * .7, y + Math.sin(a) * r * .7, r * rnd(.25, .5), r * rnd(.2, .4), a, P.bird, { grain: .2, h: .4, creases: 1 }); }
+      ball(x, y, r * .95, r * .8, rnd(0, 3), P.bird, { grain: .2, h: .5 });
+      ball(x + rnd(-4, 4), y + rnd(-4, 4), r * .42, r * .36, rnd(0, 3), { hi: [120, 100, 80], base: [64, 50, 36], dark: [26, 20, 13] }, { grain: 1, h: .6 });
       drops(x, y, r, P.bird, 7, 2.2);
     },
     runny(x, y, r) {
-      for (let i = 0; i < 9; i++) {      // Spritzstrahlen
-        const a = rnd(0, 6.28), l = rnd(r * 1.2, r * 2.4);
-        dctx.save(); dctx.shadowColor = 'rgba(25,10,0,.4)'; dctx.shadowBlur = 4 * S;
-        const g = dctx.createLinearGradient(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l);
-        g.addColorStop(0, P.runny.base); g.addColorStop(1, 'rgba(140,90,26,.5)');
-        dctx.strokeStyle = g; dctx.lineCap = 'round'; dctx.lineWidth = rnd(3, 9);
-        dctx.beginPath(); dctx.moveTo(x, y); dctx.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); dctx.stroke(); dctx.restore();
-      }
-      ball(x, y, r * 1.1, r * .9, rnd(0, 3), P.runny, { grain: .4 });
+      for (let i = 0; i < 6; i++) { const a = rnd(0, 6.28), l = rnd(r * .9, r * 1.7); tube(x, y, x + Math.cos(a) * l, y + Math.sin(a) * l, rnd(5, 12), P.runny, .8); }
+      ball(x, y, r * 1.1, r * .9, rnd(0, 3), P.runny, { grain: .4, h: .4, creases: 1 });
       drops(x, y, r, P.runny, 16, 2.6);
     },
     eleph(x, y, r) {
-      for (let i = 0; i < 4; i++) { const a = i * 1.57 + rnd(-.4, .4); ball(x + Math.cos(a) * r * .55, y + Math.sin(a) * r * .5, r * rnd(.5, .65), r * rnd(.45, .6), rnd(0, 3), P.eleph, { grain: 2 }); }
-      ball(x, y, r * .7, r * .62, 0, P.eleph, { grain: 2 });
+      for (let i = 0; i < 4; i++) { const a = i * 1.57 + rnd(-.4, .4); ball(x + Math.cos(a) * r * .55, y + Math.sin(a) * r * .5, r * rnd(.5, .65), r * rnd(.45, .6), rnd(0, 3), P.eleph, { grain: 2, h: .8 }); }
+      ball(x, y, r * .7, r * .62, 0, P.eleph, { grain: 2, h: 1 });
       drops(x, y, r, P.eleph, 4, 1.7);
     },
     alien(x, y, r) {
-      const gl = 'rgba(120,255,40,.75)';
-      ball(x, y, r * 1.05, r * .9, rnd(0, 3), P.alien, { glow: gl, grain: .3 });
-      for (let i = 0; i < 6; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .6); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.08, .2), r * rnd(.08, .2), 0, { hi: '#eaffb0', base: '#8be84a', dark: '#2f8a10' }, { grain: 0 }); }
+      ball(x, y, r * 1.05, r * .9, rnd(0, 3), P.alien, { grain: .3, h: .7, creases: 1 });
+      for (let i = 0; i < 6; i++) { const a = rnd(0, 6.28), d = rnd(0, r * .6); ball(x + Math.cos(a) * d, y + Math.sin(a) * d, r * rnd(.08, .2), r * rnd(.08, .2), 0, { hi: [234, 255, 176], base: [139, 232, 74], dark: [47, 138, 16] }, { grain: 0, h: 1, creases: 0 }); }
       drops(x, y, r, P.alien, 8, 2.1);
     },
-    gold(x, y, r) {
-      pile(x, y, r, P.gold, { grain: .6 });
-      for (let i = 0; i < 5; i++) sparkle(x + rnd(-r, r), y + rnd(-r * 1.3, r * .4), rnd(5, 11), '#fff6b0');
-    },
+    gold(x, y, r) { pile(x, y, r, P.gold, { grain: .6 }); drops(x, y, r, P.gold, 4, 1.8); },
     uni(x, y, r) {
-      const cols = [P.uni, { hi: '#d8f0ff', base: '#6cc4f2', dark: '#2a6aa0' }, { hi: '#f1dcff', base: '#b384ee', dark: '#5a3a9a' }];
-      cols.forEach((p, i) => ball(x + (i - 1) * r * .55, y + (i === 1 ? -r * .3 : r * .2), r * .62, r * .5, rnd(-.3, .3), p, { grain: .5 }));
-      for (let i = 0; i < 5; i++) sparkle(x + rnd(-r, r), y + rnd(-r, r), rnd(5, 10), pick(['#fff', '#ffd6f0', '#d8f0ff']));
+      const cols = [P.uni, { hi: [216, 240, 255], base: [108, 196, 242], dark: [42, 106, 160] }, { hi: [241, 220, 255], base: [179, 132, 238], dark: [90, 58, 154] }];
+      cols.forEach((p, i) => ball(x + (i - 1) * r * .55, y + (i === 1 ? -r * .3 : r * .2), r * .62, r * .5, rnd(-.3, .3), p, { grain: .5, h: .9 }));
+      drops(x, y, r, P.uni, 5, 1.8);
     }
   };
 
@@ -268,22 +415,38 @@
     const x = fx || rnd(r * 1.1, W - r * 1.1), y = fy || rnd(r * 1.1 + 60, H - r * 1.1);
     DRAW[T.k](x, y, r);
     if (Math.random() < .55 && T.k !== 'alien' && T.k !== 'uni')
-      drips.push({ x: x + rnd(-r * .5, r * .5), y: y + r * .5, w: rnd(3, 8), len: rnd(40, 150), c: P[T.k].base });
+      drips.push({ x: x + rnd(-r * .5, r * .5), y: y + r * .5, w: rnd(3, 8), len: rnd(40, 150), c: rgb(P[T.k].base) });
   }
 
   function stepDrips(dt) {
+    if (!drips.length) return;
     drips = drips.filter(d => {
       const v = 38 * dt; d.len -= v;
       dctx.fillStyle = d.c; dctx.fillRect(d.x - d.w / 2, d.y, d.w, v + 1);
-      dctx.fillStyle = 'rgba(255,255,255,.18)'; dctx.fillRect(d.x - d.w / 2 + 1, d.y, 1.5, v + 1);
-      dctx.fillStyle = d.c; dctx.beginPath(); dctx.arc(d.x, d.y + v, d.w / 2 + .5, 0, 7); dctx.fill();
-      d.y += v;
+      dctx.beginPath(); dctx.arc(d.x, d.y + v, d.w / 2 + .5, 0, 7); dctx.fill();
+      const g = hctx.createLinearGradient(d.x - d.w / 2, 0, d.x + d.w / 2, 0);
+      g.addColorStop(0, 'rgba(255,255,255,.1)'); g.addColorStop(.5, 'rgba(255,255,255,.75)'); g.addColorStop(1, 'rgba(255,255,255,.1)');
+      hctx.fillStyle = g; hctx.fillRect(d.x - d.w / 2, d.y, d.w, v + 1);
+      const g2 = hctx.createRadialGradient(d.x, d.y + v, 0, d.x, d.y + v, d.w * .8);
+      g2.addColorStop(0, 'rgba(255,255,255,.95)'); g2.addColorStop(1, 'rgba(255,255,255,0)');
+      hctx.fillStyle = g2; hctx.beginPath(); hctx.arc(d.x, d.y + v, d.w * .8, 0, 7); hctx.fill();
+      d.y += v; dirty = true;
       return d.len > 0 && d.y < H;
     });
   }
 
-  /* ---------- Wischen / Verschmieren ---------- */
+  /* =================== Wischen / Verschmieren =================== */
   let ptr = null, load = 0, loadCol = [100, 60, 28];
+  function smudge(c, t, qx, qy, px, py, alphaErase, alphaPaint) {
+    t.clearRect(0, 0, tmp.width, tmp.height);
+    t.drawImage(c.canvas, (qx - R) * S, (qy - R) * S, R * 2 * S, R * 2 * S, 0, 0, R * 2 * S, R * 2 * S);
+    c.save(); c.globalCompositeOperation = 'destination-out';
+    const g = c.createRadialGradient(px, py, R * .15, px, py, R);
+    g.addColorStop(0, 'rgba(0,0,0,' + alphaErase + ')'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(px, py, R, 0, 7); c.fill(); c.restore();
+    c.save(); c.globalAlpha = alphaPaint; c.beginPath(); c.arc(px, py, R * .8, 0, 7); c.clip();
+    c.drawImage(t.canvas, 0, 0, tmp.width, tmp.height, px - R, py - R, R * 2, R * 2); c.restore();
+  }
   function wipeSegment(x0, y0, x1, y1) {
     const dx = x1 - x0, dy = y1 - y0, dist = Math.hypot(dx, dy);
     if (dist < 0.5) return;
@@ -291,50 +454,30 @@
     for (let i = 1; i <= n; i++) {
       const t = i / n, px = x0 + dx * t, py = y0 + dy * t;
       const qx = x0 + dx * (i - 1) / n, qy = y0 + dy * (i - 1) / n;
-      // 1) Farbe an der alten Stelle aufnehmen …
-      tctx.clearRect(0, 0, tmp.width, tmp.height);
-      tctx.drawImage(dirt, (qx - R) * S, (qy - R) * S, R * 2 * S, R * 2 * S, 0, 0, R * 2 * S, R * 2 * S);
-      // Farbe/Menge, die der Finger gerade trägt
-      const m = tctx.getImageData(tmp.width >> 1, tmp.height >> 1, 1, 1).data;
+      smudge(dctx, tctx, qx, qy, px, py, .30, .5);
+      const m = tctx.getImageData(tmp.width >> 1, tmp.height >> 1, 1, 1).data; // (Farbe vom Aufnehmen im tmp)
+      smudge(hctx, tctxH, qx, qy, px, py, .30, .5);
       if (m[3] > 40) { loadCol = [m[0], m[1], m[2]]; load = Math.min(1, load + m[3] / 255 * .45); }
       else load *= 0.9;
-      // 2) … an der Stelle teilweise abwischen …
-      dctx.save();
-      dctx.globalCompositeOperation = 'destination-out';
-      const g = dctx.createRadialGradient(px, py, R * .15, px, py, R);
-      g.addColorStop(0, 'rgba(0,0,0,.30)'); g.addColorStop(1, 'rgba(0,0,0,0)');
-      dctx.fillStyle = g; dctx.beginPath(); dctx.arc(px, py, R, 0, 7); dctx.fill();
-      dctx.restore();
-      // 3) … und ein Stück weiter verschmiert wieder auftragen
-      dctx.save();
-      dctx.globalAlpha = 0.5;
-      dctx.beginPath(); dctx.arc(px, py, R * .8, 0, 7); dctx.clip();
-      dctx.drawImage(tmp, 0, 0, tmp.width, tmp.height, px - R, py - R, R * 2, R * 2);
-      dctx.restore();
       scoreCell(px, py);
     }
-    smearTrail(x0, y0, x1, y1);
+    smearTrail(x0, y0, x1, y1); dirty = true;
   }
 
-  // bleibender Schmierfilm: man sieht immer, wo gewischt wurde
   function smearTrail(x0, y0, x1, y1) {
     if (load < 0.05) return;
     const ang = Math.atan2(y1 - y0, x1 - x0), nx = -Math.sin(ang), ny = Math.cos(ang);
     const r = Math.min(255, loadCol[0] * 1.25 + 20), g = Math.min(255, loadCol[1] * 1.2 + 14), b = Math.min(255, loadCol[2] * 1.2 + 6), a = Math.min(.5, load * .5);
-    const c = fctx;
-    c.save(); c.lineCap = 'round';
-    c.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + a * .16 + ')'; c.lineWidth = R * 1.4;   // Grundfilm
+    const c = fctx; c.save(); c.lineCap = 'round';
+    c.strokeStyle = 'rgba(' + r + ',' + g + ',' + b + ',' + a * .18 + ')'; c.lineWidth = R * 1.4;
     c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
-    for (let k = -3; k <= 3; k++) {                   // Fingerspuren
-      const o = k * R * .2 + rnd(-2, 2), w = rnd(1, 4);
-      c.strokeStyle = 'rgba(' + (r * .7 | 0) + ',' + (g * .7 | 0) + ',' + (b * .7 | 0) + ',' + a * rnd(.08, .22) + ')'; c.lineWidth = w;
+    for (let k = -3; k <= 3; k++) {
+      const o = k * R * .2 + rnd(-2, 2), w = rnd(1.2, 4);
+      c.strokeStyle = 'rgba(' + (r * .8 | 0) + ',' + (g * .8 | 0) + ',' + (b * .8 | 0) + ',' + a * rnd(.1, .3) + ')'; c.lineWidth = w;
       c.beginPath(); c.moveTo(x0 + nx * o, y0 + ny * o); c.lineTo(x1 + nx * o, y1 + ny * o); c.stroke();
-      c.strokeStyle = 'rgba(255,246,225,' + a * .2 + ')'; c.lineWidth = 1;                    // feuchter Glanz daneben
-      c.beginPath(); c.moveTo(x0 + nx * (o + w), y0 + ny * (o + w)); c.lineTo(x1 + nx * (o + w), y1 + ny * (o + w)); c.stroke();
     }
-    // Wulst am Rand der Wischbahn
     for (const side of [-1, 1]) {
-      c.strokeStyle = 'rgba(' + (r * .6 | 0) + ',' + (g * .6 | 0) + ',' + (b * .6 | 0) + ',' + a * .22 + ')'; c.lineWidth = 3;
+      c.strokeStyle = 'rgba(' + (r * .7 | 0) + ',' + (g * .7 | 0) + ',' + (b * .7 | 0) + ',' + a * .45 + ')'; c.lineWidth = 3.5;
       c.beginPath(); c.moveTo(x0 + nx * side * R * .75, y0 + ny * side * R * .75); c.lineTo(x1 + nx * side * R * .75, y1 + ny * side * R * .75); c.stroke();
     }
     c.restore();
@@ -346,13 +489,11 @@
     if (cx < 0 || cy < 0 || cx >= GW || cy >= GH) return;
     const i = cy * GW + cx;
     if (cells[i] > 0.3 && cellCool[i] <= 0) {
-      score += 1; cellCool[i] = 0.35; scoreEl.textContent = score;
-      cells[i] *= 0.6;
+      score += 1; cellCool[i] = 0.35; scoreEl.textContent = score; cells[i] *= 0.6;
       if (navigator.vibrate && Math.random() < 0.15) navigator.vibrate(8);
       updateLevel();
     }
   }
-
   function updateLevel() {
     level = 1 + Math.floor(score / LVL_POINTS);
     $('lvl').textContent = 'LEVEL ' + level;
@@ -378,21 +519,41 @@
   const up = () => { ptr = null; load *= .5; };
   view.addEventListener('pointerup', up); view.addEventListener('pointercancel', up);
 
-  /* ---------- Sound (kleines Quietschen/Schmatzen) ---------- */
+  /* =================== Sound =================== */
   let actx = null, lastSq = 0;
+  const ac = () => (actx = actx || new (window.AudioContext || window.webkitAudioContext)());
   function squelch(v) {
     try {
       const now = performance.now(); if (now - lastSq < 90) return; lastSq = now;
-      actx = actx || new (window.AudioContext || window.webkitAudioContext)();
-      const o = actx.createOscillator(), g = actx.createGain();
-      o.type = 'sawtooth'; o.frequency.setValueAtTime(rnd(90, 160), actx.currentTime);
-      o.frequency.exponentialRampToValueAtTime(rnd(40, 70), actx.currentTime + .12);
-      g.gain.setValueAtTime(.07 * v, actx.currentTime); g.gain.exponentialRampToValueAtTime(.001, actx.currentTime + .14);
-      o.connect(g).connect(actx.destination); o.start(); o.stop(actx.currentTime + .15);
+      const a = ac(), o = a.createOscillator(), g = a.createGain();
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(rnd(90, 160), a.currentTime);
+      o.frequency.exponentialRampToValueAtTime(rnd(40, 70), a.currentTime + .12);
+      g.gain.setValueAtTime(.07 * v, a.currentTime); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + .14);
+      o.connect(g).connect(a.destination); o.start(); o.stop(a.currentTime + .15);
+    } catch (e) {}
+  }
+  // Furz-Geräusch: tiefes, flatterndes Brummen + Luftrauschen, Länge/Tonhöhe variiert
+  function fart(len, big) {
+    try {
+      const a = ac(), t = a.currentTime, o = a.createOscillator(), g = a.createGain(), lfo = a.createOscillator(), lg = a.createGain();
+      const f0 = (big ? 85 : rnd(110, 150));
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f0 * rnd(.45, .6), t + len);
+      lfo.type = 'square'; lfo.frequency.setValueAtTime(rnd(26, 34), t); lfo.frequency.linearRampToValueAtTime(rnd(14, 20), t + len);
+      lg.gain.value = 38; lfo.connect(lg).connect(o.frequency);
+      const lp = a.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 650; lp.Q.value = 4;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(big ? .5 : .32, t + .02);
+      g.gain.setValueAtTime(big ? .5 : .32, t + len * .75); g.gain.exponentialRampToValueAtTime(.001, t + len);
+      o.connect(lp).connect(g).connect(a.destination);
+      const nb = a.createBuffer(1, a.sampleRate * len, a.sampleRate), d = nb.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const ns = a.createBufferSource(); ns.buffer = nb; const nf = a.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 420; nf.Q.value = 1.2;
+      const ng = a.createGain(); ng.gain.setValueAtTime(.18, t); ng.gain.exponentialRampToValueAtTime(.001, t + len);
+      ns.connect(nf).connect(ng).connect(a.destination);
+      o.start(t); lfo.start(t); ns.start(t); o.stop(t + len); lfo.stop(t + len); ns.stop(t + len);
     } catch (e) {}
   }
 
-  /* ---------- Messen ---------- */
+  /* =================== Messen + Countdown =================== */
   function measure() {
     gctx.clearRect(0, 0, GW, GH);
     gctx.drawImage(dirt, 0, 0, GW, GH);
@@ -401,17 +562,38 @@
     for (let i = 0; i < GW * GH; i++) { const a = d[i * 4 + 3] / 255; cells[i] = a; sum += a; }
     coverage = sum / (GW * GH);
   }
+  // Letzte Sekunden: ab 88 % der Grenze läuft 3-2-1, jede Zahl mit Furz. Wegwischen bricht ab.
+  let cd = -1, cdLast = 0;
+  const cdEl = $('count');
+  function countdown(dt) {
+    const k = coverage / LIMIT;
+    if (cd < 0) {
+      if (k >= 0.88) { cd = 3; cdLast = 4; }
+      else return;
+    } else if (k < 0.78) {
+      cd = -1; cdEl.classList.remove('on'); return;
+    } else cd -= dt;
+    const n = Math.ceil(cd);
+    if (n !== cdLast && n >= 1) {
+      cdLast = n; cdEl.textContent = n; cdEl.classList.remove('on'); void cdEl.offsetWidth; cdEl.classList.add('on');
+      fart(n === 1 ? .55 : n === 2 ? .38 : .28, n === 1);
+      if (navigator.vibrate) navigator.vibrate(n === 1 ? 120 : 50);
+    }
+    if (cd <= 0) { cdEl.classList.remove('on'); cd = -1; fart(1.1, true); gameOver(); }
+  }
 
-  /* ---------- Spielablauf ---------- */
+  /* =================== Spielablauf =================== */
   function startGame() {
-    dctx.clearRect(0, 0, W, H); fctx.clearRect(0, 0, W, H); load = 0;
-    level = 1; lastLevelShown = 0; updateLevel();
+    dctx.clearRect(0, 0, W, H); hctx.clearRect(0, 0, W, H); fctx.clearRect(0, 0, W, H); load = 0; dirty = true;
+    level = 1; lastLevelShown = 0; updateLevel(); cd = -1; cdEl.classList.remove('on');
     drips = []; score = 0; elapsed = 0; spawnT = 0; coverage = 0; cells.fill(0); cellCool.fill(0);
     scoreEl.textContent = '0'; state = 'play';
     $('start').hidden = true; $('over').hidden = true;
+    if (!camOn) tryCamera();
     splat();
   }
   function gameOver() {
+    if (state !== 'play') return;
     state = 'over';
     const rec = score > best;
     if (rec) { best = score; try { localStorage.setItem('wisch_best', best); } catch (e) {} }
@@ -425,25 +607,11 @@
   $('again').addEventListener('click', startGame);
 
   function draw() {
-    // Hintergrund: helle Kacheln
-    vctx.fillStyle = '#ece7da'; vctx.fillRect(0, 0, view.width, view.height);
-    vctx.strokeStyle = 'rgba(0,0,0,.06)'; vctx.lineWidth = 1;
-    const T = 70 * S;
-    vctx.beginPath();
-    for (let x = 0; x < view.width; x += T) { vctx.moveTo(x, 0); vctx.lineTo(x, view.height); }
-    for (let y = 0; y < view.height; y += T) { vctx.moveTo(0, y); vctx.lineTo(view.width, y); }
-    vctx.stroke();
-    vctx.drawImage(film, 0, 0);
-    vctx.drawImage(dirt, 0, 0);
-    // „von innen braun“: der Rand läuft zu, je mehr Dreck
-    const k = Math.min(1, coverage / LIMIT);
-    if (k > 0.02) {
-      const cx = view.width / 2, cy = view.height / 2, rad = Math.hypot(cx, cy);
-      const g = vctx.createRadialGradient(cx, cy, rad * (1 - k * 0.75), cx, cy, rad);
-      g.addColorStop(0, 'rgba(70,40,14,0)'); g.addColorStop(1, 'rgba(70,40,14,' + (0.25 + k * 0.6) + ')');
-      vctx.fillStyle = g; vctx.fillRect(0, 0, view.width, view.height);
-      vctx.fillStyle = 'rgba(90,52,20,' + (k * k * 0.35) + ')'; vctx.fillRect(0, 0, view.width, view.height);
-    }
+    if (camOn && video.readyState >= 2) upload(0, video);
+    if (dirty) { upload(1, dirt); upload(2, hgt); upload(3, film); dirty = false; }
+    gl.uniform2f(U('uBGs'), bgS[0], bgS[1]);
+    gl.uniform1f(U('uK'), Math.min(1, coverage / LIMIT));
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   function frame(ts) {
@@ -462,15 +630,14 @@
         bar.classList.toggle('hot', coverage / LIMIT > 0.75);
         if (coverage >= LIMIT) gameOver();
       }
-      if (elapsed - Math.floor(elapsed) < dt) { score += 0; }
+      if (state === 'play') countdown(dt);
       if (score > best) bestEl.textContent = score;
     }
     draw();
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  // Test-/Debug-Zugriff
-  window.__game = { startGame, splat, setState(v) { state = v; }, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
+  window.__game = { startGame, splat, setState(v) { state = v; }, tryCamera, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
 })();
 </script>
 </body>

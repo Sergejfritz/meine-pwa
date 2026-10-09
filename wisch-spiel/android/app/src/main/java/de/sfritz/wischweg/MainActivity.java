@@ -4,6 +4,10 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.webkit.PermissionRequest;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 
@@ -22,7 +26,16 @@ public class MainActivity extends Activity {
         web.setOverScrollMode(View.OVER_SCROLL_NEVER);
         web.setLongClickable(false);
         web.setHapticFeedbackEnabled(false);
-        web.setBackgroundColor(0xFFECE7DA);
+        web.setBackgroundColor(0xFF2A2018);
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override public void onPermissionRequest(final PermissionRequest r) {
+                runOnUiThread(() -> r.grant(r.getResources()));
+            }
+        });
+        if (android.os.Build.VERSION.SDK_INT >= 23
+            && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, 1);
+        }
         setContentView(web);
         web.loadUrl("file:///android_asset/index.html");
         hideBars();
