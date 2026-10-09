@@ -11,9 +11,12 @@
   canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
   #hud { position: fixed; top: 0; left: 0; right: 0; padding: calc(env(safe-area-inset-top, 0px) + 10px) 16px 0;
     display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none;
-    color: #3b2412; text-shadow: 0 1px 0 rgba(255,255,255,.55); font-weight: 800; }
+    color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.75), 0 0 2px rgba(0,0,0,.8); font-weight: 800; }
   #hud small { display: block; font-size: 11px; letter-spacing: .12em; opacity: .7; }
   #score { font-size: 38px; line-height: 1; }
+  #lvlbox { width: 110px; text-align: center; }
+  #lvlbar { height: 7px; border-radius: 4px; background: rgba(0,0,0,.28); margin-top: 5px; overflow: hidden; box-shadow: 0 0 0 1px rgba(255,255,255,.3); }
+  #lvlbar i { display: block; height: 100%; width: 0; background: #ffd54a; }
   #lvl { font-size: 15px; padding-top: 6px; letter-spacing: .08em; }
   #count { position: fixed; left: 0; right: 0; top: 38%; text-align: center; font-size: 150px; font-weight: 900; color: #fff; text-shadow: 0 4px 14px rgba(0,0,0,.8); opacity: 0; pointer-events: none; }
   #count.on { animation: cnt .95s ease-out; }
@@ -45,7 +48,7 @@
 <canvas id="c"></canvas>
 <div id="hud">
   <div><small>PUNKTE</small><span id="score">0</span></div>
-  <div id="lvl">LEVEL 1</div>
+  <div id="lvlbox"><div id="lvl">LEVEL 1</div><div id="lvlbar"><i id="lvlfill"></i></div></div>
   <div id="best"><small>REKORD</small><span id="bestv">0</span></div>
 </div>
 <div id="banner"></div>
@@ -55,7 +58,7 @@
 <div class="panel" id="start">
   <div id="poop">💩</div>
   <h1>Wisch weg!</h1>
-  <p>Der Bildschirm wird von innen zugeschissen.<br>Wisch den Dreck mit dem Finger weg – bevor alles braun ist!</p>
+  <p>Der Bildschirm wird von innen zugeschissen.<br>Wisch den Dreck weg – schnell genug, dann steigst du ein Level auf. Verlierst du, geht’s wieder bei Level 1 los!</p>
   <p>10 Level – jedes mit neuer Sorte: vom Hundehaufen bis zur Einhorn-Kacke.</p>
   <p>Rekord: <b id="startbest">0</b></p>
   <button id="go">Los geht’s</button>
@@ -211,23 +214,43 @@ void main(){
     upload(4, n);
   })();
 
-  // Hintergrund: Raum mit Fenster (Ersatz, wenn keine Kamera da ist)
+  // Hintergründe: je Level eine andere Szene (unscharf, wie hinter einer Linse)
   const bgCanvas = mk(); bgCanvas.width = 256; bgCanvas.height = 512;
-  (function () {
-    const c = bgCanvas.getContext('2d'), w = 256, h = 512;
-    let g = c.createLinearGradient(0, 0, 0, h); g.addColorStop(0, '#d9cdb6'); g.addColorStop(.6, '#a89a82'); g.addColorStop(1, '#5d5240');
-    c.fillStyle = g; c.fillRect(0, 0, w, h);
-    c.filter = 'blur(5px)';
-    g = c.createLinearGradient(0, 40, 0, 220); g.addColorStop(0, '#fffdf4'); g.addColorStop(1, '#bcd9f2');
-    c.fillStyle = g; c.fillRect(120, 40, 110, 170);
-    c.fillStyle = 'rgba(80,60,40,.8)'; c.fillRect(172, 40, 6, 170); c.fillRect(120, 120, 110, 6);
-    c.fillStyle = '#4a3c2c'; c.fillRect(0, 330, 150, 120);
-    c.fillStyle = '#7a5a3a'; c.fillRect(150, 380, 106, 132);
-    c.fillStyle = '#2e5a34'; c.beginPath(); c.arc(40, 250, 34, 0, 7); c.fill();
-    c.fillStyle = 'rgba(255,240,200,.55)'; for (let i = 0; i < 6; i++) { c.beginPath(); c.arc(rnd(10, 246), rnd(250, 500), rnd(8, 20), 0, 7); c.fill(); }
-    c.filter = 'none';
-  })();
-  upload(0, bgCanvas);
+  const SCENES = [
+    // 1 Wohnzimmer
+    c => { vg(c, '#d9cdb6', '#a89a82', '#5d5240'); bl(c); win(c, 120, 40, 110, 170, '#fffdf4', '#bcd9f2'); rect(c, '#4a3c2c', 0, 330, 150, 120); rect(c, '#7a5a3a', 150, 380, 106, 132); circ(c, '#2e5a34', 40, 250, 34); },
+    // 2 Küche
+    c => { vg(c, '#f1ede2', '#d8d2c2', '#9d9482'); bl(c); for (let y = 0; y < 330; y += 36) for (let x = (y / 36 % 2) * 18; x < 256; x += 36) rect(c, 'rgba(0,0,0,.07)', x, y, 34, 34); rect(c, '#c9c2b2', 0, 330, 256, 24); rect(c, '#8a7458', 0, 354, 256, 158); win(c, 150, 70, 80, 100, '#fffbe8', '#cfe4f5'); circ(c, '#d8442c', 50, 320, 14); },
+    // 3 Badezimmer
+    c => { vg(c, '#cfe6ee', '#a9ccd8', '#6f98a8'); bl(c); for (let y = 0; y < 512; y += 42) for (let x = 0; x < 256; x += 42) rect(c, 'rgba(255,255,255,.22)', x, y, 40, 40); rect(c, '#f4f6f6', 60, 300, 150, 90); circ(c, '#ffffff', 135, 300, 55); rect(c, '#9ec0cc', 0, 440, 256, 72); },
+    // 4 Garten
+    c => { vg(c, '#9fd2f0', '#d6ecf5', '#d6ecf5'); bl(c); rect(c, '#5c9a3c', 0, 300, 256, 212); rect(c, '#437a2a', 0, 380, 256, 132); circ(c, '#2f6a2a', 60, 270, 55); circ(c, '#3f8a34', 190, 280, 48); circ(c, '#ffe96a', 210, 70, 28); for (let i = 0; i < 9; i++) circ(c, pick(['#e8506a', '#f4d03f', '#ffffff']), rnd(10, 246), rnd(330, 500), rnd(4, 8)); },
+    // 5 Straße bei Tag
+    c => { vg(c, '#8ec3ea', '#cfe3f0', '#b9c0c4'); bl(c); rect(c, '#9a948c', 20, 120, 80, 260); rect(c, '#b7a58e', 110, 80, 70, 300); rect(c, '#7f8a96', 185, 150, 70, 230); rect(c, '#55585c', 0, 380, 256, 132); rect(c, '#f4e18a', 120, 420, 14, 60); rect(c, '#f4e18a', 120, 500, 14, 12); },
+    // 6 Strand
+    c => { vg(c, '#7cc4ee', '#bfe4f4', '#bfe4f4'); bl(c); rect(c, '#2f86b8', 0, 230, 256, 80); rect(c, 'rgba(255,255,255,.5)', 0, 305, 256, 10); rect(c, '#e8d49a', 0, 315, 256, 197); circ(c, '#fff3b0', 60, 70, 30); circ(c, '#e8506a', 190, 400, 30); rect(c, '#f4f4f4', 185, 400, 10, 60); },
+    // 7 Nachtstadt
+    c => { vg(c, '#0d1230', '#2a2f66', '#3a2a55'); bl(c); for (let i = 0; i < 9; i++) { const x = i * 30, h = rnd(150, 300); rect(c, '#14183a', x, 512 - h, 28, h); for (let k = 0; k < 14; k++) rect(c, Math.random() < .5 ? '#ffd86a' : '#2c3260', x + 4 + (k % 3) * 8, 512 - h + 10 + ((k / 3) | 0) * 22, 5, 9); } circ(c, '#f4f0d0', 200, 70, 26); },
+    // 8 Weltraum
+    c => { vg(c, '#05030f', '#140a2e', '#2a0f44'); bl(c, 2); for (let i = 0; i < 60; i++) circ(c, 'rgba(255,255,255,' + rnd(.3, 1) + ')', rnd(0, 256), rnd(0, 512), rnd(.6, 1.8)); circ(c, '#c8602a', 70, 120, 46); circ(c, 'rgba(255,200,150,.3)', 58, 106, 20); circ(c, '#4a7ad0', 200, 360, 62); circ(c, 'rgba(255,255,255,.2)', 180, 340, 26); },
+    // 9 Wüste
+    c => { vg(c, '#f2b96a', '#f8dca0', '#f8dca0'); bl(c); circ(c, '#fff6c8', 190, 100, 38); c.fillStyle = '#d99a4a'; c.beginPath(); c.moveTo(0, 360); c.quadraticCurveTo(100, 280, 256, 350); c.lineTo(256, 512); c.lineTo(0, 512); c.fill(); c.fillStyle = '#c0803a'; c.beginPath(); c.moveTo(0, 440); c.quadraticCurveTo(140, 380, 256, 450); c.lineTo(256, 512); c.lineTo(0, 512); c.fill(); rect(c, '#4a7a3a', 50, 330, 12, 60); rect(c, '#4a7a3a', 38, 345, 12, 8); },
+    // 10 Disco
+    c => { vg(c, '#1a0536', '#3a0a5a', '#12031f'); bl(c, 3); for (let i = 0; i < 18; i++) circ(c, 'hsla(' + ((i * 47) % 360) + ',90%,60%,.55)', rnd(0, 256), rnd(40, 480), rnd(14, 38)); circ(c, '#e8e8f4', 128, 60, 30); }
+  ];
+  function vg(c, a, b, d) { const g = c.createLinearGradient(0, 0, 0, 512); g.addColorStop(0, a); g.addColorStop(.6, b); g.addColorStop(1, d); c.fillStyle = g; c.fillRect(0, 0, 256, 512); }
+  function bl(c, k) { c.filter = 'blur(' + (k || 5) + 'px)'; }
+  function rect(c, col, x, y, w, h) { c.fillStyle = col; c.fillRect(x, y, w, h); }
+  function circ(c, col, x, y, r) { c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, 7); c.fill(); }
+  function win(c, x, y, w, h, a, b) { const g = c.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, a); g.addColorStop(1, b); c.fillStyle = g; c.fillRect(x, y, w, h); rect(c, 'rgba(80,60,40,.8)', x + w / 2 - 3, y, 6, h); rect(c, 'rgba(80,60,40,.8)', x, y + h / 2 - 3, w, 6); }
+  function setBG(lv) {
+    const c = bgCanvas.getContext('2d'); c.filter = 'none'; c.clearRect(0, 0, 256, 512);
+    SCENES[(lv - 1) % SCENES.length](c); c.filter = 'none';
+    // weiche Lichtflecken (Bokeh)
+    c.fillStyle = 'rgba(255,245,215,.18)'; for (let i = 0; i < 5; i++) { c.beginPath(); c.arc(rnd(10, 246), rnd(100, 500), rnd(10, 24), 0, 7); c.fill(); }
+    upload(0, bgCanvas);
+  }
+  setBG(1);
   let bgS = [1, 1];
 
   // Echte Kamera als Hintergrund (falls erlaubt), sonst Raum
@@ -285,8 +308,7 @@ void main(){
     { n: 'Elefantenhaufen', k: 'eleph', m: 1.5 }, { n: 'Alien-Schleim', k: 'alien', m: 1.1 },
     { n: 'Goldscheiße', k: 'gold', m: 1.0 }, { n: 'Einhorn-Kacke', k: 'uni', m: 1.1 }
   ];
-  const LVL_POINTS = 25;
-
+  
   // Ein Klumpen = Farbe (flach) + Höhenprofil (Halbkugel) + Dellen/Rillen
   function ball(x, y, rx, ry, rot, p, o) {
     o = o || {};
@@ -406,7 +428,7 @@ void main(){
     }
   };
 
-  let level = 1, lastLevelShown = 0;
+  let level = 1;
   function splat(fi, fx, fy, fr) {
     const lv = Math.min(level, LEVELS.length);
     const idx = fi != null ? fi : Math.random() < .5 ? lv - 1 : (Math.random() * lv) | 0;
@@ -491,20 +513,27 @@ void main(){
     if (cells[i] > 0.3 && cellCool[i] <= 0) {
       score += 1; cellCool[i] = 0.35; scoreEl.textContent = score; cells[i] *= 0.6;
       if (navigator.vibrate && Math.random() < 0.15) navigator.vibrate(8);
-      updateLevel();
+      addProgress(1);
     }
   }
-  function updateLevel() {
-    level = 1 + Math.floor(score / LVL_POINTS);
-    $('lvl').textContent = 'LEVEL ' + level;
-    if (level !== lastLevelShown) {
-      lastLevelShown = level;
+  // Level nur durch schnelles Wischen: Fortschritt füllt sich pro Wisch-Treffer und läuft ständig leer
+  const goalOf = l => 18 + l * 3;
+  const drainOf = l => Math.min(3.2, 0.9 + l * 0.22);     // Punkte/Sekunde
+  let lprog = 0;
+  function setLevel(n, announce) {
+    level = n; lprog = 0;
+    $('lvl').textContent = 'LEVEL ' + level; $('lvlfill').style.width = '0%';
+    setBG(level); dirty = true;
+    if (announce) {
       const T = LEVELS[(level - 1) % LEVELS.length];
-      if (level > 1) {
-        const b = $('banner'); b.textContent = 'LEVEL ' + level + ' · ' + T.n; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
-        if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
-      }
+      const b = $('banner'); b.textContent = 'LEVEL ' + level + ' · ' + T.n; b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+      if (navigator.vibrate) navigator.vibrate([30, 30, 30]);
     }
+  }
+  function addProgress(v) {
+    lprog += v;
+    if (lprog >= goalOf(level)) setLevel(level + 1, true);
+    else $('lvlfill').style.width = (lprog / goalOf(level) * 100) + '%';
   }
 
   view.addEventListener('pointerdown', e => {
@@ -585,11 +614,10 @@ void main(){
   /* =================== Spielablauf =================== */
   function startGame() {
     dctx.clearRect(0, 0, W, H); hctx.clearRect(0, 0, W, H); fctx.clearRect(0, 0, W, H); load = 0; dirty = true;
-    level = 1; lastLevelShown = 0; updateLevel(); cd = -1; cdEl.classList.remove('on');
+    setLevel(1, false); cd = -1; cdEl.classList.remove('on');
     drips = []; score = 0; elapsed = 0; spawnT = 0; coverage = 0; cells.fill(0); cellCool.fill(0);
     scoreEl.textContent = '0'; state = 'play';
     $('start').hidden = true; $('over').hidden = true;
-    if (!camOn) tryCamera();
     splat();
   }
   function gameOver() {
@@ -618,9 +646,10 @@ void main(){
     const dt = Math.min(0.05, (ts - last) / 1000 || 0); last = ts;
     if (state === 'play') {
       elapsed += dt;
-      const interval = Math.max(0.3, 1.3 - level * 0.07 - elapsed * 0.004);
+      const interval = Math.max(0.55, 1.45 - level * 0.07);
+      lprog = Math.max(0, lprog - drainOf(level) * dt); $('lvlfill').style.width = (lprog / goalOf(level) * 100) + '%';
       spawnT += dt;
-      if (spawnT >= interval) { spawnT = 0; splat(); if (level > 8 && Math.random() < .3) splat(); }
+      if (spawnT >= interval) { spawnT = 0; splat(); if (level > 10 && Math.random() < .15) splat(); }
       stepDrips(dt);
       for (let i = 0; i < cellCool.length; i++) if (cellCool[i] > 0) cellCool[i] -= dt;
       measureT += dt;
@@ -637,7 +666,7 @@ void main(){
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
-  window.__game = { startGame, splat, setState(v) { state = v; }, tryCamera, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
+  window.__game = { startGame, setLevel, splat, setState(v) { state = v; }, tryCamera, get state() { return state; }, get score() { return score; }, get coverage() { return coverage; } };
 })();
 </script>
 </body>
