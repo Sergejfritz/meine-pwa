@@ -78,6 +78,11 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   den „+ SZ“-Klassen) und geht als Faktor σ ein. Der **Fritz-Tipp** wählt
   zufällig unter den besten 5 % ohne Muster plus eine unbeliebte Superzahl. Neu trainieren:
   `node scripts/lotto-formel.mjs` (schreibt `lotto/formel.json`).
+- **🎯 Vorschlag + Bilanz** – für jede kommende Ziehung legt die App einmalig
+  einen Vorschlag fest (Fritz-Formel, keine Muster, **nie eine bereits gezogene
+  Kombination**) plus einen Zufallstipp zum Vergleich. Nach der Ziehung wird
+  beides mit den echten Zahlen und Quoten verglichen – ehrliche Bilanz ab
+  Installation („Unser System“ vs. Zufall vs. Mathematik).
 - **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
   nächste Ziehung + Annahmeschluss.
 - **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.

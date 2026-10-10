@@ -389,3 +389,36 @@ test('Fritz-Formel: Superzahl zählt – unbeliebte 0 ist mehr wert als beliebte
   expect(['0', '1']).toContain(sz);
   await expect(page.locator('#tipHint')).toContainText('Superzahl');
 });
+
+// ---------- Vorschlag für die nächste Ziehung + Bilanz ----------
+test('Vorschlag: festgeschrieben, nie gezogene Kombination, bleibt nach Neuladen gleich', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/#chancen');
+  const balls = page.locator('#vorschlagNaechste .ball:not(.sz)');
+  await expect(balls).toHaveCount(6);
+  const t = (await balls.allTextContents()).map(Number);
+  const gezogen = new Set(LINES.map((l) => l.split(' ').slice(1, 7).join(',')));
+  expect(gezogen.has(t.slice().sort((a, b) => a - b).join(','))).toBe(false);
+  await expect(page.locator('#vorschlagNaechste')).toContainText('noch nie gezogen');
+  await page.reload();
+  expect((await page.locator('#vorschlagNaechste .ball:not(.sz)').allTextContents()).map(Number)).toEqual(t);
+  await page.click('#vorschlagNehmen');
+  await expect(page.locator('#tipInput')).toHaveValue(t.join(' '));
+});
+
+test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen', async ({ page }) => {
+  await page.addInitScript((d) => {
+    if (localStorage.getItem('lotto_vorschlaege')) return;
+    localStorage.setItem('lotto_vorschlaege', JSON.stringify([
+      { d, tipp: [1, 2, 3, 10, 20, 30], sz: 7, zufall: [40, 41, 42, 43, 44, 45], zsz: 0, erstellt: Date.now() - 86400000 },
+    ]));
+  }, NEU);
+  await mockLive(page); // neue Ziehung NEU: 1 2 3 4 5 6, Superzahl 7
+  await page.goto('/lotto/#chancen');
+  const bilanz = page.locator('#vorschlagBilanz');
+  await expect(bilanz).toContainText('Unser System');
+  await expect(bilanz.locator('tr.hl')).toContainText('3,00');
+  await expect(bilanz.locator('tr.hl')).toContainText('1 von 1');
+  await expect(bilanz).toContainText('Gezogen: 1 2 3 4 5 6');
+  await expect(bilanz.locator('.badge').first()).toContainText('System 3+SZ');
+});

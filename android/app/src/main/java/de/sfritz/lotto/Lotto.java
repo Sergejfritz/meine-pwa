@@ -167,9 +167,11 @@ final class Lotto {
             JSONObject o = new JSONObject(json);
             List<JSONObject> roh = new ArrayList<>();
             if (o.optJSONObject("tipp") != null) roh.add(o.getJSONObject("tipp"));
-            JSONArray fav = o.optJSONArray("favoriten");
-            for (int i = 0; fav != null && i < fav.length(); i++) {
-                if (fav.optJSONObject(i) != null) roh.add(fav.getJSONObject(i));
+            for (String feld : new String[]{"favoriten", "vorschlaege"}) {
+                JSONArray a = o.optJSONArray(feld);
+                for (int i = 0; a != null && i < a.length(); i++) {
+                    if (a.optJSONObject(i) != null) roh.add(a.getJSONObject(i));
+                }
             }
             for (JSONObject t : roh) {
                 JSONArray a = t.optJSONArray("nums");

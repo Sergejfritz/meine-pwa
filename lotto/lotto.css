@@ -234,7 +234,8 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); box-shado
 
 /* ===== Ergebnis ===== */
 #result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
-.verdict, .muster { border-width: 2px; }
+.verdict, .muster, .verdict-vorschlag { border-width: 2px; }
+.verdict-vorschlag { border-color: var(--accent); }
 .verdict.win, .muster.win { border-color: var(--accent); }
 .verdict.jackpot { border-color: var(--accent); background: linear-gradient(160deg, var(--accent-soft), var(--surface) 70%); }
 .verdict-big { font-size: 22px; font-weight: 800; line-height: 1.2; margin-bottom: 6px; letter-spacing: -.2px; }
