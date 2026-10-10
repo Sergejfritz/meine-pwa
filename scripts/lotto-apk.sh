@@ -14,4 +14,10 @@ fi
 (cd android && ./gradlew --no-daemon -q assembleRelease)
 mkdir -p downloads
 cp android/app/build/outputs/apk/release/app-release.apk downloads/lotto.apk
+# Versionsdatei für die Update-Prüfung in der App
+node -e '
+const m = require("./android/app/build/outputs/apk/release/output-metadata.json").elements[0];
+require("fs").writeFileSync("downloads/version.json", JSON.stringify({ versionCode: m.versionCode, versionName: m.versionName }) + "\n");
+console.log("✓ downloads/version.json → " + m.versionName + " (" + m.versionCode + ")");
+'
 echo "✓ downloads/lotto.apk ($(du -h downloads/lotto.apk | cut -f1))"

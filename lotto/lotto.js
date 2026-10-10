@@ -21,6 +21,7 @@ const KEY = {
   quoten: 'lotto_quoten',
   theme: 'lotto_theme',
   tab: 'lotto_tab',
+  update: 'lotto_app_update',
 };
 
 // In der Android-App gibt es window.LottoApp (Benachrichtigungen, Systemleisten).
@@ -203,7 +204,8 @@ async function ladeFormel() {
     const f = await (await fetch('formel.json')).json();
     const ok = Array.isArray(f.beta) && f.beta.length === 49 && f.beta.every(Number.isFinite)
       && f.klassen && Object.values(f.klassen).every((k) => Number.isFinite(k.p) && Number.isFinite(k.r)
-        && (Number.isFinite(k.fest) || (Number.isFinite(k.topf) && Number.isFinite(k.gewinner) && Number.isFinite(k.kappa))));
+        && (Number.isFinite(k.fest) || (Number.isFinite(k.topf) && Number.isFinite(k.gewinner) && Number.isFinite(k.kappa))))
+      && (f.sz === undefined || (Array.isArray(f.sz) && f.sz.length === 10 && f.sz.every(Number.isFinite)));
     if (ok) FORMEL = f;
   } catch {}
 }
@@ -611,7 +613,7 @@ function renderErgebnis() {
     <p>${text}</p>
     <p class="muted small">Gewonnen hättest du in ${a.proJahr.size} von ${alleJahre.length} Jahren – geprüft gegen ${zahl.format(draws.length)} Ziehungen (${alleJahre[0]}–${alleJahre[alleJahre.length - 1]}).</p>
     <p class="best small">${letzteTxt}</p>
-    ${FORMEL ? `<p class="small" style="margin-top:6px">🧮 Fritz-Formel: Dein Tipp ist im Schnitt <b>${cent(fritzWert(nums))}</b> pro 1,20 € wert (Ø-Tipp ${cent(FORMEL.ev0)}) – besser als ${rangText(fritzRang(fritzWert(nums)))} aller Tipps.</p>` : ''}
+    ${FORMEL ? `<p class="small" style="margin-top:6px">🧮 Fritz-Formel: Dein Tipp ist im Schnitt <b>${cent(fritzWert(nums, sz))}</b> pro 1,20 € wert (Ø-Tipp ${cent(FORMEL.ev0)}) – besser als ${rangText(fritzRang(fritzWert(nums, sz)))} aller Tipps.</p>` : ''}
   </div>`;
 
   // 2) Jahres-Übersicht
@@ -1023,13 +1025,17 @@ function musterIn(t) {
   return null;
 }
 
-// Fritz-Formel: Erwartungswert eines Tipps in € (pro 1,20 € Einsatz)
-function fritzWert(t) {
+// Fritz-Formel: Erwartungswert eines Tipps in € (pro 1,20 € Einsatz).
+// sz = deine Superzahl (oder null = unbekannt → durchschnittlich beliebt)
+function fritzWert(t, sz = null) {
   const b = t.reduce((s, n) => s + FORMEL.beta[n - 1], 0);
+  const sigma = sz !== null && FORMEL.sz ? FORMEL.sz[sz] : 1;
   let w = 0;
-  for (const k of Object.values(FORMEL.klassen)) {
+  for (const [name, k] of Object.entries(FORMEL.klassen)) {
     if (Number.isFinite(k.fest)) { w += k.p * k.fest; continue; }
-    const mu = k.gewinner * Math.exp(k.kappa * b * (k.r / 6 - (6 - k.r) / 43));
+    // Mitgewinner mit gleicher Superzahl (σ) bzw. ohne sie ((1 − 0,1σ)/0,9)
+    const szFaktor = name.includes('SZ') ? sigma : (1 - 0.1 * sigma) / 0.9;
+    const mu = k.gewinner * Math.exp(k.kappa * b * (k.r / 6 - (6 - k.r) / 43)) * szFaktor;
     w += k.p * k.topf * (mu < 1e-9 ? 1 : (1 - Math.exp(-mu)) / mu);
   }
   return w;
@@ -1038,7 +1044,7 @@ function fritzWert(t) {
 let fritzVerteilung = null;
 function fritzRang(w) {
   if (!fritzVerteilung) {
-    fritzVerteilung = Array.from({ length: 20000 }, () => fritzWert(ziehe6())).sort((a, b) => a - b);
+    fritzVerteilung = Array.from({ length: 20000 }, () => fritzWert(ziehe6(), Math.floor(Math.random() * 10))).sort((a, b) => a - b);
   }
   let lo = 0; let hi = fritzVerteilung.length;
   while (lo < hi) { const m = (lo + hi) >> 1; if (fritzVerteilung[m] < w) lo = m + 1; else hi = m; }
@@ -1062,14 +1068,24 @@ function fritzTipp() {
   const beste = kandidaten.slice(0, Math.max(1, Math.ceil(kandidaten.length * 0.05)));
   return beste[Math.floor(Math.random() * beste.length)][1];
 }
+// die zwei am seltensten getippten Superzahlen (laut Formel-Daten)
+function fritzSuperzahl() {
+  if (!FORMEL || !FORMEL.sz) return null;
+  const rang = FORMEL.sz.map((v, j) => [v, j]).sort((a, b) => a[0] - b[0]);
+  return rang[Math.floor(Math.random() * 2)][1];
+}
 function nimmFritzTipp() {
   tipNums = new Set(fritzTipp());
+  const sz = fritzSuperzahl();
+  if (sz !== null) tipSz = sz;
   tippGeaendert(true);
   setHinweis(FORMEL
-    ? `🧮 Fritz-Tipp: bringt laut Formel im Schnitt ${(fritzWert(sortiert(tipNums)) * 100).toFixed(1).replace('.', ',')} Cent statt ${(FORMEL.ev0 * 100).toFixed(1).replace('.', ',')} – gleiche Chance, höhere Quoten.`
+    ? `🧮 Fritz-Tipp: bringt laut Formel im Schnitt ${(fritzWert(sortiert(tipNums), tipSz) * 100).toFixed(1).replace('.', ',')} Cent statt ${(FORMEL.ev0 * 100).toFixed(1).replace('.', ',')} – gleiche Chance, höhere Quoten.`
+      + (sz !== null ? ` Superzahl ${sz}: wird am seltensten getippt (nur nutzbar, wenn du die Losnummer wählen kannst).` : '')
     : '🧮 Fritz-Tipp: kaum Geburtstagszahlen, keine Muster – gleiche Chance, im Schnitt höhere Quoten.', 'ok');
 }
 const cent = (w) => `${(w * 100).toFixed(1).replace('.', ',')} ct`;
+const szText = (v) => { const p = Math.round((v - 1) * 100); return p === 0 ? '±0 %' : `${p > 0 ? '+' : '−'}${Math.abs(p)} %`; };
 // Rang als Text – an den Rändern ehrlich statt „0 %“ / „100 %“
 const rangText = (r) => (r >= 0.99 ? 'über 99 %' : r < 0.01 ? 'unter 1 %' : prozent(r));
 
@@ -1079,11 +1095,12 @@ function renderFritz() {
   $('fritzN').textContent = zahl.format(FORMEL.ziehungen);
   if (tippKomplett()) {
     const t = sortiert(tipNums);
-    const w = fritzWert(t);
+    const w = fritzWert(t, tipSz);
     const plus = w / FORMEL.ev0 - 1;
     const b = t.reduce((s, n) => s + FORMEL.beta[n - 1], 0);
     const muster = musterIn(t);
-    $('fritzDein').innerHTML = `<p class="small"><b>Dein Tipp ${t.join(' ')}</b> · Beliebtheit B(T) = ${b >= 0 ? '+' : '−'}${Math.abs(b).toFixed(3).replace('.', ',')}</p>
+    const szInfo = tipSz !== null && FORMEL.sz ? ` · Superzahl ${tipSz} (${szText(FORMEL.sz[tipSz])})` : ' · ohne Superzahl (= Durchschnitt)';
+    $('fritzDein').innerHTML = `<p class="small"><b>Dein Tipp ${t.join(' ')}</b>${szInfo} · Beliebtheit B(T) = ${b >= 0 ? '+' : '−'}${Math.abs(b).toFixed(3).replace('.', ',')}</p>
       <div class="money">
         <div><small>Wert pro 1,20 €</small><b>${cent(w)}</b></div>
         <div><small>Ø-Tipp</small><b>${cent(FORMEL.ev0)}</b></div>
@@ -1106,6 +1123,16 @@ function renderFritz() {
       + `aria-label="Zahl ${n}: ${pz} Mitgewinner gegenüber dem Schnitt"><b>${n}</b><small>${pz}</small></button>`;
   }
   $('fritzHeat').innerHTML = h;
+  if (FORMEL.sz) {
+    const maxSz = Math.max(...FORMEL.sz.map((v) => Math.abs(v - 1)));
+    $('fritzSz').innerHTML = FORMEL.sz.map((v, j) => {
+      const st = Math.round((Math.abs(v - 1) / maxSz) * 80);
+      const farbe = v >= 1 ? 'var(--accent)' : 'var(--cool)';
+      return `<span class="${st > 50 ? 'hot' : ''}${tipSz === j ? ' sel' : ''}" style="background:color-mix(in srgb, ${farbe} ${st}%, var(--surface))" `
+        + `aria-label="Superzahl ${j}: ${szText(v)}"><b>${j}</b><small>${szText(v)}</small></span>`;
+    }).join('');
+    $('fritzSzBox').classList.remove('hidden');
+  }
   $('fritzQualitaet').textContent = `Gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen (${datum(FORMEL.von)} – ${datum(FORMEL.stand)}). `
     + `Das Modell sagt die Zahl der Mitgewinner einer Ziehung zu ${prozent(FORMEL.r2)} voraus – geprüft an Ziehungen, die es beim Lernen nicht kannte (10-fache Kreuzvalidierung). `
     + `Ein Ø-Tipp bringt ${cent(FORMEL.ev0)} pro 1,20 € zurück – passt zur offiziellen Ausschüttung von rund 50 %.`;
@@ -1282,6 +1309,30 @@ function renderAppKarte() {
   $('btnNotifyTest').disabled = !an;
   $('appInfo').textContent = `${an ? '✓ Benachrichtigungen sind an.' : 'Benachrichtigungen sind aus.'} · App-Version ${app('version') || '?'}`;
 }
+// Neue APK? Die App fragt höchstens alle 6 Stunden die Versionsdatei ab, die
+// scripts/lotto-apk.sh neben die APK legt, und zeigt dann einen Download-Knopf.
+const UPDATE_URL = 'https://sergejfritz.github.io/meine-pwa/downloads/version.json';
+async function pruefeAppUpdate() {
+  if (!APP) return;
+  const meine = Number(app('versionCode'));
+  if (!Number.isInteger(meine) || meine <= 0) return;
+  let info = read(KEY.update);
+  if (!info || !(Date.now() - info.geprueft < 6 * 60 * MIN)) {
+    try {
+      const v = await holeJson(UPDATE_URL, 10000);
+      if (!Number.isInteger(v.versionCode)) return;
+      info = { code: v.versionCode, name: String(v.versionName || ''), geprueft: Date.now() };
+      write(KEY.update, info);
+    } catch {
+      return;
+    }
+  }
+  if (info.code > meine) {
+    $('updateText').textContent = `Version ${info.name} ist da (du hast ${app('version') || '?'}). Herunterladen, öffnen und „Aktualisieren“ tippen – deine Tipps bleiben erhalten.`;
+    $('updateCard').classList.remove('hidden');
+  }
+}
+
 // Aufrufe aus der App (Java): Status neu zeichnen, Bereich wechseln, Zurück-Taste
 window.lottoAppStatus = renderAppKarte;
 window.lottoZeigeTab = (name) => { zeigeTab(name); window.scrollTo({ top: 0 }); };
@@ -1387,6 +1438,7 @@ async function init() {
   renderFavs();
   binde();
   renderAppKarte();
+  pruefeAppUpdate();
   // Im Browser auf Android: Hinweis auf die installierbare App (APK)
   if (!APP && /Android/i.test(navigator.userAgent)) $('apkLink').classList.remove('hidden');
   const anker = location.hash.slice(1);

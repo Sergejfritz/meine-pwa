@@ -151,15 +151,35 @@ for (const [k, r] of KLASSEN) {
   }).filter((v) => v > 0);
   klassen[k] = { r, p: pKlasse[k], kappa: +kappa.toFixed(3), topf: Math.round(schnitt(toepfe)), gewinner: +gewinner.toFixed(3) };
 }
+// ---------- Beliebtheit der Superzahl ----------
+// Anteil der Gewinner MIT Superzahl unter allen mit 3 bzw. 4 Richtigen – bei gleich
+// beliebten Superzahlen wären das 10 %. σ_j = Anteil / 10 % (1 = Durchschnitt).
+const szSumme = new Array(10).fill(0);
+const szAnzahl = new Array(10).fill(0);
+for (const d of D) {
+  const k = daten[d].k;
+  const sz = daten[d].sz;
+  if (!(sz >= 0 && sz <= 9)) continue;
+  for (const r of ['3', '4']) {
+    const mit = k[`${r} + SZ`][0];
+    const ohne = k[r][0];
+    if (mit + ohne > 0) { szSumme[sz] += mit / (mit + ohne); szAnzahl[sz]++; }
+  }
+}
+const szRoh = szSumme.map((s, j) => (szAnzahl[j] ? s / szAnzahl[j] / 0.1 : 1));
+const szMittel = szRoh.reduce((s, v) => s + v, 0) / 10;
+const sz = szRoh.map((v) => +(v / szMittel).toFixed(4));
+
 const anteil = (mu) => (mu < 1e-9 ? 1 : (1 - Math.exp(-mu)) / mu);
 const ev0 = Object.values(klassen).reduce((s, k) => s + k.p * (k.fest ?? k.topf * anteil(k.gewinner)), 0);
 const formel = {
   stand: D[D.length - 1], von: D[0], ziehungen: D.length, r2: +bestes.r2.toFixed(3),
-  beta: beta.map((v) => +v.toFixed(4)), klassen, ev0: +ev0.toFixed(4),
+  beta: beta.map((v) => +v.toFixed(4)), sz, klassen, ev0: +ev0.toFixed(4),
 };
 fs.writeFileSync(path.join(ROOT, 'lotto', 'formel.json'), JSON.stringify(formel) + '\n');
 const rang = beta.map((v, i) => [i + 1, v]).sort((a, b) => b[1] - a[1]);
 console.log('beliebteste:', rang.slice(0, 8).map(([n, v]) => `${n} (${(v * 100).toFixed(1)})`).join(', '));
 console.log('unbeliebteste:', rang.slice(-8).map(([n, v]) => `${n} (${(v * 100).toFixed(1)})`).join(', '));
 console.log('κ je Klasse:', Object.entries(klassen).filter(([, v]) => !v.fest).map(([k, v]) => `${k}: ${v.kappa}`).join(' · '));
+console.log('Superzahl-Beliebtheit σ:', sz.map((v, j) => `${j}: ${v}`).join(' · '));
 console.log(`Ø-Tipp bringt ${(ev0 * 100).toFixed(1)} Cent pro ${PREIS.toFixed(2)} € → lotto/formel.json`);

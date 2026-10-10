@@ -52,6 +52,11 @@
 
     <!-- ===== Mein Tipp: Zahlen eingeben → wann hätte ich gewonnen? ===== -->
     <section class="panel" id="tab-tipp" role="tabpanel" aria-labelledby="tabbtn-tipp">
+      <div class="card update-card hidden" id="updateCard" role="status">
+        <b>📲 Neue App-Version verfügbar</b>
+        <span class="muted small" id="updateText"></span>
+        <a class="btn btn-primary" id="updateLink" href="https://sergejfritz.github.io/meine-pwa/downloads/lotto.apk">Jetzt herunterladen</a>
+      </div>
       <div class="card">
         <h2>Deine Zahlen</h2>
         <label class="lbl" for="tipInput">6 Zahlen von 1 bis 49 eintippen – oder unten im Schein antippen</label>
@@ -127,7 +132,7 @@
         <p class="small">Eine eigene Rechnung aus den echten Gewinnerzahlen von <span id="fritzN">…</span> Ziehungen. Sie lernt, wie beliebt jede Zahl bei den Mitspielern ist, und berechnet daraus, wie viel ein Tipp im Schnitt zurückbringt. <b>Die Chance auf Richtige ändert sie nicht</b> – nur, wie viel ein Gewinn wert ist.</p>
         <div class="formel" role="math" aria-label="W von T gleich Summe über alle Gewinnklassen k von p k mal Topf k mal eins minus e hoch minus mü k, geteilt durch mü k">
           <div>W(T) = Σ<sub>k</sub> p<sub>k</sub> · Topf<sub>k</sub> · <span class="bruch"><span>1 − e<sup>−μ<sub>k</sub></sup></span><span>μ<sub>k</sub></span></span></div>
-          <div>μ<sub>k</sub> = G<sub>k</sub> · e<sup>κ<sub>k</sub> · B(T) · (r<sub>k</sub>/6 − (6 − r<sub>k</sub>)/43)</sup></div>
+          <div>μ<sub>k</sub> = G<sub>k</sub> · e<sup>κ<sub>k</sub> · B(T) · (r<sub>k</sub>/6 − (6 − r<sub>k</sub>)/43)</sup> · σ<sub>k</sub></div>
           <div>B(T) = Σ<sub>i ∈ T</sub> β<sub>i</sub></div>
         </div>
         <details class="legende">
@@ -139,6 +144,7 @@
             <li><b>k</b> – Gewinnklasse, <b>r<sub>k</sub></b> – ihre Richtigen, <b>p<sub>k</sub></b> – ihre exakte Wahrscheinlichkeit (z. B. 1 : 63 für 3 Richtige)</li>
             <li><b>Topf<sub>k</sub></b> – Ø ausgeschütteter Betrag, <b>G<sub>k</sub></b> – Ø Zahl der Gewinner der Klasse</li>
             <li><b>κ<sub>k</sub></b> – wie stark die Gewinnerzahl auf beliebte Zahlen reagiert (gelernt)</li>
+            <li><b>σ<sub>k</sub></b> – Beliebtheit deiner Superzahl: in „+ SZ“-Klassen σ, sonst (1 − 0,1·σ)/0,9 (σ = 1 ohne Superzahl)</li>
             <li><b>μ<sub>k</sub></b> – erwartete Mitgewinner, wenn du gewinnst; <b>(1 − e<sup>−μ</sup>)/μ</b> – dein erwarteter Anteil am Topf (Poisson-Verteilung). „2 + Superzahl“ zahlt fest 6 €.</li>
           </ul>
         </details>
@@ -146,6 +152,11 @@
         <h3 style="margin-top:14px">Beliebtheit jeder Zahl (β)</h3>
         <div class="heat" id="fritzHeat" role="group" aria-label="Beliebtheit je Zahl"></div>
         <div class="heat-legend divergent" aria-hidden="true"><span>unbeliebt = mehr Geld</span><i></i><span>beliebt = weniger Geld</span></div>
+        <div class="hidden" id="fritzSzBox">
+          <h3 style="margin-top:14px">Beliebtheit der Superzahl (σ)</h3>
+          <div class="sz-heat" id="fritzSz" role="group" aria-label="Beliebtheit je Superzahl"></div>
+          <p class="muted small" style="margin-top:6px">Die Superzahl ist die letzte Ziffer der Losnummer. Wird sie gezogen, teilen sich bei der 7 rund ein Viertel mehr Gewinner den Topf als im Schnitt, bei der 0 rund ein Fünftel weniger – in allen „+ Superzahl“-Klassen bis zum Jackpot. Kannst du deine Losnummer wählen (z. B. online), lohnt eine unbeliebte.</p>
+        </div>
         <div class="btn-row"><button class="btn btn-primary" id="klugTip2" type="button">🧮 Fritz-Tipp erstellen</button></div>
         <p class="muted small" id="fritzQualitaet" style="margin-top:10px"></p>
       </div>

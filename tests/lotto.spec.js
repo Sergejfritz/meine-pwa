@@ -216,6 +216,7 @@ async function mockApp(page) {
     window.__appLog = log;
     window.LottoApp = {
       version: () => '1.0.test',
+      versionCode: () => 100,
       theme: (t) => log.push(['theme', t]),
       tipps: (json) => log.push(['tipps', JSON.parse(json)]),
       benachrichtigungen: () => an,
@@ -225,9 +226,18 @@ async function mockApp(page) {
   });
 }
 const appLog = (page, art) => page.evaluate((a) => window.__appLog.filter((e) => e[0] === a), art);
+const isUpdateDatei = (url) => url.hostname === 'sergejfritz.github.io' && url.pathname.endsWith('/downloads/version.json');
+async function mockUpdate(page, versionCode) {
+  await page.route(isUpdateDatei, (route) => (versionCode === null ? route.abort() : route.fulfill({
+    contentType: 'application/json',
+    headers: { 'Access-Control-Allow-Origin': '*' },
+    body: JSON.stringify({ versionCode, versionName: '1.0.neu' }),
+  })));
+}
 
 test('App: Benachrichtigungen schalten, Tipps und Theme gehen an die App', async ({ page }) => {
   await mockApp(page);
+  await mockUpdate(page, null);
   await mockLive(page, { latest: false });
   await page.goto('/lotto/');
   await expect(page.locator('#apkLink')).toBeHidden(); // in der App kein Download-Hinweis
@@ -259,6 +269,7 @@ test('App: Benachrichtigungen schalten, Tipps und Theme gehen an die App', async
 
 test('App: Zurück-Taste und Sprung per #Bereich', async ({ page }) => {
   await mockApp(page);
+  await mockUpdate(page, null);
   await mockLive(page, { latest: false });
   await page.goto('/lotto/#statistik');
   await expect(page.locator('#tab-statistik')).toBeVisible();
@@ -339,4 +350,42 @@ test('Fritz-Formel: beliebte Zahlen sind weniger wert als unbeliebte', async ({ 
   await tippe(page, '1 2 3 4 5 6');
   await page.click('[data-tab=chancen]');
   await expect(page.locator('#fritzDein .fritz-warn')).toContainText('Muster');
+});
+
+test('App: Hinweis auf neue Version nur, wenn es eine neuere gibt', async ({ page }) => {
+  await mockApp(page);
+  await mockLive(page, { latest: false });
+  await mockUpdate(page, 101);
+  await page.goto('/lotto/');
+  await expect(page.locator('#updateCard')).toBeVisible();
+  await expect(page.locator('#updateText')).toContainText('1.0.neu');
+  await expect(page.locator('#updateLink')).toHaveAttribute('href', /downloads\/lotto\.apk$/);
+
+  // gleiche Version → kein Hinweis (gespeicherte Prüfung vorher verwerfen)
+  await page.evaluate(() => localStorage.removeItem('lotto_app_update'));
+  await page.unroute(isUpdateDatei);
+  await mockUpdate(page, 100);
+  await page.reload();
+  await expect(page.locator('#dataInfo')).toContainText('Ziehungen');
+  await expect(page.locator('#updateCard')).toBeHidden();
+});
+
+test('Fritz-Formel: Superzahl zählt – unbeliebte 0 ist mehr wert als beliebte 7', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/');
+  await tippe(page, '14 34 36 42 43 45');
+  const wert = async (sz) => {
+    await page.click('[data-tab=tipp]');
+    await page.click(`#szPicker button[data-sz="${sz}"]`);
+    await page.click('[data-tab=chancen]');
+    return parseFloat((await page.locator('#fritzDein .money div').first().locator('b').textContent()).replace(',', '.'));
+  };
+  expect(await wert(0)).toBeGreaterThan(await wert(7));
+  await expect(page.locator('#fritzSz span')).toHaveCount(10);
+  // Fritz-Tipp schlägt eine der zwei unbeliebtesten Superzahlen vor
+  await page.click('[data-tab=tipp]');
+  await page.click('#klugTip');
+  const sz = await page.locator('#szPicker button[aria-checked="true"]').getAttribute('data-sz');
+  expect(['0', '1']).toContain(sz);
+  await expect(page.locator('#tipHint')).toContainText('Superzahl');
 });

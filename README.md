@@ -73,8 +73,10 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   Poisson-Verteilung modelliert:
   `W(T) = Σₖ pₖ · Topfₖ · (1 − e^−μₖ)/μₖ`, `μₖ = Gₖ · e^(κₖ · B(T) · (rₖ/6 − (6−rₖ)/43))`,
   `B(T) = Σ βᵢ`. Ein Ø-Tipp bringt 62 ct pro 1,20 € (≈ offizielle 50 %
-  Ausschüttung), beliebte Zahlen −25 %, unbeliebte bis +33 %. Der **Fritz-Tipp**
-  wählt zufällig unter den besten 5 % ohne Muster. Neu trainieren:
+  Ausschüttung), beliebte Zahlen −25 %, unbeliebte bis +33 %. Auch die
+  **Superzahl** ist unterschiedlich beliebt (7: +26 %, 0: −19 % Mitgewinner in
+  den „+ SZ“-Klassen) und geht als Faktor σ ein. Der **Fritz-Tipp** wählt
+  zufällig unter den besten 5 % ohne Muster plus eine unbeliebte Superzahl. Neu trainieren:
   `node scripts/lotto-formel.mjs` (schreibt `lotto/formel.json`).
 - **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
   nächste Ziehung + Annahmeschluss.
@@ -101,8 +103,10 @@ auch ein Knopf „📲 Als Android-App installieren“.
   die neuen Zahlen und ob der aktuelle oder ein gemerkter Tipp gewonnen hat –
   mit echtem Gewinnbetrag, sobald die Quoten feststehen.
 - Systemleisten passend zu Hell/Dunkel, Zurück-Taste springt erst zu „Mein Tipp“.
+- **Update-Hinweis:** Die App prüft höchstens alle 6 Stunden
+  `downloads/version.json` und bietet eine neuere APK zum Herunterladen an.
 - Neu bauen: `LOTTO_KEY_PASSWORD=… scripts/lotto-apk.sh` (legt
-  `downloads/lotto.apk` ab). Der Signatur-Schlüssel `android/lotto-app.p12` ist
+  `downloads/lotto.apk` und `downloads/version.json` ab). Der Signatur-Schlüssel `android/lotto-app.p12` ist
   passwortgeschützt; das Passwort steht bewusst **nicht** im Repo. Nur mit
   demselben Schlüssel lässt sich eine neue Version über die alte installieren
   (gespeicherte Tipps bleiben erhalten).

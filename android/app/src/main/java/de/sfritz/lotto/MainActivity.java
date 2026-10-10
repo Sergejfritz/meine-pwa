@@ -222,6 +222,12 @@ public class MainActivity extends Activity {
             return BuildConfig.VERSION_NAME;
         }
 
+        // für die Update-Prüfung (Vergleich mit downloads/version.json)
+        @JavascriptInterface
+        public int versionCode() {
+            return BuildConfig.VERSION_CODE;
+        }
+
         @JavascriptInterface
         public void theme(String t) {
             boolean dunkel = "dark".equals(t);
