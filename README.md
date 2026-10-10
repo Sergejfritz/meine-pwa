@@ -59,6 +59,13 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   hätte – geprüft gegen **alle Ziehungen seit 1955** (Jahres-Übersicht,
   größte Treffer, Gewinnklassen, Bilanz). Bei den Treffern stehen die **echten
   damaligen Auszahlungen** (inkl. Zusatzzahl-Klassen und DM-Beträgen).
+- **Chancen** – ehrlicher Muster-Check, live über alle Ziehungen gerechnet:
+  Gleichverteilung der Zahlen und Superzahlen (Chi²), Abhängigkeit zwischen
+  Ziehungen, Fortsetzung „heißer“ Zahlen und eine Rückrechnung von Strategien
+  (heiß/kalt/überfällig) gegen den Zufall – Ergebnis: kein Muster. Dazu die
+  exakten Gewinnchancen je Klasse und der **kluge Tipp**: gleiche Chance, aber
+  ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
+  20–30 % weniger pro Gewinn bringen.
 - **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
   nächste Ziehung + Annahmeschluss.
 - **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.

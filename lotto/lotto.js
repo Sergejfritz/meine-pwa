@@ -838,6 +838,187 @@ function zeigeZahlInfo(n, cnt, anzahl, zuletztIdx) {
     `Zuletzt am ${datum(draws[i].d)}${vor ? ` – vor ${plural(vor, 'Ziehung', 'Ziehungen')}` : ' – in der letzten Ziehung'}.`;
 }
 
+// ---------- Chancen & Muster-Check ----------
+// Alle Prüfungen rechnen live über sämtliche Ziehungen – kein fest eingebautes Ergebnis.
+const binom = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i; return r; };
+const KOMBIS = binom(49, 6); // 13.983.816
+const pRichtige = (r) => (binom(6, r) * binom(43, 6 - r)) / KOMBIS;
+const ERWARTET_RICHTIGE = 36 / 49; // Ø Richtige eines beliebigen Tipps
+
+// Normalverteilung & Chi²-Restwahrscheinlichkeit (Wilson-Hilferty, für 9–48 Freiheitsgrade genau genug)
+function phi(z) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  const e = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(z * z) / 2);
+  return 0.5 * (1 + (z >= 0 ? e : -e));
+}
+function chi2p(x, k) {
+  const z = (Math.pow(x / k, 1 / 3) - (1 - 2 / (9 * k))) / Math.sqrt(2 / (9 * k));
+  return 1 - phi(z);
+}
+const prozent = (v, st = 0) => `${(v * 100).toFixed(st).replace('.', ',')} %`;
+const chance = (p) => `1 : ${zahl.format(Math.round(1 / p))}`;
+
+let musterCache = null;
+function musterAnalyse() {
+  if (musterCache && musterCache.n === draws.length) return musterCache;
+  const N = draws.length;
+  const p = 6 / 49;
+  // 1) Kommen alle 49 Zahlen gleich oft? (Chi², korrigiert für „6 aus 49 ohne Zurücklegen“)
+  const cnt = new Array(50).fill(0);
+  for (const z of draws) for (const n of z.n) cnt[n]++;
+  const werte = cnt.slice(1);
+  const chi = werte.reduce((s, c) => s + (c - N * p) ** 2, 0) / (N * p * (1 - p)) * (48 / 49);
+  // 2) Superzahl
+  const sz = new Array(10).fill(0);
+  let szN = 0;
+  for (const z of draws) if (z.sz >= 0) { sz[z.sz]++; szN++; }
+  const chiSz = sz.reduce((s, c) => s + (c - szN / 10) ** 2 / (szN / 10), 0);
+  // 3) Wiederholer aus der Vorziehung
+  let rep = 0;
+  for (let i = 1; i < N; i++) {
+    const vor = new Set(draws[i - 1].n);
+    for (const n of draws[i].n) if (vor.has(n)) rep++;
+  }
+  // 4) Setzen sich Häufigkeiten fort? 1. Hälfte vs. 2. Hälfte
+  const h = Math.floor(N / 2);
+  const a = new Array(50).fill(0);
+  const b = new Array(50).fill(0);
+  draws.forEach((z, i) => { for (const n of z.n) (i < h ? a : b)[n]++; });
+  const korr = pearson(a.slice(1), b.slice(1));
+  // 5) Rückrechnung: hätten Strategien besser getroffen als Zufall?
+  const START = 200;
+  const strategien = backtest(START);
+  musterCache = {
+    n: N, min: Math.min(...werte), max: Math.max(...werte), minZ: werte.indexOf(Math.min(...werte)) + 1,
+    maxZ: werte.indexOf(Math.max(...werte)) + 1, pZahlen: chi2p(chi, 48), pSz: szN ? chi2p(chiSz, 9) : null, szN,
+    rep: rep / (N - 1), korr, strategien, getestet: N - START,
+  };
+  return musterCache;
+}
+function pearson(x, y) {
+  const mx = x.reduce((s, v) => s + v, 0) / x.length;
+  const my = y.reduce((s, v) => s + v, 0) / y.length;
+  let sxy = 0; let sxx = 0; let syy = 0;
+  for (let i = 0; i < x.length; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; }
+  return sxy / Math.sqrt(sxx * syy);
+}
+// Spielt jede Strategie über alle Ziehungen nach: Tipp = die 6 Zahlen nach Regel,
+// nur mit dem Wissen bis zum Vortag, gemessen an der echten Ziehung
+function backtest(start) {
+  const N = draws.length;
+  const regeln = [
+    { art: 'heiss100', name: '🔥 Heißeste 6 der letzten 100 Ziehungen' },
+    { art: 'heissAlle', name: '🔥 Heißeste 6 aller bisherigen Ziehungen' },
+    { art: 'kalt100', name: '🧊 Kälteste 6 der letzten 100 Ziehungen' },
+    { art: 'ueberfaellig', name: '⏳ Die 6 am längsten nicht gezogenen' },
+  ];
+  const zuletzt = new Array(50).fill(-1);
+  const gesamt = new Array(50).fill(0);
+  const fenster = new Array(50).fill(0); // Häufigkeit in den letzten 100 Ziehungen
+  const erg = regeln.map(() => ({ summe: 0, drei: 0 }));
+  const nums = Array.from({ length: 49 }, (_, i) => i + 1);
+  const top6 = (wert) => nums.slice().sort((x, y) => wert(y) - wert(x) || x - y).slice(0, 6);
+  for (let t = 0; t < N; t++) {
+    if (t >= start) {
+      const tipps = {
+        heiss100: top6((n) => fenster[n]),
+        heissAlle: top6((n) => gesamt[n]),
+        kalt100: top6((n) => -fenster[n]),
+        ueberfaellig: top6((n) => -zuletzt[n]),
+      };
+      const gezogen = new Set(draws[t].n);
+      regeln.forEach((r, i) => {
+        const treffer = tipps[r.art].filter((n) => gezogen.has(n)).length;
+        erg[i].summe += treffer;
+        if (treffer >= 3) erg[i].drei++;
+      });
+    }
+    for (const n of draws[t].n) { zuletzt[n] = t; gesamt[n]++; fenster[n]++; }
+    if (t >= 100) for (const n of draws[t - 100].n) fenster[n]--;
+  }
+  return regeln.map((r, i) => ({ name: r.name, schnitt: erg[i].summe / (N - start), drei: erg[i].drei / (N - start) }));
+}
+
+function renderChancen() {
+  const m = musterAnalyse();
+  const pDrei = [3, 4, 5, 6].reduce((s, r) => s + pRichtige(r), 0);
+  // Schwankung, die bei reinem Zufall normal ist: ±3 Standardfehler – bei 4 Strategien
+  // × 2 Kennzahlen = 8 Vergleichen ist ein einzelner Ausreißer über 2 Standardfehler normal
+  const band = 3 * Math.sqrt(6 * (6 / 49) * (43 / 49) * (43 / 48)) / Math.sqrt(m.getestet);
+  const band3 = 3 * Math.sqrt(pDrei * (1 - pDrei) / m.getestet);
+  const besser = m.strategien.filter((x) => x.schnitt > ERWARTET_RICHTIGE + band || x.drei > pDrei + band3);
+  const auffaellig = m.pZahlen < 0.01 || (m.pSz !== null && m.pSz < 0.01) || besser.length > 0;
+
+  $('musterUrteil').innerHTML = auffaellig
+    ? '<div class="verdict-big">Auffälligkeit gefunden – genauer hinsehen</div><p>Mindestens eine Prüfung weicht stärker ab, als Zufall es erwarten lässt. Details unten.</p>'
+    : `<div class="verdict-big">Nein – es gibt kein Muster.</div>
+       <p>${zahl.format(m.n)} Ziehungen seit 1955 verhalten sich genau so, wie es reiner Zufall erwarten lässt. Für die nächste Ziehung hat <b>jede Zahl dieselbe Chance von 6 aus 49 = ${prozent(6 / 49, 1)}</b> – egal wie oft sie früher kam.</p>`;
+  $('musterCard').classList.toggle('win', !auffaellig);
+
+  const ok = (b) => (b ? '✅' : '⚠️');
+  const tests = [
+    [m.pZahlen >= 0.01, 'Kommen alle Zahlen gleich oft?',
+      `Ja. Die ${m.maxZ} kam am häufigsten (${zahl.format(m.max)}×), die ${m.minZ} am seltensten (${zahl.format(m.min)}×). So große Unterschiede entstehen bei reinem Zufall in ${prozent(m.pZahlen)} der Fälle – völlig normal.`],
+    [m.pSz === null || m.pSz >= 0.01, 'Ist die Superzahl gleichmäßig?',
+      m.pSz === null ? 'Noch keine Superzahlen im Datenbestand.' : `Ja – ${zahl.format(m.szN)} Superzahlen, Abweichungen im Zufallsbereich (p = ${prozent(m.pSz)}).`],
+    [Math.abs(m.rep - ERWARTET_RICHTIGE) < 0.05, 'Beeinflusst eine Ziehung die nächste?',
+      `Nein. Im Schnitt tauchen ${m.rep.toFixed(3).replace('.', ',')} Zahlen der Vorziehung wieder auf – Zufall erwartet ${ERWARTET_RICHTIGE.toFixed(3).replace('.', ',')}.`],
+    [Math.abs(m.korr) < 0.3, 'Setzen sich „heiße“ Zahlen fort?',
+      `Nein. Wie oft eine Zahl in der ersten Hälfte aller Ziehungen kam, sagt nichts über die zweite Hälfte (Zusammenhang r = ${m.korr.toFixed(2).replace('.', ',')}; 0 = keiner).`],
+  ];
+  $('musterTests').innerHTML = tests.map(([gut, frage, text]) =>
+    `<div class="check"><span class="ico" aria-hidden="true">${ok(gut)}</span><div><b>${frage}</b><span>${text}</span></div></div>`).join('');
+
+  $('backtestInfo').textContent = `Jede Regel wurde über ${zahl.format(m.getestet)} echte Ziehungen nachgespielt – immer nur mit dem Wissen bis zum Vortag.`;
+  $('backtestTabelle').innerHTML = `<thead><tr><th>Strategie</th><th class="n">Ø Richtige</th><th class="n">3+ Richtige</th></tr></thead><tbody>${
+    m.strategien.map((x) => `<tr><td>${x.name}</td><td class="n">${x.schnitt.toFixed(3).replace('.', ',')}</td><td class="n">${prozent(x.drei, 2)}</td></tr>`).join('')
+  }<tr class="ref"><td>🎲 Reiner Zufall (Mathematik)</td><td class="n">${ERWARTET_RICHTIGE.toFixed(3).replace('.', ',')}</td><td class="n">${prozent(pDrei, 2)}</td></tr></tbody>`;
+  $('backtestUrteil').innerHTML = besser.length
+    ? `⚠️ ${besser.map((x) => x.name).join(', ')} liegt über dem normalen Zufallsbereich – bei mehreren getesteten Regeln kann das trotzdem Zufall sein.`
+    : `<b>Keine Strategie schlägt den Zufall.</b> Alle Werte liegen im normalen Schwankungsbereich `
+      + `(Ø ${(ERWARTET_RICHTIGE - band).toFixed(2).replace('.', ',')}–${(ERWARTET_RICHTIGE + band).toFixed(2).replace('.', ',')} Richtige, `
+      + `3+ Richtige ${prozent(pDrei - band3, 1)}–${prozent(pDrei + band3, 1)}). Kleine Ausreißer nach oben oder unten sind bei so vielen Vergleichen ganz normal.`;
+
+  const ziehung = naechsteZiehung();
+  $('chancenInfo').textContent = `Nächste Ziehung: ${datum(ziehung)} · gilt für jeden Tipp, jede Woche gleich.`;
+  const zeilen = KLASSEN.slice(1).map((kl, i) => {
+    const k = i + 1;
+    const r = 6 - Math.floor((k - 1) / 2);
+    const mitSz = k % 2 === 1;
+    const p = pRichtige(r) * (mitSz ? 0.1 : 0.9);
+    return `<tr><td>${kl.label}</td><td class="n">${chance(p)}</td><td class="n">${p < 0.0001 ? '&lt; 0,01 %' : prozent(p, 2)}</td></tr>`;
+  }).join('');
+  const pGewinn = pDrei + pRichtige(2) * 0.1;
+  $('chancenTabelle').innerHTML = `<thead><tr><th>Gewinnklasse</th><th class="n">Chance</th><th class="n">in %</th></tr></thead><tbody>${zeilen}
+    <tr class="hl"><td>Irgendein Gewinn</td><td class="n">${chance(pGewinn)}</td><td class="n">${prozent(pGewinn, 1)}</td></tr></tbody>`;
+  const jahre = Math.round((1 / (pRichtige(6) * 0.1)) / ZIEHUNGEN_PRO_JAHR);
+  $('chancenExtra').innerHTML = `Mit einem Tipp mittwochs und samstags kommt der Jackpot (6 + Superzahl) statistisch <b>alle ${zahl.format(jahre)} Jahre</b> einmal. Die Chance auf 6 Richtige ist in jeder Ziehung dieselbe – auch wenn eine Zahl „lange nicht dran war“.`;
+}
+
+// Zufallstipp ohne typische Massen-Muster: gleiche Gewinnchance, aber im Schnitt höhere Quoten
+function klugerTipp() {
+  const letzteZ = new Set(draws.length ? letzte().n : []);
+  for (let versuch = 0; versuch < 20000; versuch++) {
+    const t = ziehe6().sort((a, b) => a - b);
+    if (t.filter((n) => n <= 31).length > 2) continue;                          // Geburtstage
+    if (t.some((n, i) => i >= 2 && t[i - 1] === n - 1 && t[i - 2] === n - 2)) continue; // Reihen 7-8-9
+    const zeile = new Array(7).fill(0);
+    const spalte = new Array(7).fill(0);
+    for (const n of t) { zeile[Math.floor((n - 1) / 7)]++; spalte[(n - 1) % 7]++; }
+    if (Math.max(...zeile) > 3 || Math.max(...spalte) > 3) continue;           // Muster auf dem Schein
+    const abst = t.slice(1).map((n, i) => n - t[i]);
+    if (abst.every((d) => d === abst[0])) continue;                            // gleiche Abstände
+    if (t.filter((n) => letzteZ.has(n)).length > 2) continue;                  // Zahlen der letzten Ziehung
+    return t;
+  }
+  return ziehe6().sort((a, b) => a - b);
+}
+function nimmKlugenTipp() {
+  tipNums = new Set(klugerTipp());
+  tippGeaendert(true);
+  setHinweis('🧠 Kluger Tipp: kaum Geburtstagszahlen, keine Muster – gleiche Chance, im Schnitt höhere Quoten.', 'ok');
+}
+
 // ---------- Simulator ----------
 function renderSimTipp() {
   const ok = tippKomplett();
@@ -982,6 +1163,7 @@ function zeigeTab(name) {
   if (!draws.length) return;
   if (name === 'archiv') renderArchiv();
   if (name === 'statistik') renderStatistik();
+  if (name === 'chancen') renderChancen();
   if (name === 'simulator') renderSimTipp();
 }
 
@@ -1031,6 +1213,8 @@ function binde() {
   $('tipInput').addEventListener('input', leseEingabe);
   $('tipInput').addEventListener('change', () => { if (!$('tipHint').classList.contains('warn')) $('tipInput').value = sortiert(tipNums).join(' '); });
   $('quickTip').addEventListener('click', () => { tipNums = new Set(ziehe6()); tippGeaendert(true); });
+  $('klugTip').addEventListener('click', nimmKlugenTipp);
+  $('klugTip2').addEventListener('click', () => { nimmKlugenTipp(); window.lottoZeigeTab('tipp'); });
   $('clearTip').addEventListener('click', () => { tipNums.clear(); tipSz = null; tippGeaendert(true); });
   $('saveTip').addEventListener('click', merkeTipp);
   $('favList').addEventListener('click', (e) => {

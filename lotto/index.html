@@ -41,6 +41,7 @@
 
   <nav class="tabs" role="tablist" aria-label="Bereiche">
     <button role="tab" id="tabbtn-tipp" data-tab="tipp" aria-controls="tab-tipp" aria-selected="true" type="button"><span aria-hidden="true">🎯</span> Mein Tipp</button>
+    <button role="tab" id="tabbtn-chancen" data-tab="chancen" aria-controls="tab-chancen" aria-selected="false" type="button"><span aria-hidden="true">🔮</span> Chancen</button>
     <button role="tab" id="tabbtn-archiv" data-tab="archiv" aria-controls="tab-archiv" aria-selected="false" type="button"><span aria-hidden="true">📜</span> Archiv</button>
     <button role="tab" id="tabbtn-statistik" data-tab="statistik" aria-controls="tab-statistik" aria-selected="false" type="button"><span aria-hidden="true">📊</span> Statistik</button>
     <button role="tab" id="tabbtn-simulator" data-tab="simulator" aria-controls="tab-simulator" aria-selected="false" type="button"><span aria-hidden="true">🎲</span> Simulator</button>
@@ -66,6 +67,7 @@
 
         <div class="btn-row">
           <button class="btn" id="quickTip" type="button">🎲 Quicktipp</button>
+          <button class="btn" id="klugTip" type="button" title="Zufallstipp ohne typische Massen-Zahlen – gleiche Chance, aber höhere Quoten">🧠 Kluger Tipp</button>
           <button class="btn" id="saveTip" type="button">⭐ Merken</button>
           <button class="btn btn-ghost" id="clearTip" type="button">Leeren</button>
         </div>
@@ -76,6 +78,51 @@
       </div>
 
       <div id="result" aria-live="polite"></div>
+    </section>
+
+    <!-- ===== Chancen & Muster-Check ===== -->
+    <section class="panel" id="tab-chancen" role="tabpanel" aria-labelledby="tabbtn-chancen" hidden>
+      <div class="card muster" id="musterCard">
+        <h2>🔮 Lässt sich die nächste Ziehung vorhersagen?</h2>
+        <div id="musterUrteil"></div>
+      </div>
+
+      <div class="card">
+        <h3>Die Prüfungen – live aus allen Ziehungen</h3>
+        <div class="checks" id="musterTests"></div>
+      </div>
+
+      <div class="card">
+        <h3>Hätten „heiße“ oder „überfällige“ Zahlen geholfen?</h3>
+        <p class="muted small" id="backtestInfo"></p>
+        <table class="classes" id="backtestTabelle"></table>
+        <p class="small" id="backtestUrteil" style="margin-top:8px"></p>
+      </div>
+
+      <div class="card">
+        <h3>🎯 Deine Chancen in der nächsten Ziehung</h3>
+        <p class="muted small" id="chancenInfo"></p>
+        <table class="classes" id="chancenTabelle"></table>
+        <p class="small" id="chancenExtra" style="margin-top:8px"></p>
+      </div>
+
+      <div class="card">
+        <h3>💡 Was du wirklich beeinflussen kannst: die Gewinnhöhe</h3>
+        <p class="small">Die Gewinnchance ist für jeden Tipp gleich. Aber viele Menschen tippen Geburtstage (1–31), Muster und Glückszahlen – wird so etwas gezogen, teilen sich mehr Gewinner den Topf. Echte Quoten der letzten 628 Ziehungen (Okt. 2020 – Okt. 2026), nach Anzahl gezogener Zahlen von 1 bis 31:</p>
+        <table class="classes" id="quotenEffekt">
+          <thead><tr><th>Zahlen 1–31</th><th class="n">Ziehungen</th><th class="n">3 Richtige</th><th class="n">4 Richtige</th><th class="n">5 Richtige</th></tr></thead>
+          <tbody>
+            <tr><td>höchstens 2</td><td class="n">55</td><td class="n">12,27 €</td><td class="n">57,49 €</td><td class="n">5.089 €</td></tr>
+            <tr><td>3</td><td class="n">168</td><td class="n">11,87 €</td><td class="n">55,90 €</td><td class="n">4.755 €</td></tr>
+            <tr><td>4</td><td class="n">206</td><td class="n">11,17 €</td><td class="n">52,55 €</td><td class="n">4.485 €</td></tr>
+            <tr><td>5</td><td class="n">158</td><td class="n">10,39 €</td><td class="n">47,23 €</td><td class="n">4.090 €</td></tr>
+            <tr><td>alle 6</td><td class="n">41</td><td class="n">9,53 €</td><td class="n">40,60 €</td><td class="n">3.037 €</td></tr>
+          </tbody>
+        </table>
+        <p class="small" style="margin-top:8px"><b>Rund 20–30 % mehr Geld pro Gewinn</b> als bei Ziehungen mit 5–6 Geburtstagszahlen (gegenüber „alle 6“ sogar bis zu +68 %) – bei exakt gleicher Gewinnchance. Der „kluge Tipp“ nutzt genau das: zufällige Zahlen, höchstens 2 davon unter 32, keine Zahlenreihen, keine Muster auf dem Schein, nicht die Zahlen der letzten Ziehung.</p>
+        <div class="btn-row"><button class="btn btn-primary" id="klugTip2" type="button">🧠 Klugen Tipp erstellen</button></div>
+      </div>
+      <p class="foot">Jede Ziehung ist ein neues, unabhängiges Zufallsexperiment: Die Kugeln haben kein Gedächtnis. Kein System kann die Chance auf Richtige erhöhen – wer etwas anderes verspricht, verkauft Illusionen.</p>
     </section>
 
     <!-- ===== Archiv aller Ziehungen ===== -->

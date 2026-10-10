@@ -278,3 +278,38 @@ test('Browser: APK-Download nur auf Android, App-Karte nie', async ({ page }) =>
   await page.click('[data-tab=archiv]');
   await expect(page.locator('#appCard')).toBeHidden();
 });
+
+// ---------- Chancen & Muster-Check ----------
+test('Chancen: Muster-Check rechnet live und findet kein Muster', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/#chancen');
+  await expect(page.locator('#musterUrteil')).toContainText('kein Muster');
+  await expect(page.locator('#musterTests .check')).toHaveCount(4);
+  await expect(page.locator('#musterTests')).toContainText('am häufigsten');
+  // Rückrechnung: 4 Strategien + Zufall als Vergleich
+  await expect(page.locator('#backtestTabelle tbody tr')).toHaveCount(5);
+  await expect(page.locator('#backtestUrteil')).toContainText('Keine Strategie schlägt den Zufall');
+  // exakte Chancen
+  await expect(page.locator('#chancenTabelle')).toContainText('1 : 139.838.160');
+  await expect(page.locator('#chancenTabelle')).toContainText('1 : 63');
+  await expect(page.locator('#chancenTabelle')).toContainText('Irgendein Gewinn');
+});
+
+test('Kluger Tipp: kaum Geburtstagszahlen, keine Reihen, gültige Zahlen', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/');
+  for (let i = 0; i < 15; i++) {
+    await page.click('#klugTip');
+    const t = (await page.inputValue('#tipInput')).split(' ').map(Number);
+    expect(new Set(t).size).toBe(6);
+    expect(t.every((n) => n >= 1 && n <= 49)).toBe(true);
+    expect(t.filter((n) => n <= 31).length).toBeLessThanOrEqual(2);
+    expect(t.some((n, j) => j >= 2 && t[j - 1] === n - 1 && t[j - 2] === n - 2)).toBe(false);
+  }
+  await expect(page.locator('#tipHint')).toContainText('Kluger Tipp');
+  await expect(page.locator('.verdict')).toBeVisible(); // Auswertung läuft sofort
+  // Knopf im Chancen-Bereich übernimmt den Tipp und springt zu „Mein Tipp“
+  await page.click('[data-tab=chancen]');
+  await page.click('#klugTip2');
+  await expect(page.locator('#tab-tipp')).toBeVisible();
+});
