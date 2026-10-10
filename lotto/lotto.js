@@ -196,7 +196,20 @@ function merge(basis, extra) {
   return [...map.values()].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
 }
 
+// Fritz-Formel (scripts/lotto-formel.mjs) – optional: ohne sie fehlt nur die Formel-Karte
+let FORMEL = null;
+async function ladeFormel() {
+  try {
+    const f = await (await fetch('formel.json')).json();
+    const ok = Array.isArray(f.beta) && f.beta.length === 49 && f.beta.every(Number.isFinite)
+      && f.klassen && Object.values(f.klassen).every((k) => Number.isFinite(k.p) && Number.isFinite(k.r)
+        && (Number.isFinite(k.fest) || (Number.isFinite(k.topf) && Number.isFinite(k.gewinner) && Number.isFinite(k.kappa))));
+    if (ok) FORMEL = f;
+  } catch {}
+}
+
 async function ladeDaten() {
+  const formel = ladeFormel(); // parallel laden, wirft nie
   const res = await fetch('ziehungen.txt');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const basis = parseTxt(await res.text());
@@ -204,6 +217,7 @@ async function ladeDaten() {
   bundledLast = basis[basis.length - 1].d;
   const extra = parseTxt((read(KEY.neu) || []).join('\n'));
   draws = merge(basis, extra);
+  await formel;
 }
 
 const letzte = () => draws[draws.length - 1];
@@ -597,6 +611,7 @@ function renderErgebnis() {
     <p>${text}</p>
     <p class="muted small">Gewonnen hättest du in ${a.proJahr.size} von ${alleJahre.length} Jahren – geprüft gegen ${zahl.format(draws.length)} Ziehungen (${alleJahre[0]}–${alleJahre[alleJahre.length - 1]}).</p>
     <p class="best small">${letzteTxt}</p>
+    ${FORMEL ? `<p class="small" style="margin-top:6px">🧮 Fritz-Formel: Dein Tipp ist im Schnitt <b>${cent(fritzWert(nums))}</b> pro 1,20 € wert (Ø-Tipp ${cent(FORMEL.ev0)}) – besser als ${rangText(fritzRang(fritzWert(nums)))} aller Tipps.</p>` : ''}
   </div>`;
 
   // 2) Jahres-Übersicht
@@ -995,28 +1010,105 @@ function renderChancen() {
   $('chancenExtra').innerHTML = `Mit einem Tipp mittwochs und samstags kommt der Jackpot (6 + Superzahl) statistisch <b>alle ${zahl.format(jahre)} Jahre</b> einmal. Die Chance auf 6 Richtige ist in jeder Ziehung dieselbe – auch wenn eine Zahl „lange nicht dran war“.`;
 }
 
-// Zufallstipp ohne typische Massen-Muster: gleiche Gewinnchance, aber im Schnitt höhere Quoten
-function klugerTipp() {
-  const letzteZ = new Set(draws.length ? letzte().n : []);
-  for (let versuch = 0; versuch < 20000; versuch++) {
-    const t = ziehe6().sort((a, b) => a - b);
-    if (t.filter((n) => n <= 31).length > 2) continue;                          // Geburtstage
-    if (t.some((n, i) => i >= 2 && t[i - 1] === n - 1 && t[i - 2] === n - 2)) continue; // Reihen 7-8-9
-    const zeile = new Array(7).fill(0);
-    const spalte = new Array(7).fill(0);
-    for (const n of t) { zeile[Math.floor((n - 1) / 7)]++; spalte[(n - 1) % 7]++; }
-    if (Math.max(...zeile) > 3 || Math.max(...spalte) > 3) continue;           // Muster auf dem Schein
-    const abst = t.slice(1).map((n, i) => n - t[i]);
-    if (abst.every((d) => d === abst[0])) continue;                            // gleiche Abstände
-    if (t.filter((n) => letzteZ.has(n)).length > 2) continue;                  // Zahlen der letzten Ziehung
-    return t;
-  }
-  return ziehe6().sort((a, b) => a - b);
+// Muster, die Massen von Spielern tippen (sortierter Tipp) – die Formel kennt nur
+// einzelne Zahlen, solche Kombinationen sind aber noch viel häufiger getippt
+function musterIn(t) {
+  if (t.some((n, i) => i >= 2 && t[i - 1] === n - 1 && t[i - 2] === n - 2)) return 'Zahlenreihe';
+  const zeile = new Array(7).fill(0);
+  const spalte = new Array(7).fill(0);
+  for (const n of t) { zeile[Math.floor((n - 1) / 7)]++; spalte[(n - 1) % 7]++; }
+  if (Math.max(...zeile) > 3 || Math.max(...spalte) > 3) return 'Linie auf dem Schein';
+  const abst = t.slice(1).map((n, i) => n - t[i]);
+  if (abst.every((d) => d === abst[0])) return 'gleiche Abstände';
+  return null;
 }
-function nimmKlugenTipp() {
-  tipNums = new Set(klugerTipp());
+
+// Fritz-Formel: Erwartungswert eines Tipps in € (pro 1,20 € Einsatz)
+function fritzWert(t) {
+  const b = t.reduce((s, n) => s + FORMEL.beta[n - 1], 0);
+  let w = 0;
+  for (const k of Object.values(FORMEL.klassen)) {
+    if (Number.isFinite(k.fest)) { w += k.p * k.fest; continue; }
+    const mu = k.gewinner * Math.exp(k.kappa * b * (k.r / 6 - (6 - k.r) / 43));
+    w += k.p * k.topf * (mu < 1e-9 ? 1 : (1 - Math.exp(-mu)) / mu);
+  }
+  return w;
+}
+// Rang unter allen möglichen Tipps (Stichprobe von 20.000 Zufallstipps, einmal berechnet)
+let fritzVerteilung = null;
+function fritzRang(w) {
+  if (!fritzVerteilung) {
+    fritzVerteilung = Array.from({ length: 20000 }, () => fritzWert(ziehe6())).sort((a, b) => a - b);
+  }
+  let lo = 0; let hi = fritzVerteilung.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (fritzVerteilung[m] < w) lo = m + 1; else hi = m; }
+  return lo / fritzVerteilung.length;
+}
+
+// Fritz-Tipp: zufällig unter den besten Tipps laut Formel – ohne Muster, kaum
+// Geburtstagszahlen, höchstens 2 Zahlen der letzten Ziehung. So wird es nicht
+// jedes Mal derselbe Tipp (den würden dann womöglich auch andere spielen).
+function fritzTipp() {
+  const letzteZ = new Set(draws.length ? letzte().n : []);
+  const kandidaten = [];
+  for (let versuch = 0; versuch < 20000 && kandidaten.length < 400; versuch++) {
+    const t = ziehe6().sort((a, b) => a - b);
+    if (t.filter((n) => n <= 31).length > 2 || musterIn(t)) continue;
+    if (t.filter((n) => letzteZ.has(n)).length > 2) continue;
+    kandidaten.push([FORMEL ? fritzWert(t) : 0, t]);
+  }
+  if (!kandidaten.length) return ziehe6().sort((a, b) => a - b);
+  kandidaten.sort((a, b) => b[0] - a[0]);
+  const beste = kandidaten.slice(0, Math.max(1, Math.ceil(kandidaten.length * 0.05)));
+  return beste[Math.floor(Math.random() * beste.length)][1];
+}
+function nimmFritzTipp() {
+  tipNums = new Set(fritzTipp());
   tippGeaendert(true);
-  setHinweis('🧠 Kluger Tipp: kaum Geburtstagszahlen, keine Muster – gleiche Chance, im Schnitt höhere Quoten.', 'ok');
+  setHinweis(FORMEL
+    ? `🧮 Fritz-Tipp: bringt laut Formel im Schnitt ${(fritzWert(sortiert(tipNums)) * 100).toFixed(1).replace('.', ',')} Cent statt ${(FORMEL.ev0 * 100).toFixed(1).replace('.', ',')} – gleiche Chance, höhere Quoten.`
+    : '🧮 Fritz-Tipp: kaum Geburtstagszahlen, keine Muster – gleiche Chance, im Schnitt höhere Quoten.', 'ok');
+}
+const cent = (w) => `${(w * 100).toFixed(1).replace('.', ',')} ct`;
+// Rang als Text – an den Rändern ehrlich statt „0 %“ / „100 %“
+const rangText = (r) => (r >= 0.99 ? 'über 99 %' : r < 0.01 ? 'unter 1 %' : prozent(r));
+
+function renderFritz() {
+  if (!FORMEL) return;
+  $('fritzCard').classList.remove('hidden');
+  $('fritzN').textContent = zahl.format(FORMEL.ziehungen);
+  if (tippKomplett()) {
+    const t = sortiert(tipNums);
+    const w = fritzWert(t);
+    const plus = w / FORMEL.ev0 - 1;
+    const b = t.reduce((s, n) => s + FORMEL.beta[n - 1], 0);
+    const muster = musterIn(t);
+    $('fritzDein').innerHTML = `<p class="small"><b>Dein Tipp ${t.join(' ')}</b> · Beliebtheit B(T) = ${b >= 0 ? '+' : '−'}${Math.abs(b).toFixed(3).replace('.', ',')}</p>
+      <div class="money">
+        <div><small>Wert pro 1,20 €</small><b>${cent(w)}</b></div>
+        <div><small>Ø-Tipp</small><b>${cent(FORMEL.ev0)}</b></div>
+        <div><small>Besser als</small><b>${rangText(fritzRang(w))}</b></div>
+      </div>
+      <p class="small" style="margin-top:8px">${plus >= 0 ? `Ein Gewinn mit diesem Tipp bringt im Schnitt <b>${prozent(plus)} mehr</b>` : `Ein Gewinn mit diesem Tipp bringt im Schnitt <b>${prozent(-plus)} weniger</b>`} als mit einem Durchschnittstipp – weil ${plus >= 0 ? 'weniger' : 'mehr'} Mitspieler diese Zahlen tippen. Unter 1,20 € bleibt jeder Tipp: Lotto ist im Schnitt immer ein Verlustgeschäft.</p>
+      ${muster ? `<p class="fritz-warn">⚠️ Dein Tipp enthält ein Muster (${muster}) – so etwas tippen extrem viele; die Formel unterschätzt das eher.</p>` : ''}`;
+  } else {
+    $('fritzDein').innerHTML = '<p class="muted small">Wähle unter „Mein Tipp“ 6 Zahlen – dann rechnet die Formel deinen Tipp aus.</p>';
+  }
+  const max = Math.max(...FORMEL.beta.map(Math.abs));
+  let h = '';
+  for (let n = 1; n <= 49; n++) {
+    const v = FORMEL.beta[n - 1];
+    const st = Math.round((Math.abs(v) / max) * 80);
+    const farbe = v >= 0 ? 'var(--accent)' : 'var(--cool)';
+    const gerundet = Math.round(Math.abs(v) * 100);
+    const pz = gerundet === 0 ? '±0 %' : `${v >= 0 ? '+' : '−'}${gerundet} %`;
+    h += `<button type="button" tabindex="-1" class="${st > 50 ? 'hot' : ''}" style="background:color-mix(in srgb, ${farbe} ${st}%, var(--surface))" `
+      + `aria-label="Zahl ${n}: ${pz} Mitgewinner gegenüber dem Schnitt"><b>${n}</b><small>${pz}</small></button>`;
+  }
+  $('fritzHeat').innerHTML = h;
+  $('fritzQualitaet').textContent = `Gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen (${datum(FORMEL.von)} – ${datum(FORMEL.stand)}). `
+    + `Das Modell sagt die Zahl der Mitgewinner einer Ziehung zu ${prozent(FORMEL.r2)} voraus – geprüft an Ziehungen, die es beim Lernen nicht kannte (10-fache Kreuzvalidierung). `
+    + `Ein Ø-Tipp bringt ${cent(FORMEL.ev0)} pro 1,20 € zurück – passt zur offiziellen Ausschüttung von rund 50 %.`;
 }
 
 // ---------- Simulator ----------
@@ -1163,7 +1255,7 @@ function zeigeTab(name) {
   if (!draws.length) return;
   if (name === 'archiv') renderArchiv();
   if (name === 'statistik') renderStatistik();
-  if (name === 'chancen') renderChancen();
+  if (name === 'chancen') { renderChancen(); renderFritz(); }
   if (name === 'simulator') renderSimTipp();
 }
 
@@ -1213,8 +1305,8 @@ function binde() {
   $('tipInput').addEventListener('input', leseEingabe);
   $('tipInput').addEventListener('change', () => { if (!$('tipHint').classList.contains('warn')) $('tipInput').value = sortiert(tipNums).join(' '); });
   $('quickTip').addEventListener('click', () => { tipNums = new Set(ziehe6()); tippGeaendert(true); });
-  $('klugTip').addEventListener('click', nimmKlugenTipp);
-  $('klugTip2').addEventListener('click', () => { nimmKlugenTipp(); window.lottoZeigeTab('tipp'); });
+  $('klugTip').addEventListener('click', nimmFritzTipp);
+  $('klugTip2').addEventListener('click', () => { nimmFritzTipp(); window.lottoZeigeTab('tipp'); });
   $('clearTip').addEventListener('click', () => { tipNums.clear(); tipSz = null; tippGeaendert(true); });
   $('saveTip').addEventListener('click', merkeTipp);
   $('favList').addEventListener('click', (e) => {

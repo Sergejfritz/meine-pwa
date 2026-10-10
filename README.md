@@ -66,6 +66,16 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   exakten Gewinnchancen je Klasse und der **kluge Tipp**: gleiche Chance, aber
   ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
   20–30 % weniger pro Gewinn bringen.
+- **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
+  Trefferchance): Aus den echten Gewinnerzahlen von 631 Ziehungen (seit 09/2020)
+  lernt eine Ridge-Regression die Beliebtheit β jeder Zahl (Mitgewinner-Prognose
+  mit kreuzvalidiertem R² = 0,66). Pro Gewinnklasse werden die Mitgewinner als
+  Poisson-Verteilung modelliert:
+  `W(T) = Σₖ pₖ · Topfₖ · (1 − e^−μₖ)/μₖ`, `μₖ = Gₖ · e^(κₖ · B(T) · (rₖ/6 − (6−rₖ)/43))`,
+  `B(T) = Σ βᵢ`. Ein Ø-Tipp bringt 62 ct pro 1,20 € (≈ offizielle 50 %
+  Ausschüttung), beliebte Zahlen −25 %, unbeliebte bis +33 %. Der **Fritz-Tipp**
+  wählt zufällig unter den besten 5 % ohne Muster. Neu trainieren:
+  `node scripts/lotto-formel.mjs` (schreibt `lotto/formel.json`).
 - **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
   nächste Ziehung + Annahmeschluss.
 - **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.

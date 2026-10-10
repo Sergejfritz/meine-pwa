@@ -67,7 +67,7 @@
 
         <div class="btn-row">
           <button class="btn" id="quickTip" type="button">🎲 Quicktipp</button>
-          <button class="btn" id="klugTip" type="button" title="Zufallstipp ohne typische Massen-Zahlen – gleiche Chance, aber höhere Quoten">🧠 Kluger Tipp</button>
+          <button class="btn" id="klugTip" type="button" title="Tipp mit möglichst hohem Wert laut Fritz-Formel – gleiche Chance, höhere Quoten">🧮 Fritz-Tipp</button>
           <button class="btn" id="saveTip" type="button">⭐ Merken</button>
           <button class="btn btn-ghost" id="clearTip" type="button">Leeren</button>
         </div>
@@ -119,8 +119,35 @@
             <tr><td>alle 6</td><td class="n">41</td><td class="n">9,53 €</td><td class="n">40,60 €</td><td class="n">3.037 €</td></tr>
           </tbody>
         </table>
-        <p class="small" style="margin-top:8px"><b>Rund 20–30 % mehr Geld pro Gewinn</b> als bei Ziehungen mit 5–6 Geburtstagszahlen (gegenüber „alle 6“ sogar bis zu +68 %) – bei exakt gleicher Gewinnchance. Der „kluge Tipp“ nutzt genau das: zufällige Zahlen, höchstens 2 davon unter 32, keine Zahlenreihen, keine Muster auf dem Schein, nicht die Zahlen der letzten Ziehung.</p>
-        <div class="btn-row"><button class="btn btn-primary" id="klugTip2" type="button">🧠 Klugen Tipp erstellen</button></div>
+        <p class="small" style="margin-top:8px"><b>Rund 20–30 % mehr Geld pro Gewinn</b> als bei Ziehungen mit 5–6 Geburtstagszahlen (gegenüber „alle 6“ sogar bis zu +68 %) – bei exakt gleicher Gewinnchance. Die Fritz-Formel rechnet das für jeden einzelnen Tipp genau aus.</p>
+      </div>
+
+      <div class="card hidden" id="fritzCard">
+        <h3>🧮 Die Fritz-Formel – was ist dein Tipp wert?</h3>
+        <p class="small">Eine eigene Rechnung aus den echten Gewinnerzahlen von <span id="fritzN">…</span> Ziehungen. Sie lernt, wie beliebt jede Zahl bei den Mitspielern ist, und berechnet daraus, wie viel ein Tipp im Schnitt zurückbringt. <b>Die Chance auf Richtige ändert sie nicht</b> – nur, wie viel ein Gewinn wert ist.</p>
+        <div class="formel" role="math" aria-label="W von T gleich Summe über alle Gewinnklassen k von p k mal Topf k mal eins minus e hoch minus mü k, geteilt durch mü k">
+          <div>W(T) = Σ<sub>k</sub> p<sub>k</sub> · Topf<sub>k</sub> · <span class="bruch"><span>1 − e<sup>−μ<sub>k</sub></sup></span><span>μ<sub>k</sub></span></span></div>
+          <div>μ<sub>k</sub> = G<sub>k</sub> · e<sup>κ<sub>k</sub> · B(T) · (r<sub>k</sub>/6 − (6 − r<sub>k</sub>)/43)</sup></div>
+          <div>B(T) = Σ<sub>i ∈ T</sub> β<sub>i</sub></div>
+        </div>
+        <details class="legende">
+          <summary>Was bedeuten die Zeichen?</summary>
+          <ul>
+            <li><b>T</b> – dein Tipp (6 Zahlen), <b>W(T)</b> – was er im Schnitt zurückbringt (in € pro 1,20 € Einsatz)</li>
+            <li><b>β<sub>i</sub></b> – Beliebtheit der Zahl i, gelernt per Ridge-Regression aus den Gewinnerzahlen jeder Ziehung (+ = von vielen getippt)</li>
+            <li><b>B(T)</b> – Beliebtheit deines Tipps (Summe der sechs β)</li>
+            <li><b>k</b> – Gewinnklasse, <b>r<sub>k</sub></b> – ihre Richtigen, <b>p<sub>k</sub></b> – ihre exakte Wahrscheinlichkeit (z. B. 1 : 63 für 3 Richtige)</li>
+            <li><b>Topf<sub>k</sub></b> – Ø ausgeschütteter Betrag, <b>G<sub>k</sub></b> – Ø Zahl der Gewinner der Klasse</li>
+            <li><b>κ<sub>k</sub></b> – wie stark die Gewinnerzahl auf beliebte Zahlen reagiert (gelernt)</li>
+            <li><b>μ<sub>k</sub></b> – erwartete Mitgewinner, wenn du gewinnst; <b>(1 − e<sup>−μ</sup>)/μ</b> – dein erwarteter Anteil am Topf (Poisson-Verteilung). „2 + Superzahl“ zahlt fest 6 €.</li>
+          </ul>
+        </details>
+        <div id="fritzDein"></div>
+        <h3 style="margin-top:14px">Beliebtheit jeder Zahl (β)</h3>
+        <div class="heat" id="fritzHeat" role="group" aria-label="Beliebtheit je Zahl"></div>
+        <div class="heat-legend divergent" aria-hidden="true"><span>unbeliebt = mehr Geld</span><i></i><span>beliebt = weniger Geld</span></div>
+        <div class="btn-row"><button class="btn btn-primary" id="klugTip2" type="button">🧮 Fritz-Tipp erstellen</button></div>
+        <p class="muted small" id="fritzQualitaet" style="margin-top:10px"></p>
       </div>
       <p class="foot">Jede Ziehung ist ein neues, unabhängiges Zufallsexperiment: Die Kugeln haben kein Gedächtnis. Kein System kann die Chance auf Richtige erhöhen – wer etwas anderes verspricht, verkauft Illusionen.</p>
     </section>

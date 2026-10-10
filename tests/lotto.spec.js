@@ -295,10 +295,10 @@ test('Chancen: Muster-Check rechnet live und findet kein Muster', async ({ page 
   await expect(page.locator('#chancenTabelle')).toContainText('Irgendein Gewinn');
 });
 
-test('Kluger Tipp: kaum Geburtstagszahlen, keine Reihen, gültige Zahlen', async ({ page }) => {
+test('Fritz-Tipp: kaum Geburtstagszahlen, keine Reihen, hoher Formel-Wert', async ({ page }) => {
   await mockLive(page, { latest: false });
   await page.goto('/lotto/');
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 10; i++) {
     await page.click('#klugTip');
     const t = (await page.inputValue('#tipInput')).split(' ').map(Number);
     expect(new Set(t).size).toBe(6);
@@ -306,10 +306,37 @@ test('Kluger Tipp: kaum Geburtstagszahlen, keine Reihen, gültige Zahlen', async
     expect(t.filter((n) => n <= 31).length).toBeLessThanOrEqual(2);
     expect(t.some((n, j) => j >= 2 && t[j - 1] === n - 1 && t[j - 2] === n - 2)).toBe(false);
   }
-  await expect(page.locator('#tipHint')).toContainText('Kluger Tipp');
-  await expect(page.locator('.verdict')).toBeVisible(); // Auswertung läuft sofort
-  // Knopf im Chancen-Bereich übernimmt den Tipp und springt zu „Mein Tipp“
+  await expect(page.locator('#tipHint')).toContainText('Fritz-Tipp');
+  await expect(page.locator('.verdict')).toContainText('Fritz-Formel');
+  // Bewertung im Bereich „Chancen“: deutlich über dem Durchschnitt
   await page.click('[data-tab=chancen]');
+  await expect(page.locator('#fritzCard')).toBeVisible();
+  await expect(page.locator('#fritzDein')).toContainText('Wert pro 1,20 €');
+  const rang = await page.locator('#fritzDein .money div').nth(2).locator('b').textContent();
+  expect(parseInt(rang.replace(/\D+/g, ''), 10)).toBeGreaterThanOrEqual(80); // z. B. „über 99 %“
+  // Knopf im Chancen-Bereich übernimmt einen Tipp und springt zu „Mein Tipp“
   await page.click('#klugTip2');
   await expect(page.locator('#tab-tipp')).toBeVisible();
+});
+
+test('Fritz-Formel: beliebte Zahlen sind weniger wert als unbeliebte', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/');
+  const wert = async (tipp) => {
+    await page.click('[data-tab=tipp]');
+    await tippe(page, tipp);
+    await page.click('[data-tab=chancen]');
+    const t = await page.locator('#fritzDein .money div').first().locator('b').textContent();
+    return parseFloat(t.replace(',', '.'));
+  };
+  const beliebt = await wert('3 7 9 11 12 19');
+  const unbeliebt = await wert('14 34 36 42 43 45');
+  expect(unbeliebt).toBeGreaterThan(beliebt * 1.3);
+  await expect(page.locator('#fritzHeat button')).toHaveCount(49);
+  await expect(page.locator('#fritzQualitaet')).toContainText('Kreuzvalidierung');
+  // Muster-Warnung
+  await page.click('[data-tab=tipp]');
+  await tippe(page, '1 2 3 4 5 6');
+  await page.click('[data-tab=chancen]');
+  await expect(page.locator('#fritzDein .fritz-warn')).toContainText('Muster');
 });
