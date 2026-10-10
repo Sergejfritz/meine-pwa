@@ -49,6 +49,77 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
 
 ---
 
+## 🍀 Lotto-Simulator (privat)
+
+Eigene kleine App unter **`/lotto/`** (🔗 https://sergejfritz.github.io/meine-pwa/lotto/),
+nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Service Worker).
+
+- **Mein Tipp** – 6 Zahlen eintippen oder im Schein antippen (+ optional
+  Superzahl): sofort sichtbar, **ob und in welchem Jahr** man mit ihnen gewonnen
+  hätte – geprüft gegen **alle Ziehungen seit 1955** (Jahres-Übersicht,
+  größte Treffer, Gewinnklassen, Bilanz). Bei den Treffern stehen die **echten
+  damaligen Auszahlungen** (inkl. Zusatzzahl-Klassen und DM-Beträgen).
+- **Chancen** – ehrlicher Muster-Check, live über alle Ziehungen gerechnet:
+  Gleichverteilung der Zahlen und Superzahlen (Chi²), Abhängigkeit zwischen
+  Ziehungen, Fortsetzung „heißer“ Zahlen und eine Rückrechnung von Strategien
+  (heiß/kalt/überfällig) gegen den Zufall – Ergebnis: kein Muster. Dazu die
+  exakten Gewinnchancen je Klasse und der **kluge Tipp**: gleiche Chance, aber
+  ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
+  20–30 % weniger pro Gewinn bringen.
+- **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
+  Trefferchance): Aus den echten Gewinnerzahlen von 631 Ziehungen (seit 09/2020)
+  lernt eine Ridge-Regression die Beliebtheit β jeder Zahl (Mitgewinner-Prognose
+  mit kreuzvalidiertem R² = 0,66). Pro Gewinnklasse werden die Mitgewinner als
+  Poisson-Verteilung modelliert:
+  `W(T) = Σₖ pₖ · Topfₖ · (1 − e^−μₖ)/μₖ`, `μₖ = Gₖ · e^(κₖ · B(T) · (rₖ/6 − (6−rₖ)/43))`,
+  `B(T) = Σ βᵢ`. Ein Ø-Tipp bringt 62 ct pro 1,20 € (≈ offizielle 50 %
+  Ausschüttung), beliebte Zahlen −25 %, unbeliebte bis +33 %. Auch die
+  **Superzahl** ist unterschiedlich beliebt (7: +26 %, 0: −19 % Mitgewinner in
+  den „+ SZ“-Klassen) und geht als Faktor σ ein. Der **Fritz-Tipp** wählt
+  zufällig unter den besten 5 % ohne Muster plus eine unbeliebte Superzahl. Neu trainieren:
+  `node scripts/lotto-formel.mjs` (schreibt `lotto/formel.json`).
+- **🎯 Vorschlag + Bilanz** – für jede kommende Ziehung legt die App einmalig
+  einen Vorschlag fest (Fritz-Formel, keine Muster, **nie eine bereits gezogene
+  Kombination**) plus einen Zufallstipp zum Vergleich. Nach der Ziehung wird
+  beides mit den echten Zahlen und Quoten verglichen – ehrliche Bilanz ab
+  Installation („Unser System“ vs. Zufall vs. Mathematik).
+- **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
+  nächste Ziehung + Annahmeschluss.
+- **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.
+- **Simulator** – Ziehung simulieren oder „spielen bis zum Gewinn“.
+- **Live-Daten** – neue Ziehungen kommen automatisch über die öffentliche
+  Schnittstelle von **WestLotto** (beim Öffnen und, solange die Seite offen ist,
+  kurz nach jeder Ziehung); verpasste Ziehungen werden nachgeholt.
+  Ersatzquelle: [LottoNumberArchive](https://github.com/JohannesFriedrich/LottoNumberArchive).
+  Die mitgelieferte Grunddatei `lotto/ziehungen.txt` lässt sich mit
+  `node scripts/lotto-daten.mjs` auffrischen (nötig ist das nicht).
+
+### 📱 Android-App (APK)
+
+Download aufs Handy: **https://sergejfritz.github.io/meine-pwa/downloads/lotto.apk**
+(im Handy-Browser öffnen → installieren; einmalig „Installation aus dieser Quelle
+erlauben“ bestätigen). Auf der Lotto-Seite erscheint im Android-Browser dafür
+auch ein Knopf „📲 Als Android-App installieren“.
+
+- Kleine native App (`android/`, Java, ohne Fremdbibliotheken), die genau die
+  Web-App aus `lotto/` als App-Inhalt mitbringt – **alles offline**, neue
+  Ziehungen kommen live dazu.
+- **Benachrichtigung nach jeder Ziehung** (Mi/Sa, Archiv → „🔔 Einschalten“):
+  die neuen Zahlen und ob der aktuelle oder ein gemerkter Tipp gewonnen hat –
+  mit echtem Gewinnbetrag, sobald die Quoten feststehen.
+- Systemleisten passend zu Hell/Dunkel, Zurück-Taste springt erst zu „Mein Tipp“.
+- **Update-Hinweis:** Die App prüft höchstens alle 6 Stunden
+  `downloads/version.json` und bietet eine neuere APK zum Herunterladen an.
+- Neu bauen: `LOTTO_KEY_PASSWORD=… scripts/lotto-apk.sh` (legt
+  `downloads/lotto.apk` und `downloads/version.json` ab). Der Signatur-Schlüssel `android/lotto-app.p12` ist
+  passwortgeschützt; das Passwort steht bewusst **nicht** im Repo. Nur mit
+  demselben Schlüssel lässt sich eine neue Version über die alte installieren
+  (gespeicherte Tipps bleiben erhalten).
+- Die CI (`.github/workflows/lotto-apk.yml`) baut die APK bei jeder Änderung mit;
+  ist das Repo-Secret `LOTTO_KEY_PASSWORD` gesetzt, signiert.
+
+---
+
 ## Projektstruktur
 
 ```
@@ -69,6 +140,10 @@ vendor/jspdf…       jsPDF (lokal gehostet, offline)
 vendor/tesseract/   OCR-Engine + WASM (SIMD), lokal gehostet
 vendor/tessdata/    Deutsches OCR-Sprachmodell (deu.traineddata.gz)
 tests/              Playwright End-to-End-Tests + statischer Server
+lotto/              Lotto-Simulator (eigene Mini-App, siehe oben)
+android/            Android-App (APK) für den Lotto-Simulator
+downloads/          fertige lotto.apk zum Herunterladen
+scripts/            Hilfsskripte (Ziehungsdatei erneuern, APK bauen)
 ```
 
 Kein Build-Schritt nötig – reines HTML/CSS/JS, direkt von GitHub Pages

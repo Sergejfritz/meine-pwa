@@ -1,0 +1,42 @@
+name: Lotto-App (APK)
+
+on:
+  push:
+    branches: [main]
+    paths: ['lotto/**', 'android/**', '.github/workflows/lotto-apk.yml']
+  pull_request:
+    paths: ['lotto/**', 'android/**', '.github/workflows/lotto-apk.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: APK bauen
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # Mit Secret LOTTO_KEY_PASSWORD entsteht die signierte Release-APK
+      # (gleicher Schlüssel wie downloads/lotto.apk), sonst eine Debug-APK.
+      - name: APK bauen
+        working-directory: android
+        env:
+          LOTTO_KEY_PASSWORD: ${{ secrets.LOTTO_KEY_PASSWORD }}
+        run: |
+          if [ -n "$LOTTO_KEY_PASSWORD" ]; then
+            ./gradlew --no-daemon assembleRelease
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
+
+      - name: APK hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: lotto-apk
+          path: android/app/build/outputs/apk/**/*.apk
+          retention-days: 14
