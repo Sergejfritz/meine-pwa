@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="theme-color" content="#c1623c">
+  <meta name="description" content="Privater Lotto-6aus49-Simulator: alle Ziehungen seit 1955, Tipp-Prüfung über alle Jahre, Statistik und Ziehungs-Simulator.">
+  <title>Lotto 6aus49 · Simulator</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Lotto">
+  <script>
+    // Theme vor dem ersten Zeichnen setzen (kein Aufblitzen)
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('lotto_theme'); } catch (e) {}
+      if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="stylesheet" href="lotto.css">
+  <script type="module" src="lotto.js"></script>
+</head>
+<body>
+
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">6<small>aus</small>49</span>
+      <div>
+        <h1>Lotto-Simulator</h1>
+        <span class="sub" id="dataInfo">Lade Ziehungen …</span>
+      </div>
+    </div>
+    <button class="icon-btn" id="themeToggle" type="button" aria-label="Hell- oder Dunkelmodus umschalten" title="Hell/Dunkel">🌙</button>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Bereiche">
+    <button role="tab" id="tabbtn-tipp" data-tab="tipp" aria-controls="tab-tipp" aria-selected="true" type="button"><span aria-hidden="true">🎯</span> Mein Tipp</button>
+    <button role="tab" id="tabbtn-archiv" data-tab="archiv" aria-controls="tab-archiv" aria-selected="false" type="button"><span aria-hidden="true">📜</span> Archiv</button>
+    <button role="tab" id="tabbtn-statistik" data-tab="statistik" aria-controls="tab-statistik" aria-selected="false" type="button"><span aria-hidden="true">📊</span> Statistik</button>
+    <button role="tab" id="tabbtn-simulator" data-tab="simulator" aria-controls="tab-simulator" aria-selected="false" type="button"><span aria-hidden="true">🎲</span> Simulator</button>
+  </nav>
+
+  <main>
+    <div class="error-box hidden" id="loadError" role="alert"></div>
+
+    <!-- ===== Mein Tipp: Zahlen eingeben → wann hätte ich gewonnen? ===== -->
+    <section class="panel" id="tab-tipp" role="tabpanel" aria-labelledby="tabbtn-tipp">
+      <div class="card">
+        <h2>Deine Zahlen</h2>
+        <label class="lbl" for="tipInput">6 Zahlen von 1 bis 49 eintippen – oder unten im Schein antippen</label>
+        <input id="tipInput" type="text" inputmode="numeric" placeholder="z. B. 3 12 13 16 23 41" autocomplete="off" spellcheck="false">
+        <div class="hint" id="tipHint" aria-live="polite"></div>
+
+        <div class="grid49" id="tipGrid" role="group" aria-label="Lottoschein: Zahlen 1 bis 49"></div>
+
+        <div class="sz-block">
+          <div class="lbl">Superzahl <span class="muted">(optional – letzte Ziffer deiner Losnummer)</span></div>
+          <div class="sz-picker" id="szPicker" role="radiogroup" aria-label="Superzahl"></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn" id="quickTip" type="button">🎲 Quicktipp</button>
+          <button class="btn" id="saveTip" type="button">⭐ Merken</button>
+          <button class="btn btn-ghost" id="clearTip" type="button">Leeren</button>
+        </div>
+        <div class="favs hidden" id="favs">
+          <div class="lbl">Gemerkte Tipps</div>
+          <div class="fav-list" id="favList"></div>
+        </div>
+      </div>
+
+      <div id="result" aria-live="polite"></div>
+    </section>
+
+    <!-- ===== Archiv aller Ziehungen ===== -->
+    <section class="panel" id="tab-archiv" role="tabpanel" aria-labelledby="tabbtn-archiv" hidden>
+      <div class="card">
+        <h2>Letzte Ziehung</h2>
+        <div id="lastDraw"></div>
+        <div class="update-row">
+          <button class="btn" id="btnUpdate" type="button">🔄 Jetzt live abgleichen</button>
+          <span class="muted" id="updateStatus" role="status"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>Alle Ziehungen</h2>
+          <label class="sel">
+            <span class="sr-only">Jahr</span>
+            <select id="yearSelect" aria-label="Jahr wählen"></select>
+          </label>
+        </div>
+        <p class="muted small" id="archivInfo"></p>
+        <div class="draw-list" id="drawList"></div>
+      </div>
+      <p class="foot">Neue Ziehungen kommen automatisch live über die öffentliche Schnittstelle von WestLotto – beim Öffnen und, solange die Seite offen ist, kurz nach jeder Ziehung. Samstagsziehungen ab 9. Oktober 1955 (anfangs sonntags), Mittwochsziehungen ab Dezember 2000 (davor gab es ein separates Mittwochslotto). Superzahl ab Dezember 1991.</p>
+    </section>
+
+    <!-- ===== Statistik ===== -->
+    <section class="panel" id="tab-statistik" role="tabpanel" aria-labelledby="tabbtn-statistik" hidden>
+      <div class="card">
+        <div class="card-head">
+          <h2>Wie oft wurde jede Zahl gezogen?</h2>
+          <label class="sel">
+            <span class="sr-only">Zeitraum</span>
+            <select id="statRange" aria-label="Zeitraum wählen">
+              <option value="alle">Alle seit 1955</option>
+              <option value="10j">Letzte 10 Jahre</option>
+              <option value="1j">Letzte 12 Monate</option>
+              <option value="100">Letzte 100 Ziehungen</option>
+            </select>
+          </label>
+        </div>
+        <p class="muted small" id="statInfo"></p>
+        <div class="heat" id="heat" role="group" aria-label="Häufigkeit je Zahl"></div>
+        <div class="heat-legend" aria-hidden="true"><span>seltener</span><i></i><span>öfter</span></div>
+        <div class="num-info" id="numInfo" aria-live="polite">Tipp auf eine Zahl für Details.</div>
+      </div>
+
+      <div class="stat-cols">
+        <div class="card"><h3>🔥 Am häufigsten</h3><div id="topHot"></div></div>
+        <div class="card"><h3>🧊 Am seltensten</h3><div id="topCold"></div></div>
+        <div class="card"><h3>⏳ Am längsten nicht gezogen</h3><div id="topDue"></div></div>
+      </div>
+
+      <div class="card">
+        <h3>Superzahl-Häufigkeit</h3>
+        <div class="bars" id="szBars"></div>
+      </div>
+      <p class="foot">Hinweis: Jede Zahl hat bei jeder Ziehung exakt dieselbe Chance (6 aus 49). Häufigkeiten aus der Vergangenheit sagen nichts über die nächste Ziehung.</p>
+    </section>
+
+    <!-- ===== Simulator ===== -->
+    <section class="panel" id="tab-simulator" role="tabpanel" aria-labelledby="tabbtn-simulator" hidden>
+      <div class="card">
+        <h2>Dein Tipp im Simulator</h2>
+        <div id="simTip"></div>
+      </div>
+
+      <div class="card">
+        <h2>Eine Ziehung simulieren</h2>
+        <div class="draw-stage" id="liveBalls" aria-live="polite"></div>
+        <div class="live-result" id="liveResult"></div>
+        <button class="btn btn-primary" id="btnLive" type="button">▶ Ziehung starten</button>
+      </div>
+
+      <div class="card">
+        <h2>Spielen, bis du gewinnst</h2>
+        <p class="muted small">Der Simulator spielt deinen Tipp mittwochs und samstags – so lange, bis das Ziel erreicht ist. Zufällige Ziehungen, in Sekunden statt Jahrtausenden.</p>
+        <div class="sim-ctrl">
+          <label class="sel">
+            <span>Ziel</span>
+            <select id="simTarget">
+              <option value="6">4 Richtige</option>
+              <option value="4">5 Richtige</option>
+              <option value="2" selected>6 Richtige</option>
+              <option value="1">6 Richtige + Superzahl (Jackpot)</option>
+            </select>
+          </label>
+          <button class="btn btn-primary" id="btnSim" type="button">▶ Los geht's</button>
+        </div>
+        <div class="sim-stats" id="simStats"></div>
+        <div class="sim-msg" id="simMsg" role="status"></div>
+      </div>
+      <p class="foot">Gewinnbeträge sind grobe Schätzungen mit durchschnittlichen Quoten der letzten Jahre; der Einsatz rechnet mit 1,20 € pro Tipp (ohne Gebühren).</p>
+    </section>
+  </main>
+
+  <footer class="app-foot">Nur für mich · Daten: WestLotto (live) &amp; LottoNumberArchive · funktioniert offline</footer>
+</body>
+</html>

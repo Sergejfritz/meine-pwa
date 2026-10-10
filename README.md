@@ -49,6 +49,29 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
 
 ---
 
+## 🍀 Lotto-Simulator (privat)
+
+Eigene kleine App unter **`/lotto/`** (🔗 https://sergejfritz.github.io/meine-pwa/lotto/),
+nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Service Worker).
+
+- **Mein Tipp** – 6 Zahlen eintippen oder im Schein antippen (+ optional
+  Superzahl): sofort sichtbar, **ob und in welchem Jahr** man mit ihnen gewonnen
+  hätte – geprüft gegen **alle Ziehungen seit 1955** (Jahres-Übersicht,
+  größte Treffer, Gewinnklassen, Bilanz). Bei den Treffern stehen die **echten
+  damaligen Auszahlungen** (inkl. Zusatzzahl-Klassen und DM-Beträgen).
+- **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
+  nächste Ziehung + Annahmeschluss.
+- **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.
+- **Simulator** – Ziehung simulieren oder „spielen bis zum Gewinn“.
+- **Live-Daten** – neue Ziehungen kommen automatisch über die öffentliche
+  Schnittstelle von **WestLotto** (beim Öffnen und, solange die Seite offen ist,
+  kurz nach jeder Ziehung); verpasste Ziehungen werden nachgeholt.
+  Ersatzquelle: [LottoNumberArchive](https://github.com/JohannesFriedrich/LottoNumberArchive).
+  Die mitgelieferte Grunddatei `lotto/ziehungen.txt` lässt sich mit
+  `node scripts/lotto-daten.mjs` auffrischen (nötig ist das nicht).
+
+---
+
 ## Projektstruktur
 
 ```
@@ -69,6 +92,8 @@ vendor/jspdf…       jsPDF (lokal gehostet, offline)
 vendor/tesseract/   OCR-Engine + WASM (SIMD), lokal gehostet
 vendor/tessdata/    Deutsches OCR-Sprachmodell (deu.traineddata.gz)
 tests/              Playwright End-to-End-Tests + statischer Server
+lotto/              Lotto-Simulator (eigene Mini-App, siehe oben)
+scripts/            Hilfsskripte (lotto-daten.mjs: Ziehungsdatei erneuern)
 ```
 
 Kein Build-Schritt nötig – reines HTML/CSS/JS, direkt von GitHub Pages

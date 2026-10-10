@@ -1,0 +1,20 @@
+{
+  "name": "Lotto-Simulator 6aus49",
+  "short_name": "Lotto",
+  "description": "Alle Lotto-Ziehungen seit 1955: Tipp prüfen, Statistik und Ziehungs-Simulator – auch offline.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "id": "lotto-simulator-sfritz",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f1ea",
+  "theme_color": "#f4f1ea",
+  "lang": "de",
+  "dir": "ltr",
+  "categories": ["entertainment", "utilities"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

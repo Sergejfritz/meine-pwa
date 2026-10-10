@@ -39,7 +39,8 @@ self.addEventListener('install', (e) => {
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
+      // alte Caches löschen – den des Lotto-Simulators (eigener SW) nicht anfassen
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && !k.startsWith('lotto-')).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -48,6 +49,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  // Lotto-Simulator (/lotto/) hat einen eigenen Service Worker
+  if (new URL(req.url).pathname.includes('/lotto/')) return;
 
   e.respondWith(
     caches.match(req).then((cached) => {
