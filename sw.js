@@ -49,8 +49,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
-  // Lotto-Simulator (/lotto/) hat einen eigenen Service Worker
-  if (new URL(req.url).pathname.includes('/lotto/')) return;
+  // Lotto-Simulator (/lotto/) hat einen eigenen Service Worker, die APK (/downloads/) nie cachen
+  if (/\/(lotto|downloads)\//.test(new URL(req.url).pathname)) return;
 
   e.respondWith(
     caches.match(req).then((cached) => {

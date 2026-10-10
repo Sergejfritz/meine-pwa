@@ -207,3 +207,74 @@ test('Simulator: einzelne Ziehung und Dauerlauf bis 4 Richtige', async ({ page }
   await page.click('#btnSim');
   await expect(page.locator('#simMsg.done')).toContainText('Geschafft', { timeout: 20000 });
 });
+
+// ---------- Android-App (window.LottoApp wird von der App bereitgestellt) ----------
+async function mockApp(page) {
+  await page.addInitScript(() => {
+    const log = [];
+    let an = false;
+    window.__appLog = log;
+    window.LottoApp = {
+      version: () => '1.0.test',
+      theme: (t) => log.push(['theme', t]),
+      tipps: (json) => log.push(['tipps', JSON.parse(json)]),
+      benachrichtigungen: () => an,
+      setBenachrichtigungen: (x, datum) => { an = x; log.push(['benachrichtigen', x, datum]); },
+      testBenachrichtigung: () => log.push(['test']),
+    };
+  });
+}
+const appLog = (page, art) => page.evaluate((a) => window.__appLog.filter((e) => e[0] === a), art);
+
+test('App: Benachrichtigungen schalten, Tipps und Theme gehen an die App', async ({ page }) => {
+  await mockApp(page);
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/');
+  await expect(page.locator('#apkLink')).toBeHidden(); // in der App kein Download-Hinweis
+
+  await page.click('[data-tab=archiv]');
+  await expect(page.locator('#appCard')).toBeVisible();
+  await expect(page.locator('#appInfo')).toContainText('1.0.test');
+  await page.click('#btnNotify');
+  await expect(page.locator('#btnNotify')).toContainText('Ausschalten');
+  const an = await appLog(page, 'benachrichtigen');
+  expect(an[0][1]).toBe(true);
+  expect(an[0][2]).toBe(BUNDLED_LAST); // schon bekannte Ziehung wird nicht noch einmal gemeldet
+  await page.click('#btnNotifyTest');
+  expect(await appLog(page, 'test')).toHaveLength(1);
+
+  await page.click('[data-tab=tipp]');
+  await tippe(page, '5 9 17 22 38 44');
+  await page.click('#saveTip');
+  const tipps = await appLog(page, 'tipps');
+  const letzter = tipps[tipps.length - 1][1];
+  expect(letzter.tipp.nums).toEqual([5, 9, 17, 22, 38, 44]);
+  expect(letzter.favoriten[0].nums).toEqual([5, 9, 17, 22, 38, 44]);
+
+  await page.click('#themeToggle');
+  const themes = await appLog(page, 'theme');
+  expect(themes.length).toBeGreaterThanOrEqual(2); // beim Start + Umschalten
+  expect(themes[themes.length - 1][1]).toBe(await page.evaluate(() => document.documentElement.dataset.theme));
+});
+
+test('App: Zurück-Taste und Sprung per #Bereich', async ({ page }) => {
+  await mockApp(page);
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/#statistik');
+  await expect(page.locator('#tab-statistik')).toBeVisible();
+  expect(await page.evaluate(() => window.lottoZurueck())).toBe(true);
+  await expect(page.locator('#tab-tipp')).toBeVisible();
+  expect(await page.evaluate(() => window.lottoZurueck())).toBe(false); // App darf schließen
+  await page.evaluate(() => window.lottoZeigeTab('archiv'));
+  await expect(page.locator('#tab-archiv')).toBeVisible();
+});
+
+test('Browser: APK-Download nur auf Android, App-Karte nie', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/');
+  const android = /Android/i.test(await page.evaluate(() => navigator.userAgent));
+  await expect(page.locator('#apkLink')).toBeVisible({ visible: android });
+  await expect(page.locator('#apkLink')).toHaveAttribute('href', '../downloads/lotto.apk');
+  await page.click('[data-tab=archiv]');
+  await expect(page.locator('#appCard')).toBeHidden();
+});

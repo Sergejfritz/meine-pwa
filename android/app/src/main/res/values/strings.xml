@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Lotto</string>
+    <string name="kanal_name">Neue Lottozahlen</string>
+    <string name="kanal_beschreibung">Die Zahlen kurz nach jeder Ziehung – und ob deine Tipps gewonnen haben.</string>
+</resources>

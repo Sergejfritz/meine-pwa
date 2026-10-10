@@ -70,6 +70,28 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   Die mitgelieferte Grunddatei `lotto/ziehungen.txt` lässt sich mit
   `node scripts/lotto-daten.mjs` auffrischen (nötig ist das nicht).
 
+### 📱 Android-App (APK)
+
+Download aufs Handy: **https://sergejfritz.github.io/meine-pwa/downloads/lotto.apk**
+(im Handy-Browser öffnen → installieren; einmalig „Installation aus dieser Quelle
+erlauben“ bestätigen). Auf der Lotto-Seite erscheint im Android-Browser dafür
+auch ein Knopf „📲 Als Android-App installieren“.
+
+- Kleine native App (`android/`, Java, ohne Fremdbibliotheken), die genau die
+  Web-App aus `lotto/` als App-Inhalt mitbringt – **alles offline**, neue
+  Ziehungen kommen live dazu.
+- **Benachrichtigung nach jeder Ziehung** (Mi/Sa, Archiv → „🔔 Einschalten“):
+  die neuen Zahlen und ob der aktuelle oder ein gemerkter Tipp gewonnen hat –
+  mit echtem Gewinnbetrag, sobald die Quoten feststehen.
+- Systemleisten passend zu Hell/Dunkel, Zurück-Taste springt erst zu „Mein Tipp“.
+- Neu bauen: `LOTTO_KEY_PASSWORD=… scripts/lotto-apk.sh` (legt
+  `downloads/lotto.apk` ab). Der Signatur-Schlüssel `android/lotto-app.p12` ist
+  passwortgeschützt; das Passwort steht bewusst **nicht** im Repo. Nur mit
+  demselben Schlüssel lässt sich eine neue Version über die alte installieren
+  (gespeicherte Tipps bleiben erhalten).
+- Die CI (`.github/workflows/lotto-apk.yml`) baut die APK bei jeder Änderung mit;
+  ist das Repo-Secret `LOTTO_KEY_PASSWORD` gesetzt, signiert.
+
 ---
 
 ## Projektstruktur
@@ -93,7 +115,9 @@ vendor/tesseract/   OCR-Engine + WASM (SIMD), lokal gehostet
 vendor/tessdata/    Deutsches OCR-Sprachmodell (deu.traineddata.gz)
 tests/              Playwright End-to-End-Tests + statischer Server
 lotto/              Lotto-Simulator (eigene Mini-App, siehe oben)
-scripts/            Hilfsskripte (lotto-daten.mjs: Ziehungsdatei erneuern)
+android/            Android-App (APK) für den Lotto-Simulator
+downloads/          fertige lotto.apk zum Herunterladen
+scripts/            Hilfsskripte (Ziehungsdatei erneuern, APK bauen)
 ```
 
 Kein Build-Schritt nötig – reines HTML/CSS/JS, direkt von GitHub Pages

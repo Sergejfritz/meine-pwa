@@ -23,6 +23,14 @@ const KEY = {
   tab: 'lotto_tab',
 };
 
+// In der Android-App gibt es window.LottoApp (Benachrichtigungen, Systemleisten).
+// Im Browser fehlt es – dann laufen alle app()-Aufrufe ins Leere.
+const APP = typeof window.LottoApp === 'object' && window.LottoApp ? window.LottoApp : null;
+function app(methode, ...args) {
+  if (!APP) return undefined;
+  try { return APP[methode](...args); } catch { return undefined; }
+}
+
 // Gewinnklassen nach heutigem Schema (seit 2013). Quoten = grobe Durchschnitte.
 const KLASSEN = [
   null,
@@ -411,7 +419,14 @@ function tippGeaendert(inputSync, probleme = []) {
   else setHinweis(`Noch ${plural(6 - tipNums.size, 'Zahl', 'Zahlen')} wählen.`);
 
   write(KEY.tipp, { nums: sortiert(tipNums), sz: tipSz });
+  tippsAnApp();
   renderErgebnis();
+}
+
+// Die App prüft nach jeder Ziehung den aktuellen und alle gemerkten Tipps
+function tippsAnApp() {
+  if (!APP) return;
+  app('tipps', JSON.stringify({ tipp: tippKomplett() ? { nums: sortiert(tipNums), sz: tipSz } : null, favoriten: favoriten() }));
 }
 
 function leseEingabe() {
@@ -449,6 +464,7 @@ function merkeTipp() {
   favs.unshift(neu);
   write(KEY.favs, favs.slice(0, 12));
   renderFavs();
+  tippsAnApp();
   setHinweis('⭐ Tipp gemerkt.', 'ok');
 }
 
@@ -978,7 +994,27 @@ function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   $('themeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
   document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#262320' : '#f4f1ea';
+  app('theme', t); // Statusleiste der App mitfärben
 }
+
+// ---------- Android-App ----------
+function renderAppKarte() {
+  if (!APP) return;
+  $('appCard').classList.remove('hidden');
+  const an = !!app('benachrichtigungen');
+  $('btnNotify').textContent = an ? '🔕 Ausschalten' : '🔔 Einschalten';
+  $('btnNotify').classList.toggle('btn-primary', !an);
+  $('btnNotifyTest').disabled = !an;
+  $('appInfo').textContent = `${an ? '✓ Benachrichtigungen sind an.' : 'Benachrichtigungen sind aus.'} · App-Version ${app('version') || '?'}`;
+}
+// Aufrufe aus der App (Java): Status neu zeichnen, Bereich wechseln, Zurück-Taste
+window.lottoAppStatus = renderAppKarte;
+window.lottoZeigeTab = (name) => { zeigeTab(name); window.scrollTo({ top: 0 }); };
+window.lottoZurueck = () => {
+  if (aktiverTab === 'tipp') return false;
+  window.lottoZeigeTab('tipp');
+  return true;
+};
 
 function binde() {
   $('themeToggle').addEventListener('click', () => {
@@ -1004,6 +1040,7 @@ function binde() {
       favs.splice(Number(b.dataset.del), 1);
       write(KEY.favs, favs);
       renderFavs();
+      tippsAnApp();
     } else if (b.dataset.load !== undefined) {
       const f = favs[Number(b.dataset.load)];
       if (!f) return;
@@ -1051,6 +1088,16 @@ function binde() {
   });
   $('btnLive').addEventListener('click', liveZiehung);
   $('btnSim').addEventListener('click', simStart);
+
+  $('btnNotify').addEventListener('click', () => {
+    app('setBenachrichtigungen', !app('benachrichtigungen'), draws.length ? letzte().d : '');
+    setTimeout(renderAppKarte, 400);
+  });
+  $('btnNotifyTest').addEventListener('click', () => {
+    app('testBenachrichtigung');
+    $('appInfo').textContent = 'Test läuft – die Benachrichtigung kommt gleich.';
+    setTimeout(renderAppKarte, 4000);
+  });
 }
 
 async function init() {
@@ -1062,7 +1109,11 @@ async function init() {
   if (t && gueltigeSz(t.sz)) tipSz = t.sz ?? null;
   renderFavs();
   binde();
-  zeigeTab(read(KEY.tab) || 'tipp');
+  renderAppKarte();
+  // Im Browser auf Android: Hinweis auf die installierbare App (APK)
+  if (!APP && /Android/i.test(navigator.userAgent)) $('apkLink').classList.remove('hidden');
+  const anker = location.hash.slice(1);
+  zeigeTab($('tab-' + anker) ? anker : read(KEY.tab) || 'tipp');
 
   try {
     await ladeDaten();
@@ -1077,7 +1128,8 @@ async function init() {
   zeigeTab(aktiverTab);
   aktualisieren(false);
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Offline-Cache nur im Browser – in der App liegt alles schon im Gerät
+  if (!APP && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 init();

@@ -89,6 +89,17 @@
         </div>
       </div>
 
+      <!-- nur in der Android-App sichtbar -->
+      <div class="card hidden" id="appCard">
+        <h2>🔔 Benachrichtigung nach jeder Ziehung</h2>
+        <p class="muted small">Kurz nach jeder Ziehung (Mittwoch und Samstag) meldet dir die App die neuen Zahlen – und ob dein Tipp oder deine gemerkten Tipps gewonnen haben, mit echtem Gewinnbetrag.</p>
+        <div class="btn-row">
+          <button class="btn btn-primary" id="btnNotify" type="button">🔔 Einschalten</button>
+          <button class="btn" id="btnNotifyTest" type="button">Test</button>
+        </div>
+        <p class="muted small" id="appInfo" role="status" style="margin-top:10px"></p>
+      </div>
+
       <div class="card">
         <div class="card-head">
           <h2>Alle Ziehungen</h2>
@@ -173,6 +184,9 @@
     </section>
   </main>
 
-  <footer class="app-foot">Nur für mich · Daten: WestLotto (live) &amp; LottoNumberArchive · funktioniert offline</footer>
+  <footer class="app-foot">
+    <a class="apk-link hidden" id="apkLink" href="../downloads/lotto.apk" download>📲 Als Android-App installieren (APK)</a>
+    Nur für mich · Daten: WestLotto (live) &amp; LottoNumberArchive · funktioniert offline
+  </footer>
 </body>
 </html>
