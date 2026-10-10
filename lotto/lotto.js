@@ -56,7 +56,8 @@ function klasse(richtige, szTreffer) {
 
 const $ = (id) => document.getElementById(id);
 const zahl = new Intl.NumberFormat('de-DE');
-const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+// minimumFractionDigits mit angeben – ältere Browser/WebViews werfen sonst einen RangeError
+const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const eur = (v) => eurFmt.format(v);
 const WT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -803,7 +804,7 @@ function renderStatistik() {
     const p = max > min ? (cnt[n] - min) / (max - min) : 0.5;
     const mix = Math.round(8 + p * 84);
     h += `<button type="button" data-n="${n}" class="${mix > 55 ? 'hot' : ''}${statAuswahl === n ? ' sel' : ''}" ` +
-      `style="background:color-mix(in srgb, var(--accent) ${mix}%, var(--surface))" aria-label="Zahl ${n}: ${cnt[n]}-mal gezogen">` +
+      `style="background:rgba(193,98,60,${(mix / 100).toFixed(2)});background:color-mix(in srgb, var(--accent) ${mix}%, var(--surface))" aria-label="Zahl ${n}: ${cnt[n]}-mal gezogen">` +
       `<b>${n}</b><small>${zahl.format(cnt[n])}×</small></button>`;
   }
   $('heat').innerHTML = h;

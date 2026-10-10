@@ -211,6 +211,31 @@ final class Lotto {
         kanal.setDescription(c.getString(R.string.kanal_beschreibung));
         nm.createNotificationChannel(kanal);
 
+        String[] text = meldungsText(z, tippsJson);
+
+        Intent oeffnen = new Intent(c, MainActivity.class).putExtra("tab", "tipp")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent pi = PendingIntent.getActivity(c, 0, oeffnen,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+
+        Notification n = new Notification.Builder(c, KANAL)
+                .setSmallIcon(R.drawable.ic_stat_lotto)
+                .setColor(0xFFC1623C)
+                .setContentTitle(text[0])
+                .setContentText(text[1])
+                .setStyle(new Notification.BigTextStyle().bigText(text[2]))
+                .setContentIntent(pi)
+                .setAutoCancel(true)
+                .build();
+        try {
+            nm.notify(MELDUNG_ID, n);
+        } catch (SecurityException ignored) {
+            // Berechtigung inzwischen entzogen
+        }
+    }
+
+    /** Titel, Kurztext und ausführlicher Text der Meldung (ohne Android-Abhängigkeiten → testbar). */
+    static String[] meldungsText(Ziehung z, String tippsJson) {
         NumberFormat euro = NumberFormat.getCurrencyInstance(Locale.GERMANY);
         StringBuilder zahlen = new StringBuilder();
         for (int n : z.zahlen) zahlen.append(zahlen.length() > 0 ? " · " : "").append(n);
@@ -248,26 +273,7 @@ final class Lotto {
             }
             kurz = bester != null ? bester : (tipps.size() == 1 ? "Dein Tipp" : "Deine Tipps") + ": diesmal kein Gewinn";
         }
-
-        Intent oeffnen = new Intent(c, MainActivity.class).putExtra("tab", "tipp")
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pi = PendingIntent.getActivity(c, 0, oeffnen,
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
-
-        Notification n = new Notification.Builder(c, KANAL)
-                .setSmallIcon(R.drawable.ic_stat_lotto)
-                .setColor(0xFFC1623C)
-                .setContentTitle("Lottozahlen vom " + datumText(z.datum))
-                .setContentText(kurz)
-                .setStyle(new Notification.BigTextStyle().bigText(lang.toString()))
-                .setContentIntent(pi)
-                .setAutoCancel(true)
-                .build();
-        try {
-            nm.notify(MELDUNG_ID, n);
-        } catch (SecurityException ignored) {
-            // Berechtigung inzwischen entzogen
-        }
+        return new String[]{"Lottozahlen vom " + datumText(z.datum), kurz, lang.toString()};
     }
 
     static String datumText(String iso) {

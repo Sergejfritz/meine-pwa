@@ -125,11 +125,13 @@ public class MainActivity extends Activity {
         } else {
             w.setStatusBarColor(bg);
             w.setNavigationBarColor(bg);
-            View d = w.getDecorView();
-            int hell = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
-            int f = d.getSystemUiVisibility();
-            d.setSystemUiVisibility(dunkel ? (f & ~hell) : (f | hell));
         }
+        // Auch die alten Flags setzen: Android 11 ignoriert sonst den Wechsel der
+        // Statusleisten-Symbole, wenn das Theme sie anfangs auf „hell“ gestellt hat.
+        View d = w.getDecorView();
+        int hellAlt = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR | View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR;
+        int f = d.getSystemUiVisibility();
+        d.setSystemUiVisibility(dunkel ? (f & ~hellAlt) : (f | hellAlt));
     }
 
     // Zurück: erst zum Bereich „Mein Tipp“, von dort aus die App schließen

@@ -123,7 +123,8 @@ button { cursor: pointer; }
 }
 
 main { max-width: 720px; margin: 0 auto; padding: 6px 16px 0; }
-.panel { display: flex; flex-direction: column; gap: 14px; }
+/* Grid statt Flex: Abstände (gap) klappen so auch in älteren Android-WebViews */
+.panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .panel[hidden] { display: none; }
 
 .card {
@@ -187,8 +188,13 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); box-shado
 }
 .grid49 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .grid49 button[aria-pressed="true"]::after {
-  content: ''; position: absolute; inset: 18%; border-radius: 50%;
+  content: ''; position: absolute; top: 18%; right: 18%; bottom: 18%; left: 18%; border-radius: 50%;
   border: 2px solid currentColor; opacity: .55;
+}
+
+/* ältere WebViews ohne aspect-ratio: feste Höhe statt Quadrat */
+@supports not (aspect-ratio: 1) {
+  .grid49 button, .heat button { height: 42px; }
 }
 
 .sz-block { margin-top: 14px; }
@@ -221,7 +227,7 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); box-shado
 .ball.big { width: 44px; height: 44px; font-size: 18px; }
 
 /* ===== Ergebnis ===== */
-#result { display: flex; flex-direction: column; gap: 14px; }
+#result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .verdict { border-width: 2px; }
 .verdict.win { border-color: var(--accent); }
 .verdict.jackpot { border-color: var(--accent); background: linear-gradient(160deg, var(--accent-soft), var(--surface) 70%); }
