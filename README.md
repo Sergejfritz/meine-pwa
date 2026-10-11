@@ -82,7 +82,11 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   einen Vorschlag fest (Fritz-Formel, keine Muster, **nie eine bereits gezogene
   Kombination**) plus einen Zufallstipp zum Vergleich. Nach der Ziehung wird
   beides mit den echten Zahlen und Quoten verglichen – ehrliche Bilanz ab
-  Installation („Unser System“ vs. Zufall vs. Mathematik).
+  Installation („Unser System“ vs. Zufall vs. Mathematik). Der Vorschlag steht
+  groß ganz oben auf „Mein Tipp“ – mit Begründung für jede Zahl (Beliebtheit,
+  nie gezogen, keine Muster, Geburtstagszahlen, Superzahl, Fritz-Wert). Er wird
+  per festem Zufall aus dem Ziehungsdatum berechnet: gleiche Daten → auf jedem
+  Gerät derselbe Vorschlag.
 - **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
   nächste Ziehung + Annahmeschluss.
 - **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.

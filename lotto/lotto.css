@@ -235,7 +235,15 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); box-shado
 /* ===== Ergebnis ===== */
 #result { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .verdict, .muster, .verdict-vorschlag { border-width: 2px; }
-.verdict-vorschlag { border-color: var(--accent); }
+.verdict-vorschlag { border-color: var(--accent); background: linear-gradient(160deg, var(--accent-soft), var(--surface) 60%); }
+.vs-datum { font-size: 15px; }
+.vs-balls { margin: 10px 0 4px; }
+.vs-zahlen { font-size: 22px; font-weight: 800; letter-spacing: .5px; font-variant-numeric: tabular-nums; }
+.vs-warum ol { margin: 8px 0 8px 18px; display: grid; gap: 6px; color: var(--text); font-size: 13.5px; }
+.vs-sz { display: block; font-size: 16px; font-weight: 700; color: var(--text-muted); margin-top: 2px; }
+.vs-liste { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; color: var(--text-muted); }
+.vs-liste li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; }
+.vs-liste .ball { width: 26px; height: 26px; font-size: 12px; }
 .verdict.win, .muster.win { border-color: var(--accent); }
 .verdict.jackpot { border-color: var(--accent); background: linear-gradient(160deg, var(--accent-soft), var(--surface) 70%); }
 .verdict-big { font-size: 22px; font-weight: 800; line-height: 1.2; margin-bottom: 6px; letter-spacing: -.2px; }

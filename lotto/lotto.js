@@ -367,11 +367,25 @@ function maskeVon(nums) {
   for (const n of nums) m[n] = 1;
   return m;
 }
+// Zufallsquelle: normal Math.random; für den Vorschlag einer Ziehung ein fester
+// Zufall aus dem Datum (gleiches Datum → auf jedem Gerät derselbe Vorschlag)
+let zufall = Math.random;
+function festerZufall(text) {
+  let h = 2166136261;
+  for (const c of text) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  let a = h >>> 0;
+  return () => { // mulberry32
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 function ziehe6() {
   const pool = Array.from({ length: 49 }, (_, i) => i + 1);
   const out = [];
   for (let j = 0; j < 6; j++) {
-    const x = j + Math.floor(Math.random() * (49 - j));
+    const x = j + Math.floor(zufall() * (49 - j));
     [pool[j], pool[x]] = [pool[x], pool[j]];
     out.push(pool[j]);
   }
@@ -1068,13 +1082,13 @@ function fritzTipp() {
   if (!kandidaten.length) return ziehe6().sort((a, b) => a - b);
   kandidaten.sort((a, b) => b[0] - a[0]);
   const beste = kandidaten.slice(0, Math.max(1, Math.ceil(kandidaten.length * 0.05)));
-  return beste[Math.floor(Math.random() * beste.length)][1];
+  return beste[Math.floor(zufall() * beste.length)][1];
 }
 // die zwei am seltensten getippten Superzahlen (laut Formel-Daten)
 function fritzSuperzahl() {
   if (!FORMEL || !FORMEL.sz) return null;
   const rang = FORMEL.sz.map((v, j) => [v, j]).sort((a, b) => a[0] - b[0]);
-  return rang[Math.floor(Math.random() * 2)][1];
+  return rang[Math.floor(zufall() * 2)][1];
 }
 function nimmFritzTipp() {
   tipNums = new Set(fritzTipp());
@@ -1164,7 +1178,12 @@ function sichereVorschlag() {
   const d = naechsteZiehung();
   const liste = vorschlaege();
   if (d <= letzte().d || liste.some((v) => v.d === d)) return;
-  liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(Math.random() * 10), erstellt: Date.now() });
+  zufall = festerZufall(`lotto-vorschlag-${d}`);
+  try {
+    liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), erstellt: Date.now() });
+  } finally {
+    zufall = Math.random;
+  }
   write(KEY.prognosen, liste.slice(-500));
   tippsAnApp();
 }
@@ -1181,6 +1200,44 @@ function betragFuer(b, d, tipp) {
   const k = damals(b.r, b.szTreffer, q, maskeVon(tipp));
   return k ? inEuro(k.quote > 0 ? k.quote : (k.jackpot || 0), q.w) : 0;
 }
+// Ausführliche Begründung des Vorschlags (für „Mein Tipp“ und „Chancen“)
+function vorschlagHtml(n) {
+  const t = n.tipp;
+  const sz = n.sz ?? null;
+  const geb = t.filter((x) => x <= 31).length;
+  const ausLetzter = t.filter((x) => letzte().n.includes(x)).length;
+  const zeilen = FORMEL
+    ? t.map((x) => {
+      const p = Math.round(FORMEL.beta[x - 1] * 100);
+      const txt = p < 0 ? `wird ${Math.abs(p)} % seltener getippt als der Schnitt` : p > 0 ? `wird ${p} % häufiger getippt – ausgeglichen durch die anderen` : 'durchschnittlich oft getippt';
+      return `<li><span class="ball">${x}</span><span>${txt}</span></li>`;
+    }).join('')
+    : '';
+  const w = FORMEL ? fritzWert(t, sz) : null;
+  return `<p class="vs-datum">für <b>${datum(n.d)}</b></p>
+    <div class="balls vs-balls">${kugeln({ n: t, sz: sz ?? -1 }, null, null, true)}</div>
+    <p class="vs-zahlen">${t.join(' · ')}${sz !== null ? `<span class="vs-sz">Superzahl ${sz}</span>` : ''}</p>
+    <p class="muted small">Festgelegt am ${new Date(n.erstellt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr – danach unveränderlich, damit die Bilanz ehrlich bleibt.</p>
+    <details class="legende vs-warum" open>
+      <summary>Warum genau diese Zahlen?</summary>
+      <ol>
+        <li><b>Noch nie gezogen:</b> Diese 6er-Kombination kam in ${zahl.format(draws.length)} Ziehungen seit 1955 nie vor.</li>
+        <li><b>Keine Muster:</b> keine Zahlenreihen, keine Linie auf dem Schein, ${ausLetzter ? `nur ${ausLetzter}` : 'keine'} Zahl${ausLetzter === 1 ? '' : 'en'} aus der letzten Ziehung.</li>
+        <li><b>Kaum Geburtstagszahlen:</b> nur ${geb} von 6 Zahlen liegen bei 1–31 – die tippen sehr viele Menschen.</li>
+        ${FORMEL ? `<li><b>Unbeliebte Zahlen</b> (gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen):<ul class="vs-liste">${zeilen}</ul></li>` : ''}
+        ${sz !== null && FORMEL && FORMEL.sz ? `<li><b>Superzahl ${sz}:</b> wird ${Math.abs(Math.round((FORMEL.sz[sz] - 1) * 100))} % seltener getippt als der Schnitt (nur nutzbar, wenn du die Losnummer wählen kannst).</li>` : ''}
+        ${w !== null ? `<li><b>Ergebnis laut Fritz-Formel:</b> ${cent(w)} pro 1,20 € statt ${cent(FORMEL.ev0)} beim Durchschnittstipp – gewinnt er, teilst du mit weniger Leuten, also im Schnitt <b>${prozent(w / FORMEL.ev0 - 1)} mehr Geld</b>.</li>` : ''}
+      </ol>
+      <p class="small"><b>Ehrlich:</b> Die Chance auf Richtige ist genau so groß wie bei jedem anderen Tipp (z. B. 3 Richtige 1 : 63). Kein System kann die Zahlen vorhersagen – der Vorschlag holt nur mehr heraus, <i>falls</i> er gewinnt.</p>
+    </details>`;
+}
+function renderVorschlagTipp() {
+  if (!draws.length) return;
+  const n = vorschlaege().filter((v) => v.d > letzte().d).sort((a, b) => (a.d < b.d ? -1 : 1))[0];
+  $('vorschlagTippCard').classList.toggle('hidden', !n);
+  if (n) $('vorschlagTipp').innerHTML = vorschlagHtml(n);
+}
+
 function renderVorschlag() {
   if (!draws.length) return;
   sichereVorschlag();
@@ -1192,9 +1249,7 @@ function renderVorschlag() {
 
   const n = offen[0];
   $('vorschlagNaechste').innerHTML = n
-    ? `<p class="small"><b>Für ${datum(n.d)}</b> – festgelegt am ${new Date(n.erstellt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr</p>
-       <div class="balls" style="margin:8px 0">${kug(n.tipp, n.sz, maskeVon(n.tipp))}</div>
-       <p class="muted small">✓ Diese Kombination wurde noch nie gezogen · ✓ keine Reihen oder Muster · ✓ unbeliebte Zahlen laut Fritz-Formel${FORMEL ? ` (Wert ${cent(fritzWert(n.tipp, n.sz))} statt ${cent(FORMEL.ev0)})` : ''}${n.sz !== null && n.sz !== undefined ? ` · Superzahl ${n.sz} gilt nur, wenn du sie wählen kannst` : ''}.</p>
+    ? `${vorschlagHtml(n)}
        <div class="btn-row"><button class="btn btn-primary" type="button" id="vorschlagNehmen">Als meinen Tipp übernehmen</button></div>`
     : '<p class="muted small">Der Vorschlag für die nächste Ziehung wird erstellt, sobald die aktuelle ausgewertet ist.</p>';
 
@@ -1384,6 +1439,7 @@ function zeigeTab(name) {
 function allesNeuZeichnen() {
   gezogeneKombis = null;
   sichereVorschlag();
+  renderVorschlagTipp();
   zeigeDatenInfo();
   renderErgebnis();
   zeigeTab(aktiverTab);
@@ -1454,15 +1510,18 @@ function binde() {
   $('tipInput').addEventListener('change', () => { if (!$('tipHint').classList.contains('warn')) $('tipInput').value = sortiert(tipNums).join(' '); });
   $('quickTip').addEventListener('click', () => { tipNums = new Set(neuerZufallstipp()); tippGeaendert(true); });
   $('klugTip').addEventListener('click', nimmFritzTipp);
-  $('vorschlagNaechste').addEventListener('click', (e) => {
-    if (!e.target.closest('#vorschlagNehmen')) return;
+  const nimmVorschlag = (e) => {
+    if (!e.target.closest('#vorschlagNehmen, #vorschlagNehmen2')) return;
     const v = vorschlaege().find((x) => x.d > letzte().d);
     if (!v) return;
     tipNums = new Set(v.tipp);
     tipSz = v.sz ?? tipSz;
     tippGeaendert(true);
     window.lottoZeigeTab('tipp');
-  });
+  };
+  $('vorschlagNaechste').addEventListener('click', nimmVorschlag);
+  $('vorschlagBilanzLink').addEventListener('click', () => window.lottoZeigeTab('chancen'));
+  $('vorschlagTippCard').addEventListener('click', nimmVorschlag);
   $('klugTip2').addEventListener('click', () => { nimmFritzTipp(); window.lottoZeigeTab('tipp'); });
   $('clearTip').addEventListener('click', () => { tipNums.clear(); tipSz = null; tippGeaendert(true); });
   $('saveTip').addEventListener('click', merkeTipp);
@@ -1559,6 +1618,7 @@ async function init() {
     return;
   }
   sichereVorschlag();
+  renderVorschlagTipp();
   zeigeDatenInfo();
   tippGeaendert(true);
   zeigeTab(aktiverTab);

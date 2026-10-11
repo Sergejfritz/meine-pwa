@@ -394,16 +394,44 @@ test('Fritz-Formel: Superzahl zählt – unbeliebte 0 ist mehr wert als beliebte
 test('Vorschlag: festgeschrieben, nie gezogene Kombination, bleibt nach Neuladen gleich', async ({ page }) => {
   await mockLive(page, { latest: false });
   await page.goto('/lotto/#chancen');
-  const balls = page.locator('#vorschlagNaechste .ball:not(.sz)');
+  const balls = page.locator('#vorschlagNaechste .vs-balls .ball:not(.sz)');
   await expect(balls).toHaveCount(6);
   const t = (await balls.allTextContents()).map(Number);
   const gezogen = new Set(LINES.map((l) => l.split(' ').slice(1, 7).join(',')));
   expect(gezogen.has(t.slice().sort((a, b) => a - b).join(','))).toBe(false);
-  await expect(page.locator('#vorschlagNaechste')).toContainText('noch nie gezogen');
+  await expect(page.locator('#vorschlagNaechste')).toContainText('Noch nie gezogen');
   await page.reload();
-  expect((await page.locator('#vorschlagNaechste .ball:not(.sz)').allTextContents()).map(Number)).toEqual(t);
+  expect((await page.locator('#vorschlagNaechste .vs-balls .ball:not(.sz)').allTextContents()).map(Number)).toEqual(t);
   await page.click('#vorschlagNehmen');
   await expect(page.locator('#tipInput')).toHaveValue(t.join(' '));
+});
+
+test('Startseite: Vorschlag steht eindeutig oben, mit Begründung für jede Zahl', async ({ page }) => {
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/');
+  const karte = page.locator('#vorschlagTippCard');
+  await expect(karte).toBeVisible();
+  await expect(karte.locator('.vs-datum')).toHaveText(/^für (Mi|Sa), \d\d\.\d\d\.\d{4}$/);
+  const balls = karte.locator('.vs-balls .ball:not(.sz)');
+  await expect(balls).toHaveCount(6);
+  await expect(karte.locator('.vs-balls .ball.sz')).toHaveCount(1);
+  const t = (await balls.allTextContents()).map(Number);
+  await expect(karte.locator('.vs-zahlen')).toContainText(t.join(' · '));
+  await expect(karte.locator('.vs-sz')).toHaveText(/^Superzahl \d$/);
+  // Begründung: für jede der 6 Zahlen eine Zeile + Muster/Geburtstag/Superzahl/Formel
+  await expect(karte.locator('.vs-liste li')).toHaveCount(6);
+  for (const x of ['Noch nie gezogen', 'Keine Muster', 'Geburtstagszahlen', 'Superzahl', 'Fritz-Formel', 'Ehrlich']) {
+    await expect(karte).toContainText(x);
+  }
+  // gleiche Ziehung → auf jedem Gerät derselbe Vorschlag (fester Zufall aus dem Datum)
+  await page.evaluate(() => localStorage.removeItem('lotto_vorschlaege'));
+  await page.reload();
+  await expect(balls).toHaveCount(6);
+  expect((await balls.allTextContents()).map(Number)).toEqual(t);
+  await page.click('#vorschlagNehmen2');
+  await expect(page.locator('#tipInput')).toHaveValue(t.join(' '));
+  await page.click('#vorschlagBilanzLink');
+  await expect(page.locator('#vorschlagBilanz')).toBeVisible();
 });
 
 test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen', async ({ page }) => {
