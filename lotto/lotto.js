@@ -171,7 +171,9 @@ function parseLive(json) {
       .map((x) => [x.kurzbeschreibung.replace(/\s+/g, ' ').trim(), x.quote,
         Number.isFinite(x.anzahl) ? x.anzahl : null, Number.isFinite(x.jackpot) ? x.jackpot : null]);
     // Direkt nach der Ziehung stehen die Quoten noch nicht fest (alle 0)
-    if (k.some((x) => x[1] > 0)) quoten = { w: qz.waehrung === 'DM' ? 'DM' : 'EUR', zz, k };
+    // Spieleinsatz → Zahl der Tipps (für den Formel-Check)
+    const se = json.auswertung.spieleinsatz && Number(json.auswertung.spieleinsatz.hauptlotterie);
+    if (k.some((x) => x[1] > 0)) quoten = { w: qz.waehrung === 'DM' ? 'DM' : 'EUR', zz, k, ...(se > 0 ? { e: se } : {}) };
   }
   const f = h.folgeZiehung;
   const folge = f && /^\d{4}-\d{2}-\d{2}$/.test(f.datum || '')
@@ -1149,8 +1151,11 @@ function renderFritz() {
     }).join('');
     $('fritzSzBox').classList.remove('hidden');
   }
+  const pf = FORMEL.pruefung;
   $('fritzQualitaet').textContent = `Gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen (${datum(FORMEL.von)} – ${datum(FORMEL.stand)}). `
-    + `Das Modell sagt die Zahl der Mitgewinner einer Ziehung zu ${prozent(FORMEL.r2)} voraus – geprüft an Ziehungen, die es beim Lernen nicht kannte (10-fache Kreuzvalidierung). `
+    + (pf && pf[3]
+      ? `Test an den letzten ${pf.ziehungen} Ziehungen, die die Formel jeweils noch nicht kannte: Die Zahl der Gewinner mit 3 Richtigen lag im Schnitt nur ${prozent(pf[3].formel, 1)} daneben (ohne Formel: ${prozent(pf[3].gleich, 1)}), bei 4 Richtigen ${prozent(pf[4].formel, 1)} (ohne: ${prozent(pf[4].gleich, 1)}). `
+      : `Das Modell sagt die Zahl der Mitgewinner einer Ziehung zu ${prozent(FORMEL.r2)} voraus – geprüft an Ziehungen, die es beim Lernen nicht kannte (10-fache Kreuzvalidierung). `)
     + `Ein Ø-Tipp bringt ${cent(FORMEL.ev0)} pro 1,20 € zurück – passt zur offiziellen Ausschüttung von rund 50 %.`;
 }
 
@@ -1175,9 +1180,14 @@ function vorschlaege() {
 // Dazu ein Zufallstipp vom selben Zeitpunkt als ehrlicher Vergleich.
 function sichereVorschlag() {
   if (!draws.length) return;
-  const d = naechsteZiehung();
+  let d = naechsteZiehung();
+  // Uhr des Geräts hinkt der schon eingetragenen Ziehung hinterher → Ziehungstag danach
+  if (d <= letzte().d) {
+    const [y, m, t] = letzte().d.split('-').map(Number);
+    d = naechsteZiehung(new Date(y, m - 1, t + 1));
+  }
   const liste = vorschlaege();
-  if (d <= letzte().d || liste.some((v) => v.d === d)) return;
+  if (liste.some((v) => v.d === d)) return;
   zufall = festerZufall(`lotto-vorschlag-${d}`);
   try {
     liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), erstellt: Date.now() });
@@ -1231,11 +1241,57 @@ function vorschlagHtml(n) {
       <p class="small"><b>Ehrlich:</b> Die Chance auf Richtige ist genau so groß wie bei jedem anderen Tipp (z. B. 3 Richtige 1 : 63). Kein System kann die Zahlen vorhersagen – der Vorschlag holt nur mehr heraus, <i>falls</i> er gewinnt.</p>
     </details>`;
 }
+// Formel-Check einer Ziehung: Wie viele Gewinner mit 3/4/5 Richtigen sagte die Formel
+// voraus – und wie viele hätte es gegeben, wenn alle Zahlen gleich beliebt wären?
+function formelCheck(z) {
+  const q = quotenFuer(z.d);
+  if (!FORMEL || !FORMEL.gesamt || !q || !(q.e > 0)) return null;
+  const tipps = q.e / PREIS;
+  const b = z.n.reduce((s, x) => s + FORMEL.beta[x - 1], 0);
+  const anzahl = (name) => { const k = q.k.find((x) => x[0] === name); return k && Number.isFinite(k[2]) ? k[2] : null; };
+  const zeilen = [];
+  for (const r of [3, 4, 5]) {
+    const g = FORMEL.gesamt[r];
+    const a = anzahl(String(r));
+    const b2 = anzahl(`${r} + SZ`);
+    if (!g || a === null || b2 === null) continue;
+    zeilen.push({ r, echt: a + b2, formel: tipps * Math.exp(g.c + g.kappa * b), gleich: tipps * pRichtige(r) });
+  }
+  return zeilen.length ? { b, zeilen } : null;
+}
+function formelCheckHtml(z) {
+  const c = formelCheck(z);
+  if (!c) return '';
+  const abw = (v, echt) => { const p = Math.round((v / echt - 1) * 100); return p === 0 ? '±0 %' : `${p > 0 ? '+' : '−'}${Math.abs(p)} %`; };
+  const besser = c.zeilen.filter((x) => Math.abs(x.formel / x.echt - 1) < Math.abs(x.gleich / x.echt - 1)).length;
+  return `<h3 style="margin-top:16px">🔍 Formel-Check: Ziehung vom ${datum(z.d)}</h3>
+    <p class="muted small">Die gezogenen Zahlen ${z.n.join(' ')} waren laut Formel ${c.b < -0.02 ? 'eher unbeliebt' : c.b > 0.02 ? 'eher beliebt' : 'durchschnittlich beliebt'} (Beliebtheit ${c.b >= 0 ? '+' : '−'}${Math.abs(c.b * 100).toFixed(1).replace('.', ',')} %). Vorhergesagt vs. echte Gewinnerzahl:</p>
+    <table class="classes" id="formelCheck">
+      <thead><tr><th>Richtige</th><th class="n">ohne Formel</th><th class="n">Fritz-Formel</th><th class="n">echt</th></tr></thead>
+      <tbody>${c.zeilen.map((x) => `<tr><td>${x.r} Richtige</td><td class="n">${zahl.format(Math.round(x.gleich))}<br><span class="muted small">${abw(x.gleich, x.echt)}</span></td>
+        <td class="n">${zahl.format(Math.round(x.formel))}<br><span class="muted small">${abw(x.formel, x.echt)}</span></td><td class="n"><b>${zahl.format(x.echt)}</b></td></tr>`).join('')}</tbody>
+    </table>
+    <p class="muted small" style="margin-top:6px">Diesmal lag die Formel in ${besser} von ${c.zeilen.length} Klassen näher dran.${FORMEL.pruefung && FORMEL.pruefung[3] ? ` Über ${FORMEL.pruefung.ziehungen} Test-Ziehungen: Ø ${prozent(FORMEL.pruefung[3].formel, 1)} Abweichung statt ${prozent(FORMEL.pruefung[3].gleich, 1)} (3 Richtige).` : ''} Sie sagt <i>nicht</i> voraus, welche Zahlen kommen – nur, wie viele Leute sie getippt haben.</p>`;
+}
+
+// Kurz-Ergebnis der letzten ausgewerteten Vorschläge (für die Startseite)
+function letzteAuswertungHtml() {
+  const byDate = new Map(draws.map((z) => [z.d, z]));
+  const v = vorschlaege().filter((x) => byDate.has(x.d)).sort((a, b) => (a.d < b.d ? 1 : -1))[0];
+  if (!v) return '';
+  const z = byDate.get(v.d);
+  const bs = bewerte(v.tipp, v.sz, z);
+  const bz = bewerte(v.zufall, v.zsz, z);
+  const treffer = v.tipp.filter((x) => z.n.includes(x));
+  return `<div class="vs-letzte" id="vorschlagLetzte"><b>Letzte Ziehung (${datum(v.d)}):</b> ${z.n.join(' ')}${z.sz >= 0 ? ` · SZ ${z.sz}` : ''}<br>
+    Unser Vorschlag ${v.tipp.join(' ')}${v.sz !== null && v.sz !== undefined ? ` · SZ ${v.sz}` : ''} → <b>${bs.r} Richtige${bs.szTreffer ? ' + SZ' : ''}</b>${treffer.length ? ` (${treffer.join(', ')})` : ''}${bs.k ? ' – Gewinn! 🎉' : ''} · Zufallstipp: ${bz.r} Richtige${bz.szTreffer ? ' + SZ' : ''}</div>`;
+}
+
 function renderVorschlagTipp() {
   if (!draws.length) return;
   const n = vorschlaege().filter((v) => v.d > letzte().d).sort((a, b) => (a.d < b.d ? -1 : 1))[0];
   $('vorschlagTippCard').classList.toggle('hidden', !n);
-  if (n) $('vorschlagTipp').innerHTML = vorschlagHtml(n);
+  if (n) $('vorschlagTipp').innerHTML = vorschlagHtml(n) + letzteAuswertungHtml();
 }
 
 function renderVorschlag() {
@@ -1254,7 +1310,8 @@ function renderVorschlag() {
     : '<p class="muted small">Der Vorschlag für die nächste Ziehung wird erstellt, sobald die aktuelle ausgewertet ist.</p>';
 
   if (!fertig.length) {
-    $('vorschlagBilanz').innerHTML = `<p class="muted small">Ab jetzt wird jeder Vorschlag nach der Ziehung mit den echten Zahlen verglichen – neben einem Zufallstipp, der zur selben Zeit festgelegt wurde. ${n ? `Erste Auswertung nach der Ziehung am ${datum(n.d)}.` : ''}</p>`;
+    $('vorschlagBilanz').innerHTML = `<p class="muted small">Ab jetzt wird jeder Vorschlag nach der Ziehung mit den echten Zahlen verglichen – neben einem Zufallstipp, der zur selben Zeit festgelegt wurde. ${n ? `Erste Auswertung nach der Ziehung am ${datum(n.d)}.` : ''}</p>${formelCheckHtml(letzte())}`;
+    if (!quotenFuer(letzte().d)) ladeQuoten([letzte().d]).then(() => { if (aktiverTab === 'chancen') renderVorschlag(); });
     return;
   }
   let sumS = 0; let sumZ = 0; let gewS = 0; let gewZ = 0; let euroS = 0; let euroZ = 0; let fehlt = [];
@@ -1284,7 +1341,7 @@ function renderVorschlag() {
         <tr class="ref"><td>Mathematisch erwartet</td><td class="n">${komma(ERWARTET_RICHTIGE)}</td><td class="n">≈ 1 von 31</td><td class="n">–</td></tr>
       </tbody></table>
     <p class="muted small" style="margin-top:8px">${m} ${m === 1 ? 'Ziehung' : 'Ziehungen'} ausgewertet · Einsatz je ${geld(m * PREIS, 'EUR')}. Über wenige Ziehungen schwankt das stark – aussagekräftig wird die Bilanz erst nach vielen Monaten.</p>
-    <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>`;
+    <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>${formelCheckHtml(letzte())}`;
   if (fehlt.length) ladeQuoten(fehlt).then(() => { if (aktiverTab === 'chancen') renderVorschlag(); });
 }
 

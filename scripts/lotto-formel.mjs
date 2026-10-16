@@ -73,29 +73,40 @@ function loese(A, b) { // Gauß mit Pivotsuche
   }
   return M.map((z, i) => z[n] / z[i]);
 }
+// Spalten: 49 Zahlen (bestraft mit λ) + 9 Superzahl-Spalten (SZ 0 = Bezug). Die
+// Superzahl bestimmt mit, wie viele „2 + SZ“ gewinnen – ohne sie landet dieses
+// Rauschen in den Zahlen. Mit ihr sagt β neue Ziehungen deutlich genauer voraus.
+const M = 49 + 9;
+const spalten = (z) => {
+  const x = new Array(M).fill(0);
+  for (const i of z.n) x[i] = 1;
+  if (z.sz >= 1 && z.sz <= 9) x[48 + z.sz] = 1;
+  return x;
+};
 function ridge(zeilen, y, lam) {
   const n = zeilen.length;
-  const xm = new Array(49).fill(0);
-  for (const z of zeilen) for (const i of z) xm[i] += 1 / n;
+  const X = zeilen.map(spalten);
+  const xm = new Array(M).fill(0);
+  for (const x of X) for (let i = 0; i < M; i++) xm[i] += x[i] / n;
   const ym = y.reduce((s, v) => s + v, 0) / n;
-  const A = Array.from({ length: 49 }, (_, i) => Array.from({ length: 49 }, (_, j) => (i === j ? lam : 0)));
-  const b = new Array(49).fill(0);
-  zeilen.forEach((z, t) => {
-    const x = xm.map((m, i) => (z.includes(i) ? 1 : 0) - m);
-    for (let i = 0; i < 49; i++) {
+  const A = Array.from({ length: M }, (_, i) => Array.from({ length: M }, (_, j) => (i === j ? (i < 49 ? lam : 1e-6) : 0)));
+  const b = new Array(M).fill(0);
+  X.forEach((xr, t) => {
+    const x = xr.map((v, i) => v - xm[i]);
+    for (let i = 0; i < M; i++) {
       b[i] += x[i] * (y[t] - ym);
-      for (let j = 0; j < 49; j++) A[i][j] += x[i] * x[j];
+      for (let j = 0; j < M; j++) A[i][j] += x[i] * x[j];
     }
   });
-  const beta = loese(A, b);
-  const a = ym - xm.reduce((s, m, i) => s + m * beta[i], 0);
-  return { beta, a };
+  const g = loese(A, b);
+  const a = ym - xm.reduce((s, m, i) => s + m * g[i], 0);
+  return { beta: g.slice(0, 49), g, a };
 }
-const vorhersage = (m, z) => m.a + z.reduce((s, i) => s + m.beta[i], 0);
+const vorhersage = (m, z) => m.a + spalten(z).reduce((s, v, i) => s + v * m.g[i], 0);
 
 // Ziel: log(Gewinner / erwartete Gewinner bei gleichmäßiger Zahlenwahl), gemittelt aus
 // „3 Richtige“ und „2 + SZ“ (je Hunderttausende Gewinner → kaum Zufallsrauschen)
-const zeilen = D.map((d) => daten[d].n.map((x) => x - 1));
+const zeilen = D.map((d) => ({ n: daten[d].n.map((x) => x - 1), sz: daten[d].sz }));
 const logR = (d, k) => Math.log(Math.max(daten[d].k[k][0], 0.5) / ((daten[d].einsatz / PREIS) * pKlasse[k]));
 const y = D.map((d) => (logR(d, '3') + logR(d, '2 + SZ')) / 2);
 
@@ -122,7 +133,7 @@ for (const lam of [1, 3, 10]) {
 const modell = ridge(zeilen, y, bestes.lam);
 const mittel = modell.beta.reduce((s, v) => s + v, 0) / 49;
 const beta = modell.beta.map((v) => v - mittel); // Summe 0: positiv = beliebter als der Schnitt
-const B = zeilen.map((z) => z.reduce((s, i) => s + beta[i], 0));
+const B = zeilen.map((z) => z.n.reduce((s, i) => s + beta[i], 0));
 
 // ---------- Je Gewinnklasse: Topf, Ø Gewinnerzahl, Reaktion auf Beliebtheit (κ) ----------
 // Gewinnt dein Tipp, teilst du den Topf mit X anderen; X ~ Poisson(μ) mit
@@ -143,13 +154,15 @@ for (const [k, r] of KLASSEN) {
   const quelle = k === '6 + SZ' ? '6' : k;
   const pts = D.map((d, i) => [B[i], daten[d].k[quelle][0] / (daten[d].einsatz / PREIS)]).filter(([, w]) => w > 0);
   const kappa = steigung(pts.map((p) => p[0]), pts.map((p) => Math.log(p[1])));
+  // Achse c: log(Gewinner/Tipps) ≈ c + κ·Beliebtheit – für die Vorhersage einer Ziehung
+  const c = schnitt(pts.map((p) => Math.log(p[1]))) - kappa * schnitt(pts.map((p) => p[0]));
   const gewinner = schnitt(D.map((d) => daten[d].k[k][0]));
   // Topf: bei Gewinnern = Quote × Anzahl; beim Jackpot ohne Gewinner der angesammelte Betrag
   const toepfe = D.map((d) => {
     const [anzahl, quote, jackpot] = daten[d].k[k];
     return anzahl > 0 ? quote * anzahl : (jackpot || 0);
   }).filter((v) => v > 0);
-  klassen[k] = { r, p: pKlasse[k], kappa: +kappa.toFixed(3), topf: Math.round(schnitt(toepfe)), gewinner: +gewinner.toFixed(3) };
+  klassen[k] = { r, p: pKlasse[k], kappa: +kappa.toFixed(3), c: +c.toFixed(4), topf: Math.round(schnitt(toepfe)), gewinner: +gewinner.toFixed(3) };
 }
 // ---------- Beliebtheit der Superzahl ----------
 // Anteil der Gewinner MIT Superzahl unter allen mit 3 bzw. 4 Richtigen – bei gleich
@@ -170,11 +183,50 @@ const szRoh = szSumme.map((s, j) => (szAnzahl[j] ? s / szAnzahl[j] / 0.1 : 1));
 const szMittel = szRoh.reduce((s, v) => s + v, 0) / 10;
 const sz = szRoh.map((v) => +(v / szMittel).toFixed(4));
 
+// ---------- Ehrlicher Test: Vorhersage neuer Ziehungen (walk-forward) ----------
+// Für jede der letzten Ziehungen nur mit den Ziehungen davor lernen, dann die Zahl der
+// Gewinner mit 3 bzw. 4 Richtigen vorhersagen – und mit „alle Zahlen gleich beliebt“
+// vergleichen. Mittlere Abweichung in Prozent.
+const TEST = Math.min(200, D.length - 200);
+const fehler = { 3: [0, 0], 4: [0, 0] };
+for (let t = D.length - TEST; t < D.length; t++) {
+  const m = ridge(zeilen.slice(0, t), y.slice(0, t), bestes.lam);
+  const mb = m.beta.reduce((s, v) => s + v, 0) / 49;
+  const Bt = (i) => zeilen[i].n.reduce((s, j) => s + m.beta[j] - mb, 0);
+  for (const r of [3, 4]) {
+    const k = String(r);
+    const w = (i) => daten[D[i]].k[k][0] + daten[D[i]].k[`${k} + SZ`][0];
+    const tipps = (i) => daten[D[i]].einsatz / PREIS;
+    const xs = []; const ys = [];
+    for (let i = 0; i < t; i++) { xs.push(Bt(i)); ys.push(Math.log(w(i) / tipps(i))); }
+    const ka = steigung(xs, ys);
+    const ca = schnitt(ys) - ka * schnitt(xs);
+    const echt = w(t);
+    const formelV = tipps(t) * Math.exp(ca + ka * Bt(t));
+    const neutral = tipps(t) * pRichtige(r);
+    fehler[r][0] += Math.abs(formelV / echt - 1) / TEST;
+    fehler[r][1] += Math.abs(neutral / echt - 1) / TEST;
+  }
+}
+const pruefung = { ziehungen: TEST, von: D[D.length - TEST] };
+for (const r of [3, 4]) pruefung[r] = { formel: +fehler[r][0].toFixed(4), gleich: +fehler[r][1].toFixed(4) };
+console.log(`Test an ${TEST} unbekannten Ziehungen – Ø Abweichung 3 R.: Formel ${(fehler[3][0] * 100).toFixed(1)} % vs. gleich beliebt ${(fehler[3][1] * 100).toFixed(1)} % · 4 R.: ${(fehler[4][0] * 100).toFixed(1)} % vs. ${(fehler[4][1] * 100).toFixed(1)} %`);
+
+// Gesamt-Gewinner je Richtige (mit + ohne SZ) ≈ Tipps · e^(c + κ·B) – für den Formel-Check der App
+const gesamt = {};
+for (const r of [3, 4, 5]) {
+  const k = String(r);
+  const xs = []; const ys = [];
+  D.forEach((d, i) => { const w = daten[d].k[k][0] + daten[d].k[`${k} + SZ`][0]; if (w > 0) { xs.push(B[i]); ys.push(Math.log(w / (daten[d].einsatz / PREIS))); } });
+  const ka = steigung(xs, ys);
+  gesamt[k] = { kappa: +ka.toFixed(3), c: +(schnitt(ys) - ka * schnitt(xs)).toFixed(4) };
+}
+
 const anteil = (mu) => (mu < 1e-9 ? 1 : (1 - Math.exp(-mu)) / mu);
 const ev0 = Object.values(klassen).reduce((s, k) => s + k.p * (k.fest ?? k.topf * anteil(k.gewinner)), 0);
 const formel = {
   stand: D[D.length - 1], von: D[0], ziehungen: D.length, r2: +bestes.r2.toFixed(3),
-  beta: beta.map((v) => +v.toFixed(4)), sz, klassen, ev0: +ev0.toFixed(4),
+  beta: beta.map((v) => +v.toFixed(4)), sz, klassen, gesamt, pruefung, ev0: +ev0.toFixed(4),
 };
 fs.writeFileSync(path.join(ROOT, 'lotto', 'formel.json'), JSON.stringify(formel) + '\n');
 const rang = beta.map((v, i) => [i + 1, v]).sort((a, b) => b[1] - a[1]);

@@ -24,7 +24,7 @@ function westlotto(datum, nums, sz, waehrung = 'EUR') {
     error: null,
     head: { datum, folgeZiehung: { datum: naechsterZiehungstag(datum), annahmeschluss: `${naechsterZiehungstag(datum)}T18:00:00+02:00` } },
     zahlen: { hauptlotterie: { ziehungen: [{ zahlenSortiert: nums.map(String), superzahl: sz === null ? '' : String(sz), zusatzzahl: '' }] } },
-    auswertung: { quoten: { hauptlotterie: { ziehungen: [{ waehrung, gewinnklassen: [
+    auswertung: { spieleinsatz: { hauptlotterie: 30000000 }, quoten: { hauptlotterie: { ziehungen: [{ waehrung, gewinnklassen: [
       { klasse: 1, kurzbeschreibung: '6 + SZ', anzahl: 0, quote: 0, jackpot: 5842000.2 },
       { klasse: 2, kurzbeschreibung: '6', anzahl: 2, quote: 302528.1, jackpot: null },
       { klasse: 3, kurzbeschreibung: '5 + SZ', anzahl: 33, quote: 13028.5, jackpot: null },
@@ -344,7 +344,7 @@ test('Fritz-Formel: beliebte Zahlen sind weniger wert als unbeliebte', async ({ 
   const unbeliebt = await wert('14 34 36 42 43 45');
   expect(unbeliebt).toBeGreaterThan(beliebt * 1.3);
   await expect(page.locator('#fritzHeat button')).toHaveCount(49);
-  await expect(page.locator('#fritzQualitaet')).toContainText('Kreuzvalidierung');
+  await expect(page.locator('#fritzQualitaet')).toContainText('noch nicht kannte');
   // Muster-Warnung
   await page.click('[data-tab=tipp]');
   await tippe(page, '1 2 3 4 5 6');
@@ -401,7 +401,8 @@ test('Vorschlag: festgeschrieben, nie gezogene Kombination, bleibt nach Neuladen
   expect(gezogen.has(t.slice().sort((a, b) => a - b).join(','))).toBe(false);
   await expect(page.locator('#vorschlagNaechste')).toContainText('Noch nie gezogen');
   await page.reload();
-  expect((await page.locator('#vorschlagNaechste .vs-balls .ball:not(.sz)').allTextContents()).map(Number)).toEqual(t);
+  await expect(balls).toHaveCount(6);
+  expect((await balls.allTextContents()).map(Number)).toEqual(t);
   await page.click('#vorschlagNehmen');
   await expect(page.locator('#tipInput')).toHaveValue(t.join(' '));
 });
@@ -449,4 +450,14 @@ test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen
   await expect(bilanz.locator('tr.hl')).toContainText('1 von 1');
   await expect(bilanz).toContainText('Gezogen: 1 2 3 4 5 6');
   await expect(bilanz.locator('.badge').first()).toContainText('System 3+SZ');
+  // Formel-Check: vorhergesagte vs. echte Gewinnerzahl der letzten Ziehung
+  const check = page.locator('#formelCheck');
+  await expect(check.locator('tbody tr')).toHaveCount(3);
+  await expect(check.locator('tbody tr').first()).toContainText('3 Richtige');
+  await expect(check.locator('tbody tr').first()).toContainText('312.016'); // 286.271 + 25.745
+  // Startseite: Ergebnis der letzten Ziehung steht unter dem neuen Vorschlag
+  await page.click('[data-tab="tipp"]');
+  const letzte = page.locator('#vorschlagLetzte');
+  await expect(letzte).toContainText(`Letzte Ziehung (${WT[new Date(`${NEU}T12:00:00Z`).getUTCDay()]}, ${deDatum(NEU)})`);
+  await expect(letzte).toContainText('3 Richtige + SZ (1, 2, 3) – Gewinn!');
 });

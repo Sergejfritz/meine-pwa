@@ -67,9 +67,14 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
   20–30 % weniger pro Gewinn bringen.
 - **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
-  Trefferchance): Aus den echten Gewinnerzahlen von 631 Ziehungen (seit 09/2020)
-  lernt eine Ridge-Regression die Beliebtheit β jeder Zahl (Mitgewinner-Prognose
-  mit kreuzvalidiertem R² = 0,66). Pro Gewinnklasse werden die Mitgewinner als
+  Trefferchance): Aus den echten Gewinnerzahlen von 633 Ziehungen (seit 09/2020)
+  lernt eine Ridge-Regression die Beliebtheit β jeder Zahl; die gezogene
+  Superzahl wird dabei mit herausgerechnet (sie bestimmt die „2 + SZ“-Gewinner
+  mit). Ehrlicher Test an 200 Ziehungen, die das Modell jeweils noch nicht kannte
+  (walk-forward): Gewinner mit 3 Richtigen im Schnitt 4,0 % daneben (ohne
+  Superzahl-Korrektur 4,5 %, „alle Zahlen gleich beliebt“ 10,4 %), mit 4 Richtigen
+  9,8 % (10,3 % bzw. 17,9 %). Nach jeder Ziehung zeigt der **Formel-Check**
+  (Chancen → Bilanz) vorhergesagte vs. echte Gewinnerzahl. Pro Gewinnklasse werden die Mitgewinner als
   Poisson-Verteilung modelliert:
   `W(T) = Σₖ pₖ · Topfₖ · (1 − e^−μₖ)/μₖ`, `μₖ = Gₖ · e^(κₖ · B(T) · (rₖ/6 − (6−rₖ)/43))`,
   `B(T) = Σ βᵢ`. Ein Ø-Tipp bringt 62 ct pro 1,20 € (≈ offizielle 50 %

@@ -240,6 +240,7 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); box-shado
 .vs-balls { margin: 10px 0 4px; }
 .vs-zahlen { font-size: 22px; font-weight: 800; letter-spacing: .5px; font-variant-numeric: tabular-nums; }
 .vs-warum ol { margin: 8px 0 8px 18px; display: grid; gap: 6px; color: var(--text); font-size: 13.5px; }
+.vs-letzte { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 13.5px; line-height: 1.5; }
 .vs-sz { display: block; font-size: 16px; font-weight: 700; color: var(--text-muted); margin-top: 2px; }
 .vs-liste { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; color: var(--text-muted); }
 .vs-liste li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; }
