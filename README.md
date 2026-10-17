@@ -119,6 +119,8 @@ auch ein Knopf „📲 Als Android-App installieren“.
 - Systemleisten passend zu Hell/Dunkel, Zurück-Taste springt erst zu „Mein Tipp“.
 - **Update-Hinweis:** Die App prüft höchstens alle 6 Stunden
   `downloads/version.json` und bietet eine neuere APK zum Herunterladen an.
+  Ist das Repository privat, gibt es (im kostenlosen Tarif) kein GitHub Pages –
+  dann bleibt der Hinweis still weg und neue APKs kommen direkt per Datei.
 - Neu bauen: `LOTTO_KEY_PASSWORD=… scripts/lotto-apk.sh` (legt
   `downloads/lotto.apk` und `downloads/version.json` ab). Der Signatur-Schlüssel `android/lotto-app.p12` ist
   passwortgeschützt; das Passwort steht bewusst **nicht** im Repo. Nur mit
