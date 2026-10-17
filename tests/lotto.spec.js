@@ -295,10 +295,16 @@ test('Chancen: Muster-Check rechnet live und findet kein Muster', async ({ page 
   await mockLive(page, { latest: false });
   await page.goto('/lotto/#chancen');
   await expect(page.locator('#musterUrteil')).toContainText('kein Muster');
-  await expect(page.locator('#musterTests .check')).toHaveCount(4);
+  await expect(page.locator('#musterTests .check')).toHaveCount(7);
   await expect(page.locator('#musterTests')).toContainText('am häufigsten');
-  // Rückrechnung: 4 Strategien + Zufall als Vergleich
-  await expect(page.locator('#backtestTabelle tbody tr')).toHaveCount(5);
+  // Rhythmus-Prüfungen: Pausen, fester Takt, Mittwoch vs. Samstag – alle unauffällig
+  await expect(page.locator('#musterTests')).toContainText('Haben die Zahlen einen Rhythmus?');
+  await expect(page.locator('#musterTests')).toContainText('nach festem Takt');
+  await expect(page.locator('#musterTests')).toContainText('mittwochs andere Zahlen als samstags');
+  await expect(page.locator('#musterTests .check .ico', { hasText: '⚠️' })).toHaveCount(0);
+  // Rückrechnung: 5 Strategien (inkl. Rhythmus) + Zufall als Vergleich
+  await expect(page.locator('#backtestTabelle tbody tr')).toHaveCount(6);
+  await expect(page.locator('#backtestTabelle')).toContainText('Rhythmus');
   await expect(page.locator('#backtestUrteil')).toContainText('Keine Strategie schlägt den Zufall');
   // exakte Chancen
   await expect(page.locator('#chancenTabelle')).toContainText('1 : 139.838.160');

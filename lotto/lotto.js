@@ -920,13 +920,56 @@ function musterAnalyse() {
   const b = new Array(50).fill(0);
   draws.forEach((z, i) => { for (const n of z.n) (i < h ? a : b)[n]++; });
   const korr = pearson(a.slice(1), b.slice(1));
-  // 5) Rückrechnung: hätten Strategien besser getroffen als Zufall?
+  // 5) Rhythmus: Sind die Abstände zwischen zwei Auftritten einer Zahl so verteilt wie
+  //    bei reinem Zufall (geometrisch)? Ein echter Rhythmus würde Abstände bevorzugen.
+  const P = 6 / 49;
+  const zuletzt = new Array(50).fill(-1);
+  const abst = new Array(41).fill(0);
+  let nAbst = 0;
+  draws.forEach((z, t) => {
+    for (const n of z.n) {
+      if (zuletzt[n] >= 0) { abst[Math.min(t - zuletzt[n], 40)]++; nAbst++; }
+      zuletzt[n] = t;
+    }
+  });
+  let chiAbst = 0;
+  for (let g = 1; g <= 40; g++) {
+    const e = nAbst * (g < 40 ? P * (1 - P) ** (g - 1) : (1 - P) ** 39);
+    chiAbst += (abst[g] - e) ** 2 / e;
+  }
+  // 6) Wiederkehr nach genau k Ziehungen (k = 1 … 52, also bis zu einem halben Jahr)
+  const mengen = draws.map((z) => new Set(z.n));
+  let lagZ = 0; let lagK = 1;
+  for (let k = 1; k <= 52; k++) {
+    let hit = 0; let tot = 0;
+    for (let t = 0; t + k < N; t++) for (const n of draws[t].n) { tot++; if (mengen[t + k].has(n)) hit++; }
+    const zk = (hit / tot - P) / Math.sqrt(P * (1 - P) / tot);
+    if (Math.abs(zk) > Math.abs(lagZ)) { lagZ = zk; lagK = k; }
+  }
+  // Bei 52 geprüften Abständen: Wahrscheinlichkeit, dass der stärkste so groß ausfällt
+  const pLag = 1 - (1 - 2 * (1 - phi(Math.abs(lagZ)))) ** 52;
+  // 7) Mittwoch vs. Samstag: gleiche Verteilung der Zahlen?
+  const mi = new Array(50).fill(0); const sa = new Array(50).fill(0); let nMi = 0; let nSa = 0;
+  for (const z of draws) {
+    const w = new Date(`${z.d}T12:00:00Z`).getUTCDay();
+    if (w === 3) { nMi++; for (const n of z.n) mi[n]++; } else if (w === 6) { nSa++; for (const n of z.n) sa[n]++; }
+  }
+  let chiTag = 0;
+  if (nMi && nSa) {
+    for (let n = 1; n <= 49; n++) {
+      const tot = mi[n] + sa[n];
+      const em = (tot * nMi) / (nMi + nSa); const es = (tot * nSa) / (nMi + nSa);
+      if (em > 0 && es > 0) chiTag += (mi[n] - em) ** 2 / em + (sa[n] - es) ** 2 / es;
+    }
+  }
+  // 8) Rückrechnung: hätten Strategien besser getroffen als Zufall?
   const START = 200;
   const strategien = backtest(START);
   musterCache = {
     n: N, min: Math.min(...werte), max: Math.max(...werte), minZ: werte.indexOf(Math.min(...werte)) + 1,
     maxZ: werte.indexOf(Math.max(...werte)) + 1, pZahlen: chi2p(chi, 48), pSz: szN ? chi2p(chiSz, 9) : null, szN,
     rep: rep / (N - 1), korr, strategien, getestet: N - START,
+    pAbst: chi2p(chiAbst, 39), lagZ, lagK, pLag, nMi, nSa, pTag: nMi && nSa ? chi2p(chiTag, 48) : null,
   };
   return musterCache;
 }
@@ -946,7 +989,15 @@ function backtest(start) {
     { art: 'heissAlle', name: '🔥 Heißeste 6 aller bisherigen Ziehungen' },
     { art: 'kalt100', name: '🧊 Kälteste 6 der letzten 100 Ziehungen' },
     { art: 'ueberfaellig', name: '⏳ Die 6 am längsten nicht gezogenen' },
+    { art: 'rhythmus', name: '🔁 Rhythmus: die 6, die nach ihrem eigenen Takt „dran“ wären' },
   ];
+  // Rhythmus je Zahl: wie oft kam sie bisher nach genau g Ziehungen Pause wieder?
+  // (geglättet zur Grundchance 6/49, damit seltene Abstände nicht überbewertet werden)
+  const RMAX = 400;
+  const rTreffer = Array.from({ length: 50 }, () => new Array(RMAX).fill(0));
+  const rRisiko = Array.from({ length: 50 }, () => new Array(RMAX).fill(0));
+  const pause = new Array(50).fill(0);
+  const takt = (n) => { const g = Math.min(pause[n], RMAX - 1); return (rTreffer[n][g] + (6 / 49) * 8) / (rRisiko[n][g] + 8); };
   const zuletzt = new Array(50).fill(-1);
   const gesamt = new Array(50).fill(0);
   const fenster = new Array(50).fill(0); // Häufigkeit in den letzten 100 Ziehungen
@@ -960,6 +1011,7 @@ function backtest(start) {
         heissAlle: top6((n) => gesamt[n]),
         kalt100: top6((n) => -fenster[n]),
         ueberfaellig: top6((n) => -zuletzt[n]),
+        rhythmus: top6(takt),
       };
       const gezogen = new Set(draws[t].n);
       regeln.forEach((r, i) => {
@@ -967,6 +1019,12 @@ function backtest(start) {
         erg[i].summe += treffer;
         if (treffer >= 3) erg[i].drei++;
       });
+    }
+    const gez = new Set(draws[t].n);
+    for (let n = 1; n <= 49; n++) {
+      const g = Math.min(pause[n], RMAX - 1);
+      rRisiko[n][g]++;
+      if (gez.has(n)) { rTreffer[n][g]++; pause[n] = 0; } else pause[n]++;
     }
     for (const n of draws[t].n) { zuletzt[n] = t; gesamt[n]++; fenster[n]++; }
     if (t >= 100) for (const n of draws[t - 100].n) fenster[n]--;
@@ -977,12 +1035,13 @@ function backtest(start) {
 function renderChancen() {
   const m = musterAnalyse();
   const pDrei = [3, 4, 5, 6].reduce((s, r) => s + pRichtige(r), 0);
-  // Schwankung, die bei reinem Zufall normal ist: ±3 Standardfehler – bei 4 Strategien
-  // × 2 Kennzahlen = 8 Vergleichen ist ein einzelner Ausreißer über 2 Standardfehler normal
+  // Schwankung, die bei reinem Zufall normal ist: ±3 Standardfehler – bei 5 Strategien
+  // × 2 Kennzahlen = 10 Vergleichen ist ein einzelner Ausreißer über 2 Standardfehler normal
   const band = 3 * Math.sqrt(6 * (6 / 49) * (43 / 49) * (43 / 48)) / Math.sqrt(m.getestet);
   const band3 = 3 * Math.sqrt(pDrei * (1 - pDrei) / m.getestet);
   const besser = m.strategien.filter((x) => x.schnitt > ERWARTET_RICHTIGE + band || x.drei > pDrei + band3);
-  const auffaellig = m.pZahlen < 0.01 || (m.pSz !== null && m.pSz < 0.01) || besser.length > 0;
+  const auffaellig = m.pZahlen < 0.01 || (m.pSz !== null && m.pSz < 0.01) || besser.length > 0
+    || m.pAbst < 0.01 || m.pLag < 0.01 || (m.pTag !== null && m.pTag < 0.01);
 
   $('musterUrteil').innerHTML = auffaellig
     ? '<div class="verdict-big">Auffälligkeit gefunden – genauer hinsehen</div><p>Mindestens eine Prüfung weicht stärker ab, als Zufall es erwarten lässt. Details unten.</p>'
@@ -1000,6 +1059,12 @@ function renderChancen() {
       `Nein. Im Schnitt tauchen ${m.rep.toFixed(3).replace('.', ',')} Zahlen der Vorziehung wieder auf – Zufall erwartet ${ERWARTET_RICHTIGE.toFixed(3).replace('.', ',')}.`],
     [Math.abs(m.korr) < 0.3, 'Setzen sich „heiße“ Zahlen fort?',
       `Nein. Wie oft eine Zahl in der ersten Hälfte aller Ziehungen kam, sagt nichts über die zweite Hälfte (Zusammenhang r = ${m.korr.toFixed(2).replace('.', ',')}; 0 = keiner).`],
+    [m.pAbst >= 0.01, 'Haben die Zahlen einen Rhythmus?',
+      `Nein. Die Pausen zwischen zwei Auftritten einer Zahl sind genau so verteilt wie beim Würfeln – am häufigsten ist sogar „gleich in der nächsten Ziehung“, danach wird jede längere Pause seltener (p = ${prozent(m.pAbst)}).`],
+    [m.pLag >= 0.01, 'Kommt eine Zahl nach festem Takt wieder (alle 1–52 Ziehungen)?',
+      `Nein. Der auffälligste Takt war „nach ${m.lagK} Ziehungen“ mit ${m.lagZ > 0 ? 'etwas mehr' : 'etwas weniger'} Wiederkehr als erwartet (z = ${m.lagZ.toFixed(2).replace('.', ',')}). Bei 52 geprüften Takten ist so ein Ausreißer in ${prozent(m.pLag)} der Fälle reiner Zufall.`],
+    [m.pTag === null || m.pTag >= 0.01, 'Fallen mittwochs andere Zahlen als samstags?',
+      m.pTag === null ? 'Noch zu wenige Ziehungen.' : `Nein. ${zahl.format(m.nMi)} Mittwochs- und ${zahl.format(m.nSa)} Samstagsziehungen verteilen sich gleich (p = ${prozent(m.pTag)}).`],
   ];
   $('musterTests').innerHTML = tests.map(([gut, frage, text]) =>
     `<div class="check"><span class="ico" aria-hidden="true">${ok(gut)}</span><div><b>${frage}</b><span>${text}</span></div></div>`).join('');

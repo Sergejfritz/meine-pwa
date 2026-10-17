@@ -61,8 +61,10 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   damaligen Auszahlungen** (inkl. Zusatzzahl-Klassen und DM-Beträgen).
 - **Chancen** – ehrlicher Muster-Check, live über alle Ziehungen gerechnet:
   Gleichverteilung der Zahlen und Superzahlen (Chi²), Abhängigkeit zwischen
-  Ziehungen, Fortsetzung „heißer“ Zahlen und eine Rückrechnung von Strategien
-  (heiß/kalt/überfällig) gegen den Zufall – Ergebnis: kein Muster. Dazu die
+  Ziehungen, Fortsetzung „heißer“ Zahlen, **Rhythmus** (Pausen zwischen zwei
+  Auftritten vs. Zufallsverteilung, fester Takt nach 1–52 Ziehungen, Mittwoch vs.
+  Samstag) und eine Rückrechnung von Strategien (heiß/kalt/überfällig/eigener
+  Rhythmus jeder Zahl) gegen den Zufall – Ergebnis: kein Muster. Dazu die
   exakten Gewinnchancen je Klasse und der **kluge Tipp**: gleiche Chance, aber
   ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
   20–30 % weniger pro Gewinn bringen.
