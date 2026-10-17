@@ -12,13 +12,14 @@ const TYPES = {
   '.mjs': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml',
   '.webmanifest': 'application/manifest+json'
 };
 
 http.createServer((req, res) => {
   let p = decodeURIComponent(req.url.split('?')[0]);
-  if (p === '/') p = '/index.html';
+  if (p.endsWith('/')) p += 'index.html'; // Ordner → index.html (z. B. /lotto/)
   const file = path.join(ROOT, p);
   if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) {
     res.writeHead(404); return res.end('Not found');
