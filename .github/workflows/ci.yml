@@ -8,7 +8,7 @@ on:
 jobs:
   test:
     name: Playwright E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright unterstützt ubuntu-latest (26.04) noch nicht
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
