@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="akzent">#C1623C</color>
+    <color name="hintergrund">#F4F1EA</color>
+    <color name="flaeche">#FFFFFF</color>
+    <color name="text">#2B2A27</color>
+    <color name="text_leise">#6F6A60</color>
+    <color name="rand">#E6DED0</color>
+</resources>

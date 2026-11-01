@@ -1,0 +1,51 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Versionsnummer = Minuten seit 2026 → jede neue APK lässt sich über die alte installieren
+def jetzt = new Date()
+def versionsCode = (int) ((jetzt.time - Date.parse('yyyy-MM-dd', '2026-01-01').time) / 60000L)
+
+// Signatur: Schlüssel liegt passwortgeschützt im Repo, das Passwort NICHT
+// (Umgebungsvariable VORLESEN_KEY_PASSWORD). Ohne Passwort entsteht nur eine Debug-APK.
+def schluesselPasswort = System.getenv('VORLESEN_KEY_PASSWORD')
+
+android {
+    namespace 'de.sfritz.vorlesen'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId 'de.sfritz.vorlesen'
+        minSdk 26
+        targetSdk 35
+        versionCode versionsCode
+        versionName "1.0.${jetzt.format('yyyyMMdd.HHmm', TimeZone.getTimeZone('Europe/Berlin'))}"
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('../vorlesen-app.p12')
+            storeType 'pkcs12'
+            storePassword schluesselPasswort
+            keyAlias 'vorlesen'
+            keyPassword schluesselPasswort
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig schluesselPasswort ? signingConfigs.release : null
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    testImplementation 'junit:junit:4.13.2'
+}

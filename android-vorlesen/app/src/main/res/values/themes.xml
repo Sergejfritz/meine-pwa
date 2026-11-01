@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Vorlesen" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/hintergrund</item>
+        <item name="android:colorAccent">@color/akzent</item>
+        <item name="android:colorPrimary">@color/akzent</item>
+        <item name="android:statusBarColor">@color/hintergrund</item>
+        <item name="android:navigationBarColor">@color/hintergrund</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+    <style name="Theme.Vorlesen.Unsichtbar" parent="android:Theme.Translucent.NoTitleBar">
+        <item name="android:windowNoDisplay">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+</resources>

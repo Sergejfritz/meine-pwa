@@ -34,6 +34,13 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
   Stimme, Tempo und Tonhöhe einstellbar, offline nutzbar (Sprachausgabe des
   Geräts, keine Daten an Server).
   🔗 https://sergejfritz.github.io/meine-pwa/vorlesen.html
+- 📱 **Vorlesen als Android-App** (`android-vorlesen/`, APK unter
+  `downloads/vorlesen.apk`) – der runde Knopf erscheint in **allen Apps**,
+  sobald Text markiert wird (Bedienungshilfe, einmalig einschalten).
+  Zusätzlich „Vorlesen“ im Markier-Menü (⋮) und im Teilen-Menü jeder App.
+  Kein Internetzugriff, nichts wird gespeichert. Bauen:
+  `cd android-vorlesen && ./gradlew assembleRelease` (Passwort in
+  `VORLESEN_KEY_PASSWORD`, sonst `assembleDebug`).
 - 📴 **Offline-fähig** – Service Worker cacht die App inkl. PDF-Bibliothek.
 - 💬 **KI-Assistent (lokal)** – ein Chat-Assistent, dessen Sprachmodell
   **komplett im Browser** läuft (WebLLM/WebGPU) – **ohne API-Schlüssel und ohne

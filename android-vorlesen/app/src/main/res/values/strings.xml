@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Vorlesen</string>
+    <string name="menue_eintrag">Vorlesen</string>
+    <string name="dienst_name">Vorlesen – runder Knopf</string>
+    <string name="dienst_kurz">Zeigt beim Markieren einen runden Knopf zum Vorlesen</string>
+    <string name="dienst_beschreibung">Sobald du in irgendeiner App Text markierst, erscheint ein kleiner runder Knopf. Antippen liest den markierten Text vor, nochmal tippen stoppt. Lange drücken blendet ihn aus, ziehen verschiebt ihn.\n\nDie App liest nur den markierten Text, und nur, um ihn mit der Sprachausgabe deines Handys vorzulesen. Nichts wird gespeichert oder verschickt; die App hat keinen Internetzugriff. Passwortfelder werden ignoriert.</string>
+</resources>

@@ -1,0 +1,46 @@
+name: Vorlesen-App (APK)
+
+on:
+  push:
+    branches: [main]
+    paths: ['android-vorlesen/**', '.github/workflows/vorlesen-apk.yml']
+  pull_request:
+    paths: ['android-vorlesen/**', '.github/workflows/vorlesen-apk.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    name: Vorlesen-APK bauen
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Tests und Lint
+        working-directory: android-vorlesen
+        run: ./gradlew --no-daemon testDebugUnitTest lintDebug
+
+      # Mit Secret VORLESEN_KEY_PASSWORD entsteht die signierte Release-APK
+      # (gleicher Schlüssel wie downloads/vorlesen.apk), sonst eine Debug-APK.
+      - name: APK bauen
+        working-directory: android-vorlesen
+        env:
+          VORLESEN_KEY_PASSWORD: ${{ secrets.VORLESEN_KEY_PASSWORD }}
+        run: |
+          if [ -n "$VORLESEN_KEY_PASSWORD" ]; then
+            ./gradlew --no-daemon assembleRelease
+          else
+            ./gradlew --no-daemon assembleDebug
+          fi
+
+      - name: APK hochladen
+        uses: actions/upload-artifact@v4
+        with:
+          name: vorlesen-apk
+          path: android-vorlesen/app/build/outputs/apk/**/*.apk
+          retention-days: 14
