@@ -27,6 +27,13 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
   Datentabelle, nummerierte Fotos auf eigenen Seiten, Seitenzahlen und
   Erstell-Zeitstempel.
 - 📤 **Teilen** – natives Teilen (WhatsApp, E-Mail …); Fallback auf Download.
+- 🔊 **Vorlesen** (`vorlesen.html`, eigene installierbare App) – Text
+  **markieren**, dann erscheint automatisch ein **kleiner runder Knopf**;
+  antippen = vorlesen, nochmal tippen = stopp. Text per „Einfügen“, Eintippen
+  oder über **Teilen** aus jeder anderen App (Android, nach Installation).
+  Stimme, Tempo und Tonhöhe einstellbar, offline nutzbar (Sprachausgabe des
+  Geräts, keine Daten an Server).
+  🔗 https://sergejfritz.github.io/meine-pwa/vorlesen.html
 - 📴 **Offline-fähig** – Service Worker cacht die App inkl. PDF-Bibliothek.
 - 💬 **KI-Assistent (lokal)** – ein Chat-Assistent, dessen Sprachmodell
   **komplett im Browser** läuft (WebLLM/WebGPU) – **ohne API-Schlüssel und ohne

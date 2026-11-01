@@ -1,5 +1,5 @@
 // Service Worker – macht die App offline-fähig (Werkstatt ohne WLAN)
-const CACHE = 'techdoku-v2026-35';
+const CACHE = 'techdoku-v2026-36';
 
 // App-Shell – wird beim ersten Besuch gecacht.
 // Die OCR-Dateien (vendor/tesseract, vendor/tessdata) werden NICHT hier
@@ -25,6 +25,8 @@ const ASSETS = [
   './js/aimemory.js',
   './vendor/jspdf.umd.min.js',
   './manifest.json',
+  './vorlesen.html',
+  './vorlesen.webmanifest',
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png'
@@ -50,7 +52,8 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
 
   e.respondWith(
-    caches.match(req).then((cached) => {
+    // Seitenaufrufe mit ?text=… (Teilen an „Vorlesen“) auch offline aus dem Cache bedienen
+    caches.match(req, { ignoreSearch: req.mode === 'navigate' }).then((cached) => {
       if (cached) return cached;
       return fetch(req)
         .then((res) => {

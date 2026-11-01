@@ -1,0 +1,23 @@
+{
+  "name": "Vorlesen – markieren & anhören",
+  "short_name": "Vorlesen",
+  "description": "Text markieren, auf den runden Knopf tippen – wird vorgelesen. Auch Text aus anderen Apps per „Teilen“.",
+  "id": "vorlesen-sfritz",
+  "start_url": "./vorlesen.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f1ea",
+  "theme_color": "#c1623c",
+  "lang": "de",
+  "categories": ["utilities", "productivity", "education"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "share_target": {
+    "action": "./vorlesen.html",
+    "method": "GET",
+    "params": { "title": "title", "text": "text", "url": "url" }
+  }
+}
