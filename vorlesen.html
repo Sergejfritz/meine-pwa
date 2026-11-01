@@ -128,7 +128,7 @@ input[type=range] { accent-color: var(--accent); }
 </header>
 
 <main>
-  <p class="hint">Text <b>markieren</b> – der runde Knopf erscheint automatisch – <b>antippen</b>, und es wird vorgelesen. Nochmal tippen stoppt.</p>
+  <p class="hint">Lange auf Text drücken / <b>markieren</b> – unten rechts erscheint der runde Knopf – <b>antippen</b>, und es wird vorgelesen. Nochmal tippen stoppt.</p>
 
   <a class="apk card" href="downloads/vorlesen.apk" download>
     <b>📱 Android-App: Knopf in <u>allen</u> Apps</b>
@@ -310,31 +310,11 @@ input[type=range] { accent-color: var(--accent); }
     return sel ? sel.toString().trim() : '';
   }
 
-  function selectionRect() {
-    if (!editor.classList.contains('hidden') && document.activeElement === editor) {
-      return editor.getBoundingClientRect();
-    }
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return null;
-    const rects = sel.getRangeAt(0).getClientRects();
-    return rects.length ? rects[rects.length - 1] : sel.getRangeAt(0).getBoundingClientRect();
-  }
-
+  // Immer unten rechts in der Ecke
   function placeFab() {
-    const r = selectionRect();
-    const size = 52, gap = 14, vw = window.innerWidth, vh = window.innerHeight;
-    let x, y;
-    if (r && (r.width || r.height)) {
-      // unterhalb des Markierungsendes – oberhalb liegt beim Handy das System-Menü
-      x = r.right - size / 2;
-      y = r.bottom + gap + 18; // Platz für den Markierungs-Anfasser
-      if (y + size > vh - 8) y = r.top - size - gap - 44;
-    } else {
-      x = vw - size - 20; y = vh - size - 28;
-    }
-    x = Math.max(8, Math.min(vw - size - 8, x));
-    y = Math.max(8, Math.min(vh - size - 8, y));
-    fab.style.left = x + 'px'; fab.style.top = y + 'px';
+    fab.style.left = 'auto'; fab.style.top = 'auto';
+    fab.style.right = '20px';
+    fab.style.bottom = 'calc(28px + env(safe-area-inset-bottom, 0px))';
   }
 
   function showFab() { placeFab(); fab.classList.add('show'); }

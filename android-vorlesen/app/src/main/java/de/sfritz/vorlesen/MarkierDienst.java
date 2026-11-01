@@ -1,12 +1,8 @@
 package de.sfritz.vorlesen;
 
 import android.accessibilityservice.AccessibilityService;
-import android.graphics.Rect;
-import android.graphics.RectF;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.Parcelable;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -20,8 +16,8 @@ import android.widget.ImageView;
 import java.util.List;
 
 /**
- * Bedienungshilfe: erkennt markierten Text in allen Apps und zeigt daneben
- * einen kleinen runden Knopf. Antippen = vorlesen, nochmal = stopp,
+ * Bedienungshilfe: erkennt markierten Text in allen Apps und zeigt unten
+ * rechts einen kleinen runden Knopf. Antippen = vorlesen, nochmal = stopp,
  * ziehen = verschieben, lange drücken = ausblenden.
  */
 public class MarkierDienst extends AccessibilityService implements Sprecher.Hoerer {
@@ -97,7 +93,7 @@ public class MarkierDienst extends AccessibilityService implements Sprecher.Hoer
                         haupt.removeCallbacks(langDruck);
                         blase.setAlpha(1f);
                         if (!gezogen && !lang) v.performClick();
-                        else planeAusblenden();
+                        else { if (gezogen) positionMerken(); planeAusblenden(); }
                         return true;
                     case MotionEvent.ACTION_CANCEL:
                         haupt.removeCallbacks(langDruck);
@@ -138,7 +134,7 @@ public class MarkierDienst extends AccessibilityService implements Sprecher.Hoer
             return;
         }
         markiert = auswahl;
-        zeigen(position(knoten, Math.max(von, bis)));
+        zeigen();
     }
 
     static String ausschnitt(CharSequence voll, int von, int bis) {
@@ -148,52 +144,24 @@ public class MarkierDienst extends AccessibilityService implements Sprecher.Hoer
         return voll.subSequence(a, b).toString().trim();
     }
 
-    /** Bildschirmpunkt am Ende der Markierung (oder unten am Textfeld). */
-    private int[] position(AccessibilityNodeInfo knoten, int ende) {
-        if (knoten == null) return null;
-        String key = AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_KEY;
-        try {
-            List<String> extras = knoten.getAvailableExtraData();
-            if (extras != null && extras.contains(key) && ende > 0) {
-                Bundle args = new Bundle();
-                args.putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_START_INDEX, ende - 1);
-                args.putInt(AccessibilityNodeInfo.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_LENGTH, 1);
-                if (knoten.refreshWithExtraData(key, args)) {
-                    Parcelable[] r = knoten.getExtras().getParcelableArray(key);
-                    if (r != null && r.length > 0 && r[0] instanceof RectF) {
-                        RectF f = (RectF) r[0];
-                        if (f.width() > 0 || f.height() > 0) return new int[]{(int) f.right, (int) f.bottom};
-                    }
-                }
-            }
-        } catch (RuntimeException ignored) { }
-        Rect r = new Rect();
-        knoten.getBoundsInScreen(r);
-        if (r.isEmpty()) return null;
-        return new int[]{r.right - groesse, r.bottom};
-    }
-
-    private void zeigen(int[] punkt) {
+    /** Immer an derselben Stelle: unten rechts in der Ecke (oder dort, wo man ihn hingezogen hat). */
+    private void zeigen() {
         DisplayMetrics m = getResources().getDisplayMetrics();
-        int x, y;
-        if (punkt != null) {
-            // unter das Markierungsende – über der Markierung liegt das System-Menü,
-            // direkt darunter die Anfasser
-            x = punkt[0] - groesse / 2;
-            y = punkt[1] + dp(34);
-            if (y + groesse > m.heightPixels - dp(60)) y = punkt[1] - groesse - dp(90);
-        } else {
-            x = m.widthPixels - groesse - dp(16);
-            y = m.heightPixels / 2;
-        }
-        lp.x = Math.max(dp(6), Math.min(m.widthPixels - groesse - dp(6), x));
-        lp.y = Math.max(dp(30), Math.min(m.heightPixels - groesse - dp(60), y));
+        android.content.SharedPreferences p = Sprecher.prefs(this);
+        int x = p.getInt("knopfX", m.widthPixels - groesse - dp(18));
+        int y = p.getInt("knopfY", m.heightPixels - groesse - dp(110));
+        lp.x = Math.max(0, Math.min(m.widthPixels - groesse, x));
+        lp.y = Math.max(dp(24), Math.min(m.heightPixels - groesse - dp(24), y));
         try {
             if (sichtbar) wm.updateViewLayout(blase, lp);
             else { wm.addView(blase, lp); sichtbar = true; }
         } catch (RuntimeException ignored) { }
         sprichtGerade(Sprecher.von(this).spricht());
         planeAusblenden();
+    }
+
+    private void positionMerken() {
+        Sprecher.prefs(this).edit().putInt("knopfX", lp.x).putInt("knopfY", lp.y).apply();
     }
 
     private void planeAusblenden() {

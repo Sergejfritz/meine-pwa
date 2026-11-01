@@ -68,3 +68,15 @@ test('Manifest hat Teilen-Ziel', async ({ request }) => {
   expect(m.share_target.params.text).toBe('text');
   expect(m.start_url).toBe('./vorlesen.html');
 });
+
+test('Runder Knopf sitzt unten rechts in der Ecke', async ({ page }) => {
+  await mockSpeech(page);
+  await page.goto('/vorlesen.html?text=Eins%20zwei%20drei');
+  await selectText(page, 'zwei');
+  const fab = page.locator('#speakFab');
+  await expect(fab).toHaveClass(/show/);
+  const box = await fab.boundingBox();
+  const vp = page.viewportSize();
+  expect(vp.width - (box.x + box.width)).toBeLessThan(40);
+  expect(vp.height - (box.y + box.height)).toBeLessThan(60);
+});

@@ -168,7 +168,7 @@ public class MainActivity extends Activity implements Sprecher.Hoerer {
         boolean an = dienstAn();
         status.setText(an ? "✅ Runder Knopf ist an" : "⚪ Runder Knopf ist aus");
         statusHilfe.setText(an
-                ? "Markiere jetzt in irgendeiner App Text – der Knopf erscheint neben der Markierung. Ziehen = verschieben, lange drücken = ausblenden."
+                ? "Drück in irgendeiner App lange auf Text – unten rechts erscheint der runde Knopf. Ziehen = verschieben (bleibt dann dort), lange drücken = ausblenden."
                 : "Einmalig einschalten: „Knopf einschalten“ → „Installierte Apps“ / „Heruntergeladene Apps“ → „Vorlesen – runder Knopf“ → An.");
         einschalten.setText(an ? "Einstellungen öffnen" : "Knopf einschalten");
         gesperrt.setVisibility(an ? View.GONE : View.VISIBLE);
