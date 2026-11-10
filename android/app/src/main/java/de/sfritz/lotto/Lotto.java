@@ -159,8 +159,10 @@ final class Lotto {
         }
     }
 
-    // {"tipp":{"nums":[…],"sz":4},"favoriten":[{"nums":[…],"sz":null}, …]} → Liste ohne Doppelte
-    static List<Tipp> tipps(String json) {
+    // {"tipp":{"nums":[…],"sz":4},"favoriten":[{"nums":[…],"sz":null}, …],
+    //  "vorschlaege":[{"nums":[…],"sz":0,"d":"2026-11-11"}]} → Liste ohne Doppelte.
+    // Ein Vorschlag gilt nur für seine Ziehung (d) – für andere Ziehungen zählt er nicht mit.
+    static List<Tipp> tipps(String json, String ziehung) {
         Map<String, Tipp> alle = new LinkedHashMap<>();
         if (json == null) return new ArrayList<>();
         try {
@@ -170,7 +172,11 @@ final class Lotto {
             for (String feld : new String[]{"favoriten", "vorschlaege"}) {
                 JSONArray a = o.optJSONArray(feld);
                 for (int i = 0; a != null && i < a.length(); i++) {
-                    if (a.optJSONObject(i) != null) roh.add(a.getJSONObject(i));
+                    JSONObject t = a.optJSONObject(i);
+                    if (t == null) continue;
+                    String d = t.optString("d", "");
+                    if (!d.isEmpty() && ziehung != null && !d.equals(ziehung)) continue;
+                    roh.add(t);
                 }
             }
             for (JSONObject t : roh) {
@@ -243,7 +249,7 @@ final class Lotto {
         for (int n : z.zahlen) zahlen.append(zahlen.length() > 0 ? " · " : "").append(n);
         if (z.sz >= 0) zahlen.append("   Superzahl ").append(z.sz);
 
-        List<Tipp> tipps = tipps(tippsJson);
+        List<Tipp> tipps = tipps(tippsJson, z.datum);
         String kurz;
         StringBuilder lang = new StringBuilder(zahlen);
         if (tipps.isEmpty()) {

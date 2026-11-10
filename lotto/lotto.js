@@ -239,25 +239,35 @@ const quotenFuer = (d) => {
   return q && Array.isArray(q.k) ? q : null;
 };
 const quotenLaden = new Set();
-async function ladeQuoten(daten, fortschritt) {
-  const offen = [...new Set(daten)].filter((d) => !quotenFuer(d) && !quotenLaden.has(d));
+// Erfolglose Abrufe (kein Netz, Quoten stehen noch nicht fest) frühestens nach 10 Minuten
+// wiederholen – sonst fragt eine Ansicht, die nach dem Laden neu zeichnet, pausenlos nach.
+const quotenVersuch = new Map();
+// Ergebnis: Anzahl neu geladener Quoten
+async function ladeQuoten(daten, fortschritt, erzwingen = false) {
+  const jetzt = Date.now();
+  const offen = [...new Set(daten)].filter((d) => !quotenFuer(d) && !quotenLaden.has(d)
+    && (erzwingen || !(jetzt - quotenVersuch.get(d) < 10 * MIN)));
   offen.forEach((d) => quotenLaden.add(d));
   let i = 0;
   let fertig = 0;
+  let geladen = 0;
   const arbeiter = async () => {
     while (i < offen.length) {
       const d = offen[i++];
+      let ok = false;
       try {
         const r = parseLive(await holeJson(`${LIVE}&datum=${d}`));
-        if (r && r.z.d === d && r.quoten) quotenCache[d] = r.quoten;
+        if (r && r.z.d === d && r.quoten) { quotenCache[d] = r.quoten; ok = true; geladen++; }
       } catch {}
+      if (!ok) quotenVersuch.set(d, Date.now());
       quotenLaden.delete(d);
       fertig++;
       if (fortschritt) fortschritt(fertig, offen.length);
     }
   };
   await Promise.all(Array.from({ length: Math.min(4, offen.length) }, arbeiter));
-  if (offen.length) write(KEY.quoten, quotenCache);
+  if (geladen) write(KEY.quoten, quotenCache);
+  return geladen;
 }
 
 let liveStand = read(KEY.live); // { d, folge, geprueft } der letzten erfolgreichen Live-Abfrage
@@ -276,21 +286,27 @@ async function holeLive() {
   liveStand = { d: live.z.d, folge: live.folge, geprueft: Date.now() };
   write(KEY.live, liveStand);
   if (live.quoten) { quotenCache[live.z.d] = live.quoten; write(KEY.quoten, quotenCache); }
-  const out = [live.z];
+  const out = [];
   const vorhanden = new Set(draws.map((z) => z.d));
-  const fehlend = ziehungstageZwischen(bundledLast, live.z.d).filter((d) => !vorhanden.has(d));
+  let fehlend = ziehungstageZwischen(bundledLast, live.z.d).filter((d) => !vorhanden.has(d));
   if (fehlend.length > 8) {
     // längere Pause → alles auf einmal aus dem Archiv holen
     try { out.push(...parseArchiv(await holeJson(ARCHIV, 20000))); } catch {}
-  } else if (fehlend.length) {
-    const res = await Promise.all(fehlend.map((d) => holeJson(`${LIVE}&datum=${d}`).then(parseLive, () => null)));
-    for (const r of res) {
-      if (!r) continue;
+    // was das Archiv (noch) nicht kennt oder wenn es nicht erreichbar ist: einzeln nachholen
+    const da = new Set(out.map((z) => z.d));
+    fehlend = fehlend.filter((d) => !da.has(d)).slice(-60);
+  }
+  for (let i = 0; i < fehlend.length; i += 4) {
+    const teil = fehlend.slice(i, i + 4);
+    const res = await Promise.all(teil.map((d) => holeJson(`${LIVE}&datum=${d}`).then(parseLive, () => null)));
+    res.forEach((r, j) => {
+      if (!r || r.z.d !== teil[j]) return;
       out.push(r.z);
       if (r.quoten) quotenCache[r.z.d] = r.quoten;
-    }
-    write(KEY.quoten, quotenCache);
+    });
   }
+  if (fehlend.length) write(KEY.quoten, quotenCache);
+  out.push(live.z); // zuletzt: die Live-Ziehung hat Vorrang vor dem Archiv
   return out;
 }
 
@@ -302,7 +318,7 @@ async function aktualisieren(manuell = false) {
     const fehlt = letzte().d < faellig;
     if (!fehlt && quotenFuer(letzte().d) && liveFrisch()) { planeCheck(); return; }
     const seit = Date.now() - (Number(read(KEY.check)) || 0);
-    if (seit < (fehlt ? 2 * MIN : 30 * MIN)) { planeCheck(); return; }
+    if (seit < (fehlt ? 2 * MIN : 30 * MIN)) { vorschlagNachAbgleich(); planeCheck(); return; }
   }
   updating = true;
   $('btnUpdate').disabled = true;
@@ -340,6 +356,7 @@ async function aktualisieren(manuell = false) {
   } finally {
     updating = false;
     $('btnUpdate').disabled = false;
+    vorschlagNachAbgleich();
     planeCheck();
   }
 }
@@ -460,7 +477,7 @@ function tippGeaendert(inputSync, probleme = []) {
 // Die App prüft nach jeder Ziehung den aktuellen und alle gemerkten Tipps
 function tippsAnApp() {
   if (!APP) return;
-  const offen = draws.length ? vorschlaege().filter((v) => v.d > letzte().d).map((v) => ({ nums: v.tipp, sz: v.sz })) : [];
+  const offen = draws.length ? vorschlaege().filter((v) => v.d > letzte().d).map((v) => ({ nums: v.tipp, sz: v.sz, d: v.d })) : [];
   app('tipps', JSON.stringify({ tipp: tippKomplett() ? { nums: sortiert(tipNums), sz: tipSz } : null, favoriten: favoriten(), vorschlaege: offen }));
 }
 
@@ -744,7 +761,7 @@ async function echteBilanzLaden() {
   await ladeQuoten(a.gewinne.map((g) => g.z.d), (fertig, gesamt) => {
     const b = $('btnEcht');
     if (b) b.textContent = `Lade Quoten … ${fertig}/${gesamt}`;
-  });
+  }, true);
   if (auswertung !== a) return; // Tipp wurde inzwischen geändert
   fuelleQuoten();
   zeigeEchteBilanz();
@@ -1243,8 +1260,15 @@ function vorschlaege() {
 }
 // Vorschlag für die nächste Ziehung einmalig festschreiben (vor der Ziehung, danach unveränderlich).
 // Dazu ein Zufallstipp vom selben Zeitpunkt als ehrlicher Vergleich.
-function sichereVorschlag() {
-  if (!draws.length) return;
+// Erst wenn die letzte fällige Ziehung geladen ist: sonst rechnet der Vorschlag mit
+// veralteten Daten („letzte Ziehung“, schon gezogene Kombinationen) und fällt anders
+// aus als auf einem Gerät mit aktuellem Stand. nachAbgleich = der Live-Abgleich ist
+// durch; fehlen die Zahlen dann auch Stunden nach der Ziehung noch (kein Netz), wird
+// trotzdem festgelegt. Ergebnis: true, wenn ein neuer Vorschlag entstanden ist.
+function sichereVorschlag(nachAbgleich = false) {
+  if (!draws.length) return false;
+  const faellig = letzteFaelligeZiehung();
+  if (letzte().d < faellig && !(nachAbgleich && Date.now() - ziehungsZeit(faellig) > 3 * 60 * MIN)) return false;
   let d = naechsteZiehung();
   // Uhr des Geräts hinkt der schon eingetragenen Ziehung hinterher → Ziehungstag danach
   if (d <= letzte().d) {
@@ -1252,7 +1276,7 @@ function sichereVorschlag() {
     d = naechsteZiehung(new Date(y, m - 1, t + 1));
   }
   const liste = vorschlaege();
-  if (liste.some((v) => v.d === d)) return;
+  if (liste.some((v) => v.d === d)) return false;
   zufall = festerZufall(`lotto-vorschlag-${d}`);
   try {
     liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), erstellt: Date.now() });
@@ -1261,6 +1285,13 @@ function sichereVorschlag() {
   }
   write(KEY.prognosen, liste.slice(-500));
   tippsAnApp();
+  return true;
+}
+// nach dem Live-Abgleich: Vorschlag festlegen (falls noch keiner da ist) und anzeigen
+function vorschlagNachAbgleich() {
+  if (!sichereVorschlag(true)) return;
+  renderVorschlagTipp();
+  if (aktiverTab === 'chancen') renderVorschlag();
 }
 function bewerte(tipp, sz, z) {
   const gez = new Set(z.n);
@@ -1376,7 +1407,7 @@ function renderVorschlag() {
 
   if (!fertig.length) {
     $('vorschlagBilanz').innerHTML = `<p class="muted small">Ab jetzt wird jeder Vorschlag nach der Ziehung mit den echten Zahlen verglichen – neben einem Zufallstipp, der zur selben Zeit festgelegt wurde. ${n ? `Erste Auswertung nach der Ziehung am ${datum(n.d)}.` : ''}</p>${formelCheckHtml(letzte())}`;
-    if (!quotenFuer(letzte().d)) ladeQuoten([letzte().d]).then(() => { if (aktiverTab === 'chancen') renderVorschlag(); });
+    if (!quotenFuer(letzte().d)) ladeQuoten([letzte().d]).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
     return;
   }
   let sumS = 0; let sumZ = 0; let gewS = 0; let gewZ = 0; let euroS = 0; let euroZ = 0; let fehlt = [];
@@ -1407,7 +1438,7 @@ function renderVorschlag() {
       </tbody></table>
     <p class="muted small" style="margin-top:8px">${m} ${m === 1 ? 'Ziehung' : 'Ziehungen'} ausgewertet · Einsatz je ${geld(m * PREIS, 'EUR')}. Über wenige Ziehungen schwankt das stark – aussagekräftig wird die Bilanz erst nach vielen Monaten.</p>
     <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>${formelCheckHtml(letzte())}`;
-  if (fehlt.length) ladeQuoten(fehlt).then(() => { if (aktiverTab === 'chancen') renderVorschlag(); });
+  if (fehlt.length) ladeQuoten(fehlt).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
 }
 
 // ---------- Simulator ----------

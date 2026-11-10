@@ -69,13 +69,13 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
   20–30 % weniger pro Gewinn bringen.
 - **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
-  Trefferchance): Aus den echten Gewinnerzahlen von 633 Ziehungen (seit 09/2020)
+  Trefferchance): Aus den echten Gewinnerzahlen von 640 Ziehungen (seit 09/2020)
   lernt eine Ridge-Regression die Beliebtheit β jeder Zahl; die gezogene
   Superzahl wird dabei mit herausgerechnet (sie bestimmt die „2 + SZ“-Gewinner
   mit). Ehrlicher Test an 200 Ziehungen, die das Modell jeweils noch nicht kannte
   (walk-forward): Gewinner mit 3 Richtigen im Schnitt 4,0 % daneben (ohne
   Superzahl-Korrektur 4,5 %, „alle Zahlen gleich beliebt“ 10,4 %), mit 4 Richtigen
-  9,8 % (10,3 % bzw. 17,9 %). Nach jeder Ziehung zeigt der **Formel-Check**
+  9,8 % (10,3 % bzw. 17,6 %). Nach jeder Ziehung zeigt der **Formel-Check**
   (Chancen → Bilanz) vorhergesagte vs. echte Gewinnerzahl. Pro Gewinnklasse werden die Mitgewinner als
   Poisson-Verteilung modelliert:
   `W(T) = Σₖ pₖ · Topfₖ · (1 − e^−μₖ)/μₖ`, `μₖ = Gₖ · e^(κₖ · B(T) · (rₖ/6 − (6−rₖ)/43))`,
@@ -93,7 +93,9 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
   groß ganz oben auf „Mein Tipp“ – mit Begründung für jede Zahl (Beliebtheit,
   nie gezogen, keine Muster, Geburtstagszahlen, Superzahl, Fritz-Wert). Er wird
   per festem Zufall aus dem Ziehungsdatum berechnet: gleiche Daten → auf jedem
-  Gerät derselbe Vorschlag.
+  Gerät derselbe Vorschlag. Festgeschrieben wird er erst, wenn die letzte
+  fällige Ziehung geladen ist (ohne Netz: nach dem Abgleichversuch, frühestens
+  3 Stunden nach der Ziehung).
 - **Archiv** – alle Ziehungen nach Jahr, letzte Ziehung mit echten Quoten,
   nächste Ziehung + Annahmeschluss.
 - **Statistik** – Häufigkeit jeder Zahl, am längsten nicht gezogen, Superzahlen.

@@ -37,6 +37,18 @@ function westlotto(datum, nums, sz, waehrung = 'EUR') {
     ] }] } } },
   };
 }
+// Feste Uhr: Die Tests spielen am Tag nach der Ziehung NEU. Ohne das hängen sie vom
+// echten Kalender ab und schlagen fehl, sobald die mitgelieferten Daten älter werden.
+const JETZT = new Date(`${naechsterTag(NEU)}T10:00:00`);
+function naechsterTag(iso) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+test.beforeEach(async ({ page }) => {
+  await page.clock.install({ time: JETZT });
+});
+
 const KEINE_DATEN = { error: 'Für den gewählten Ziehungstag liegen keine Daten vor.', head: null };
 const isWestlotto = (url) => url.hostname === 'www.westlotto.de';
 const isArchiv = (url) => url.hostname === 'johannesfriedrich.github.io';
@@ -439,6 +451,51 @@ test('Startseite: Vorschlag steht eindeutig oben, mit Begründung für jede Zahl
   await expect(page.locator('#tipInput')).toHaveValue(t.join(' '));
   await page.click('#vorschlagBilanzLink');
   await expect(page.locator('#vorschlagBilanz')).toBeVisible();
+});
+
+test('Vorschlag wird erst mit der neuesten Ziehung berechnet (gleich auf jedem Gerät)', async ({ page }) => {
+  // Neue Ziehung mit lauter „unbeliebten“ Zahlen: Mit veraltetem Stand würden bis zu
+  // 6 davon vorgeschlagen, erlaubt sind höchstens 2 Zahlen der letzten Ziehung.
+  const gezogen = [35, 36, 42, 43, 45, 49];
+  await page.route(isWestlotto, (route) => {
+    const datum = new URL(route.request().url()).searchParams.get('datum');
+    route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' },
+      body: JSON.stringify(westlotto(datum || NEU, datum && datum !== NEU ? [7, 8, 9, 10, 11, 12] : gezogen, 3)) });
+  });
+  await page.route(isArchiv, (route) => route.abort());
+  await page.goto('/lotto/');
+  const balls = page.locator('#vorschlagTippCard .vs-balls .ball:not(.sz)');
+  await expect(balls).toHaveCount(6);
+  const frisch = (await balls.allTextContents()).map(Number);
+  expect(frisch.filter((n) => gezogen.includes(n)).length).toBeLessThanOrEqual(2);
+  await expect(page.locator('#vorschlagTippCard .vs-datum')).toContainText(deDatum(naechsterZiehungstag(NEU)));
+  // Gerät, das die Ziehung schon gespeichert hat → derselbe Vorschlag
+  await page.evaluate(() => localStorage.removeItem('lotto_vorschlaege'));
+  await page.reload();
+  await expect(balls).toHaveCount(6);
+  expect((await balls.allTextContents()).map(Number)).toEqual(frisch);
+});
+
+test('Bilanz ohne Quoten: fragt nicht pausenlos nach', async ({ page }) => {
+  await page.addInitScript((d) => {
+    localStorage.setItem('lotto_vorschlaege', JSON.stringify([
+      { d, tipp: [1, 2, 3, 10, 20, 30], sz: 7, zufall: [40, 41, 42, 43, 44, 45], zsz: 0, erstellt: Date.now() - 86400000 },
+    ]));
+  }, NEU);
+  // Ziehung ist da, die Quoten stehen aber noch nicht fest (alle 0)
+  let abrufe = 0;
+  await page.route(isWestlotto, (route) => {
+    const datum = new URL(route.request().url()).searchParams.get('datum');
+    if (datum === NEU) abrufe++;
+    const body = westlotto(datum || NEU, [1, 2, 3, 4, 5, 6], 7);
+    for (const k of body.auswertung.quoten.hauptlotterie.ziehungen[0].gewinnklassen) k.quote = 0;
+    route.fulfill({ contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify(body) });
+  });
+  await page.route(isArchiv, (route) => route.abort());
+  await page.goto('/lotto/#chancen');
+  await expect(page.locator('#vorschlagBilanz .badge').first()).toContainText('System 3+SZ · Gewinn');
+  await page.waitForTimeout(1500);
+  expect(abrufe).toBeLessThanOrEqual(2);
 });
 
 test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen', async ({ page }) => {
