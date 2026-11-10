@@ -77,11 +77,22 @@ Android-App (APK-Datei) weitergegeben – nicht öffentlich verlinkt.
   nicht besser als „jede Zahl 12,24 %“ – kein Netz schlägt den Zufall. Die App
   zeigt den Test und rechnet die Bewertung von Netz A für die nächste Ziehung
   selbst aus. Nach neuen Ziehungen in `ziehungen.txt` neu trainieren.
-- **🔭 Kandidaten-Beobachtung** – von 15 geprüften Umwelt-Faktoren (Jahreszeit,
-  Monat, Mondphase, Mond-/Sonnenabstand, Gezeitenkraft, Luftdruck, Temperatur,
-  Feuchte, Wind, Regen …) war keiner auffällig; die zwei „besten“, Sonnenabstand
-  und Mondphase, tippen ab jetzt vor jeder Ziehung mit (vorher festgeschrieben)
-  und stehen in der Bilanz neben System und Zufall.
+- **🔭 Kandidaten-Beobachtung** (`lotto/kandidaten.js`, `lotto/himmel.js`) – geprüft
+  wurden 16 Umwelt-Einflüsse (Jahreszeit, Monat, Mondphase, Mond-/Sonnenabstand,
+  Gezeitenkraft, Luftdruck, Temperatur, Feuchte, Wind, Regen, **Schwerkraft am
+  Ziehungsort zur Ziehungszeit** …) und alle 1.176 Zahlenpaare; sicher nachweisbar
+  war nichts. Vier Kandidaten tippen ab jetzt vor jeder Ziehung mit (vorher
+  festgeschrieben) und stehen in der Bilanz neben System und Zufall: Sonnenabstand,
+  Mondphase, Schwerkraft und die **Resonanz-Formel**
+  `R(T) = Σ (Sonne + Mond + Erde je Zahl) + Σ Verträglichkeit je Paar + λ · Nachbarpaare`.
+  Sie hätte in der Rückrechnung 94 statt 66 Dreier getroffen (Ø Richtige wie Zufall);
+  sinnlose Zufalls-Einteilungen schaffen das in 1 von 40 Versuchen – ein Kandidat,
+  kein Beweis.
+- **🎱 Lostrommel mit Physik** (`lotto/trommel.js`) – der Simulator zeigt eine
+  animierte Ziehung: 49 Kugeln, Schwerkraft, Stöße, drehende Trommel mit
+  Mitnehmern, feste Zeitschritte (gleicher Start → gleiche Ziehung). Der
+  **Chaos-Test** lässt dieselbe Startlage mit der Schwerkraft zweier Ziehungstage
+  laufen (Unterschied ca. 0,000005 %): Es fallen völlig andere Zahlen.
 - **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
   Trefferchance): Aus den echten Gewinnerzahlen von 640 Ziehungen (seit 09/2020)
   lernt eine Ridge-Regression die Beliebtheit β jeder Zahl; die gezogene

@@ -402,6 +402,7 @@ table.classes tr.ref td { color: var(--text-muted); font-style: italic; }
 .sz-heat span.hot { color: var(--heat-hot-ink); }
 .sz-heat span.sel { outline: 2.5px solid var(--text); outline-offset: 1px; }
 /* ===== Simulator ===== */
+.trommel { display: block; width: 100%; max-width: 420px; aspect-ratio: 25 / 28; margin: 10px auto; border-radius: 18px; background: #0d1222; }
 .draw-stage { display: flex; flex-wrap: wrap; gap: 8px; min-height: 52px; align-items: center; margin-bottom: 10px; }
 .draw-stage .ball { animation: pop .35s ease-out both; }
 @keyframes pop { from { transform: scale(.2) rotate(-90deg); opacity: 0; } to { transform: none; opacity: 1; } }

@@ -5,6 +5,10 @@
 // lokal gespeichert. Ersatzquelle: LottoNumberArchive. Mitgelieferte Datei neu
 // erzeugen:  node scripts/lotto-daten.mjs
 
+import { himmel, ziehungsort } from './himmel.js';
+import { KANDIDATEN } from './kandidaten.js';
+import { starte, ziehung, zeichne, SCHRITTE_PRO_SEKUNDE } from './trommel.js';
+
 const LIVE = 'https://www.westlotto.de/wlinfo/WL_InfoService?client=jsn&gruppe=ZahlenUndQuoten&spielart=LOTTO';
 const ARCHIV = 'https://johannesfriedrich.github.io/LottoNumberArchive/Lottonumbers_complete.json';
 const PREIS = 1.2;               // € pro Tipp (seit 09/2020, ohne Gebühren)
@@ -1333,47 +1337,6 @@ function vorschlaege() {
   return Array.isArray(v) ? v.filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && Array.isArray(x.tipp) && gueltig(x.tipp)
     && Array.isArray(x.zufall) && gueltig(x.zufall) && gueltigeSz(x.sz ?? null) && gueltigeSz(x.zsz ?? null)) : [];
 }
-// ---------- Kandidaten-Beobachtung: Umwelt-Faktoren, die ab jetzt mitgezählt werden ----------
-// In allen bisherigen Ziehungen waren Sonnenabstand und Mondphase die „auffälligsten“ von
-// 15 geprüften Umwelt-Faktoren – aber noch im Zufallsbereich. Alte Ziehungen weiter zu
-// durchsuchen beweist nichts; deshalb tippt jeder Kandidat ab jetzt jede Ziehung mit
-// (vorher festgeschrieben) und die Bilanz zeigt, ob er den Zufall schlägt.
-// Sonne/Mond nach den Näherungsformeln des Astronomical Almanac, 18 Uhr Weltzeit am Ziehungstag.
-function himmel(iso) {
-  const rad = Math.PI / 180;
-  const n = Date.parse(`${iso}T18:00:00Z`) / 86400000 + 2440587.5 - 2451545.0;
-  const T = n / 36525;
-  const g = (357.528 + 0.9856003 * n) * rad;
-  const ls = 280.460 + 0.9856474 * n + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g);
-  const R = 1.00014 - 0.01671 * Math.cos(g) - 0.00014 * Math.cos(2 * g); // Sonnenabstand in AE
-  const a = (x, y) => (x + y * T) * rad;
-  const lm = 218.32 + 481267.881 * T + 6.29 * Math.sin(a(135.0, 477198.87)) - 1.27 * Math.sin(a(259.3, -413335.36))
-    + 0.66 * Math.sin(a(235.7, 890534.22)) + 0.21 * Math.sin(a(269.9, 954397.74)) - 0.19 * Math.sin(a(357.5, 35999.05)) - 0.11 * Math.sin(a(186.5, 966404.03));
-  const elong = (((lm - ls) % 360) + 360) % 360; // 0 = Neumond, 180 = Vollmond
-  return { R, phase: Math.floor(((elong + 22.5) % 360) / 45) };
-}
-const MONDPHASEN = ['Neumond', 'zunehmende Sichel', 'erstes Viertel', 'zunehmender Mond', 'Vollmond', 'abnehmender Mond', 'letztes Viertel', 'abnehmende Sichel'];
-const SONNENSTUFEN = ['sehr nah (Winter)', 'nah', 'mittel', 'fern', 'sehr fern (Sommer)'];
-const KANDIDATEN = [
-  { id: 'sonne', name: '🌞 Sonnenabstand', gruppe: (h) => (h.R < 0.9865 ? 0 : h.R < 0.9950 ? 1 : h.R < 1.0055 ? 2 : h.R < 1.0140 ? 3 : 4), text: (g) => SONNENSTUFEN[g] },
-  { id: 'mond', name: '🌙 Mondphase', gruppe: (h) => h.phase, text: (g) => MONDPHASEN[g] },
-];
-// Tipp eines Kandidaten für den Ziehungstag d: die 6 Zahlen, die unter derselben Bedingung
-// bisher am häufigsten kamen (gedämpft, damit wenige Ziehungen nicht überbewertet werden)
-function kandidatTipp(k, d) {
-  const ziel = k.gruppe(himmel(d));
-  const cnt = new Array(50).fill(0);
-  let anzahl = 0;
-  for (const z of draws) {
-    if (z.d >= d || k.gruppe(himmel(z.d)) !== ziel) continue;
-    anzahl++;
-    for (const n of z.n) cnt[n]++;
-  }
-  const wert = (n) => (cnt[n] + 20) / (anzahl * 6 / 49 + 20);
-  const tipp = Array.from({ length: 49 }, (_, i) => i + 1).sort((x, y) => wert(y) - wert(x) || x - y).slice(0, 6).sort((x, y) => x - y);
-  return { tipp, gruppe: ziel, anzahl };
-}
-
 // Vorschlag für die nächste Ziehung einmalig festschreiben (vor der Ziehung, danach unveränderlich).
 // Dazu ein Zufallstipp vom selben Zeitpunkt als ehrlicher Vergleich.
 // Erst wenn die letzte fällige Ziehung geladen ist: sonst rechnet der Vorschlag mit
@@ -1396,7 +1359,7 @@ function sichereVorschlag(nachAbgleich = false) {
   zufall = festerZufall(`lotto-vorschlag-${d}`);
   try {
     const kand = {};
-    for (const k of KANDIDATEN) kand[k.id] = kandidatTipp(k, d).tipp;
+    for (const k of KANDIDATEN) kand[k.id] = k.tipp(draws, d);
     liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), kand, erstellt: Date.now() });
   } finally {
     zufall = Math.random;
@@ -1491,13 +1454,15 @@ function formelCheckHtml(z) {
 // Was die beobachteten Kandidaten für die nächste Ziehung tippen (n = offener Vorschlag)
 function kandidatenHtml(n) {
   if (!n || !n.kand) return '';
-  const h = himmel(n.d);
   const zeilen = KANDIDATEN.filter((k) => Array.isArray(n.kand[k.id]) && gueltig(n.kand[k.id])).map((k) =>
-    `<div class="win-row"><span class="d">${k.name}</span><span class="badge">${esc(k.text(k.gruppe(h)))}</span>
+    `<div class="win-row"><span class="d">${k.name}</span><span class="badge">${esc(k.text(n.d))}</span>
       <div class="balls">${kugeln({ n: n.kand[k.id], sz: -1 }, null, null)}</div></div>`).join('');
   if (!zeilen) return '';
+  const h = himmel(n.d);
+  const ort = ziehungsort(n.d);
   return `<h3 style="margin-top:16px">🔭 Kandidaten unter Beobachtung</h3>
-    <p class="muted small">Von 15 geprüften Umwelt-Faktoren (Jahreszeit, Mond, Gezeitenkraft, Luftdruck, Wetter …) waren diese zwei am auffälligsten – aber noch im Zufallsbereich. Ob wirklich etwas dran ist, zeigt nur die Zukunft: Jeder Kandidat tippt ab jetzt vor jeder Ziehung die 6 Zahlen, die unter derselben Bedingung bisher am häufigsten kamen, und steht oben in der Bilanz. Tipps für ${datum(n.d)}:</p>
+    <p class="muted small">Geprüft wurden 16 Umwelt-Einflüsse (Jahreszeit, Mond, Gezeiten, Luftdruck, Wetter, Schwerkraft …) und alle 1.176 Zahlenpaare. Sicher nachweisbar war nichts. Die auffälligsten Kandidaten tippen deshalb ab jetzt vor jeder Ziehung mit – vorher festgeschrieben – und stehen oben in der Bilanz. Die <b>Resonanz-Formel</b> verbindet Sonne, Mond, Schwerkraft und die „Verträglichkeit“ der Zahlenpaare; sie hätte in der Rückrechnung 94 statt 66 Dreier getroffen, was aber auch sinnlose Zufalls-Einteilungen in 1 von 40 Versuchen schaffen.</p>
+    <p class="small" id="schwerkraftInfo" style="margin-top:6px">🌍 Schwerkraft in ${esc(ort.name)} zur Ziehung am ${datum(n.d)}: <b>${h.g.toFixed(7).replace('.', ',')} m/s²</b> – Mond und Sonne machen sie um ${Math.abs(h.dg).toFixed(2).replace('.', ',')} Millionstel m/s² ${h.dg >= 0 ? 'größer' : 'kleiner'} (Mond ${h.mondHoehe >= 0 ? `${Math.round(h.mondHoehe)}° über` : `${Math.round(-h.mondHoehe)}° unter`} dem Horizont).</p>
     <div class="top-wins" id="kandidaten" style="margin-top:8px">${zeilen}</div>
     <p class="muted small" style="margin-top:6px">Erst wenn ein Kandidat über viele Monate klar über 0,73 Richtigen im Schnitt liegt, wäre das ein echter Fund.</p>`;
 }
@@ -1601,30 +1566,50 @@ function renderSimTipp() {
   }
   $('btnLive').disabled = !ok || liveLaeuft;
   $('btnSim').disabled = !ok && !sim.running;
+  // Standbild der gefüllten Trommel, solange noch keine Ziehung lief
+  if (!liveLaeuft && !$('liveBalls').children.length) trommelBild(starte({ saat: 1 }));
 }
 
+// Eine Ziehung in der Physik-Trommel: gerechnet mit der Schwerkraft des nächsten Ziehungstags.
 let liveLaeuft = false;
+function trommelBild(simu) {
+  const cv = $('trommel');
+  const b = cv.clientWidth || 340;
+  const h = Math.round(b * 1.12);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (cv.width !== Math.round(b * dpr)) { cv.width = Math.round(b * dpr); cv.height = Math.round(h * dpr); }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  zeichne(ctx, simu, b, h);
+}
 function liveZiehung() {
   if (!tippKomplett() || liveLaeuft) return;
   liveLaeuft = true;
   $('btnLive').disabled = true;
-  const zug = ziehe6();
-  const sz = Math.floor(Math.random() * 10);
   const mask = maskeVon(tipNums);
   const stage = $('liveBalls');
   stage.innerHTML = '';
   $('liveResult').textContent = '';
-  const schritt = reduceMotion() ? 0 : 450;
+  const tag = naechsteZiehung();
+  const simu = starte({ saat: Math.floor(Math.random() * 4294967296), g: himmel(tag).g });
+  let gezeigt = 0;
+  let szGezeigt = false;
   const kugel = (txt, cls) => {
     const s = document.createElement('span');
     s.className = 'ball big' + cls;
     s.textContent = txt;
     stage.append(s);
   };
-  zug.forEach((n, i) => setTimeout(() => kugel(n, mask[n] ? ' hit' : ''), i * schritt));
-  setTimeout(() => {
+  const zeigeNeue = () => {
+    for (; gezeigt < simu.haupt.gezogen.length; gezeigt++) { const n = simu.haupt.gezogen[gezeigt]; kugel(n, mask[n] ? ' hit' : ''); }
+    if (!szGezeigt && simu.sz.gezogen.length) { szGezeigt = true; kugel(simu.sz.gezogen[0], ' sz' + (tipSz !== null && simu.sz.gezogen[0] === tipSz ? ' hit' : '')); }
+  };
+  const ende = () => {
+    zeigeNeue();
+    trommelBild(simu);
+    const zug = simu.haupt.gezogen;
+    const sz = simu.sz.gezogen[0];
     const szTreffer = tipSz !== null && sz === tipSz;
-    kugel(sz, ' sz' + (szTreffer ? ' hit' : ''));
     let r = 0;
     for (const n of zug) r += mask[n];
     const k = klasse(r, szTreffer);
@@ -1632,7 +1617,41 @@ function liveZiehung() {
       (k ? `🎉 Gewinn: ${KLASSEN[k].label} (ca. ${eur(KLASSEN[k].quote)})` : 'leider kein Gewinn.');
     liveLaeuft = false;
     $('btnLive').disabled = !tippKomplett();
-  }, 6 * schritt);
+  };
+  if (reduceMotion()) { while (!simu.fertig) simu.schritt(); ende(); return; }
+  let zuletzt = performance.now();
+  let rest = 0;
+  const bild = (jetzt) => {
+    // feste Rechenschritte, egal wie schnell das Handy zeichnet (höchstens 0,1 s auf einmal nachholen)
+    rest += Math.min(0.1, (jetzt - zuletzt) / 1000) * SCHRITTE_PRO_SEKUNDE;
+    zuletzt = jetzt;
+    for (; rest >= 1 && !simu.fertig; rest--) simu.schritt();
+    zeigeNeue();
+    trommelBild(simu);
+    if (simu.fertig) ende(); else requestAnimationFrame(bild);
+  };
+  requestAnimationFrame(bild);
+}
+
+// Chaos-Test: dieselbe Startlage zweimal – einmal mit der Schwerkraft der letzten Ziehung,
+// einmal mit der der nächsten. Der Unterschied (Mond + Sonne) ist winzig, das Ergebnis völlig anders.
+function chaosTest() {
+  if (!draws.length) return;
+  const d1 = letzte().d;
+  const d2 = naechsteZiehung() > d1 ? naechsteZiehung() : naechsteZiehung(new Date(ziehungsZeit(d1).getTime() + MIN));
+  const g1 = himmel(d1).g;
+  const g2 = himmel(d2).g;
+  const saat = Math.floor(Math.random() * 4294967296);
+  const a = ziehung({ saat, g: g1 });
+  const b = ziehung({ saat, g: g2 });
+  const gleich = a.zahlen.filter((n) => b.zahlen.includes(n)).length;
+  const g7 = (g) => g.toFixed(7).replace('.', ',');
+  const reihe = (z, andere) => kugeln({ n: z.zahlen, sz: z.sz }, maskeVon(z.zahlen.filter((n) => andere.zahlen.includes(n))), andere.sz);
+  $('chaosErgebnis').innerHTML = `
+    <div class="win-row"><span class="d">${datum(d1)}</span><span class="badge">g = ${g7(g1)} m/s²</span><div class="balls" id="chaosA">${reihe(a, b)}</div></div>
+    <div class="win-row"><span class="d">${datum(d2)}</span><span class="badge">g = ${g7(g2)} m/s²</span><div class="balls" id="chaosB">${reihe(b, a)}</div></div>
+    <p class="small" style="margin-top:8px">Exakt dieselbe Startlage aller 49 Kugeln – nur die Schwerkraft ist um <b>${(Math.abs(g2 / g1 - 1) * 100).toFixed(7).replace('.', ',')} %</b> anders (so viel ändern Mond und Sonne zwischen diesen beiden Tagen). Ergebnis: <b>${gleich} von 6 Zahlen gleich</b>${gleich ? ' (markiert)' : ''}.</p>
+    <p class="muted small">Das ist Chaos: Jeder Stoß vergrößert den winzigen Unterschied, nach wenigen Sekunden ist alles anders. Die Schwerkraft wirkt also – aber sie macht die Ziehung unberechenbar statt berechenbar: Man müsste Lage und Tempo jeder Kugel auf viele Stellen hinter dem Komma kennen.</p>`;
 }
 
 const sim = { running: false };
@@ -1855,6 +1874,7 @@ function binde() {
     else { zeigeTab('tipp'); window.scrollTo({ top: 0 }); }
   });
   $('btnLive').addEventListener('click', liveZiehung);
+  $('btnChaos').addEventListener('click', chaosTest);
   $('btnSim').addEventListener('click', simStart);
 
   $('btnNotify').addEventListener('click', () => {
@@ -1892,7 +1912,8 @@ async function init() {
   sichereVorschlag();
   renderVorschlagTipp();
   zeigeDatenInfo();
-  tippGeaendert(true);
+  // schon während des Ladens getippt? Dann die Eingabe auswerten statt sie zu überschreiben
+  if ($('tipInput').value.trim()) leseEingabe(); else tippGeaendert(true);
   zeigeTab(aktiverTab);
   aktualisieren(false);
 

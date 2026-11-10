@@ -209,11 +209,28 @@ test('Simulator: einzelne Ziehung und Dauerlauf bis 4 Richtige', async ({ page }
   await page.click('[data-tab=simulator]');
   await expect(page.locator('#btnLive')).toBeDisabled();
   await page.click('#simTip button[data-act=quick]');
+  // „Bewegung reduzieren“ → die Trommel rechnet die Ziehung sofort durch (ohne Animation)
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.click('#btnLive');
   await expect(page.locator('#liveBalls .ball')).toHaveCount(7);
   const gezogen = (await page.locator('#liveBalls .ball:not(.sz)').allTextContents()).map(Number);
   expect(new Set(gezogen).size).toBe(6);
   await expect(page.locator('#liveResult')).toContainText('Richtige');
+  // Trommel ist gezeichnet (Canvas hat eine Größe und ist nicht leer)
+  expect(await page.evaluate(() => { const c = document.getElementById('trommel'); const d = c.getContext('2d').getImageData(c.width / 2, c.height / 2, 1, 1).data; return c.width > 100 && d[3] > 0; })).toBe(true);
+
+  // Chaos-Test: gleiche Startlage, Schwerkraft zweier Ziehungstage → je 6 Zahlen + Superzahl
+  await page.click('#btnChaos');
+  await expect(page.locator('#chaosA .ball')).toHaveCount(7);
+  await expect(page.locator('#chaosB .ball')).toHaveCount(7);
+  await expect(page.locator('#chaosErgebnis')).toContainText('von 6 Zahlen gleich');
+
+  // mit Animation: die Trommel läuft, die erste Kugel fällt nach ein paar Sekunden
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.click('#btnLive');
+  await expect(page.locator('#liveBalls .ball')).toHaveCount(0);
+  await expect(page.locator('#btnLive')).toBeDisabled();
+  await expect(page.locator('#liveBalls .ball').first()).toBeVisible({ timeout: 10000 });
 
   await page.selectOption('#simTarget', '6');
   await page.click('#btnSim');
@@ -488,7 +505,7 @@ test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen
     if (localStorage.getItem('lotto_vorschlaege')) return;
     localStorage.setItem('lotto_vorschlaege', JSON.stringify([
       { d, tipp: [1, 2, 3, 10, 20, 30], sz: 7, zufall: [40, 41, 42, 43, 44, 45], zsz: 0,
-        kand: { sonne: [1, 2, 3, 4, 5, 6], mond: [10, 11, 12, 13, 14, 15] }, erstellt: Date.now() - 86400000 },
+        kand: { sonne: [1, 2, 3, 4, 5, 6], mond: [10, 11, 12, 13, 14, 15], erde: [1, 2, 3, 40, 41, 42], resonanz: [1, 2, 20, 21, 22, 23] }, erstellt: Date.now() - 86400000 },
     ]));
   }, NEU);
   await mockLive(page); // neue Ziehung NEU: 1 2 3 4 5 6, Superzahl 7
@@ -503,11 +520,14 @@ test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen
   await expect(bilanz.locator('tr', { hasText: 'Sonnenabstand' })).toContainText('6,00');
   await expect(bilanz.locator('tr', { hasText: 'Sonnenabstand' })).toContainText('1 von 1');
   await expect(bilanz.locator('tr', { hasText: 'Mondphase' })).toContainText('0,00');
+  await expect(bilanz.locator('tr', { hasText: 'Schwerkraft' })).toContainText('3,00');
+  await expect(bilanz.locator('tr', { hasText: 'Resonanz' })).toContainText('2,00');
   // … und für die nächste Ziehung tippt jeder Kandidat 6 gültige Zahlen, vorher festgeschrieben
-  await expect(page.locator('#kandidaten .win-row')).toHaveCount(2);
+  await expect(page.locator('#kandidaten .win-row')).toHaveCount(4);
+  await expect(page.locator('#schwerkraftInfo')).toContainText(/9,80\d{5} m\/s²/);
   const neu = await page.evaluate((d) => JSON.parse(localStorage.getItem('lotto_vorschlaege')).filter((v) => v.d > d), NEU);
   expect(neu).toHaveLength(1);
-  for (const k of ['sonne', 'mond']) {
+  for (const k of ['sonne', 'mond', 'erde', 'resonanz']) {
     expect(neu[0].kand[k]).toHaveLength(6);
     expect(new Set(neu[0].kand[k]).size).toBe(6);
     expect(neu[0].kand[k].every((n) => Number.isInteger(n) && n >= 1 && n <= 49)).toBe(true);

@@ -260,10 +260,19 @@
       </div>
 
       <div class="card">
-        <h2>Eine Ziehung simulieren</h2>
+        <h2>Eine Ziehung in der Lostrommel</h2>
+        <p class="muted small">Echte Physik: 49 Kugeln, Schwerkraft, Stöße, drehende Trommel – gerechnet mit der Schwerkraft des nächsten Ziehungstags.</p>
+        <canvas class="trommel" id="trommel" role="img" aria-label="Animierte Lostrommel"></canvas>
         <div class="draw-stage" id="liveBalls" aria-live="polite"></div>
         <div class="live-result" id="liveResult"></div>
         <button class="btn btn-primary" id="btnLive" type="button">▶ Ziehung starten</button>
+      </div>
+
+      <div class="card">
+        <h2>🦋 Chaos-Test: Warum die Schwerkraft nichts verrät</h2>
+        <p class="muted small">Die Schwerkraft ist an jedem Ziehungstag ein winziges bisschen anders (Mond und Sonne ziehen mit). Der Test lässt dieselbe Ziehung zweimal laufen – nur mit der Schwerkraft zweier verschiedener Tage.</p>
+        <div id="chaosErgebnis"></div>
+        <button class="btn" id="btnChaos" type="button">🦋 Chaos-Test starten</button>
       </div>
 
       <div class="card">
