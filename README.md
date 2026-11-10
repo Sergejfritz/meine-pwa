@@ -111,8 +111,9 @@ Android-App (APK-Datei) weitergegeben – nicht öffentlich verlinkt.
   zufällig unter den besten 5 % ohne Muster plus eine unbeliebte Superzahl. Neu trainieren:
   `node scripts/lotto-formel.mjs` (schreibt `lotto/formel.json`).
 - **🎯 Vorschlag + Bilanz** – für jede kommende Ziehung legt die App einmalig
-  einen Vorschlag fest (Fritz-Formel, keine Muster, **nie eine bereits gezogene
-  Kombination**) plus einen Zufallstipp zum Vergleich. Nach der Ziehung wird
+  einen Vorschlag aus **5 Feldern** fest (Fritz-Formel, keine Muster, **nie eine
+  bereits gezogene Kombination**, die Felder haben möglichst wenige Zahlen
+  gemeinsam) plus 5 Zufallsfelder zum Vergleich. Nach der Ziehung wird
   beides mit den echten Zahlen und Quoten verglichen – ehrliche Bilanz ab
   Installation („Unser System“ vs. Zufall vs. Mathematik). Der Vorschlag steht
   groß ganz oben auf „Mein Tipp“ – mit Begründung für jede Zahl (Beliebtheit,

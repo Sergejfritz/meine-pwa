@@ -232,12 +232,19 @@ input[type="text"]:focus { outline: none; border-color: var(--accent); box-shado
 .verdict, .muster, .verdict-vorschlag { border-width: 2px; }
 .verdict-vorschlag { border-color: var(--accent); background: linear-gradient(160deg, var(--accent-soft), var(--surface) 60%); }
 .vs-datum { font-size: 15px; }
-.vs-balls { margin: 10px 0 4px; }
-.vs-zahlen { font-size: 22px; font-weight: 800; letter-spacing: .5px; font-variant-numeric: tabular-nums; }
+.vs-felder { display: grid; gap: 6px; margin: 10px 0 6px; }
+.vs-feld { display: grid; grid-template-columns: 58px 1fr; align-items: center; gap: 8px; width: 100%; padding: 6px 10px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.vs-feld:active { border-color: var(--accent); }
+.vs-nr { font-size: 12.5px; font-weight: 700; color: var(--text-muted); }
+.vs-feld .balls { display: flex; flex-wrap: wrap; gap: 5px; }
+.vs-feld .ball { width: 34px; height: 34px; font-size: 15px; font-weight: 700; }
+.vs-feld .ball.big { width: 44px; height: 44px; font-size: 18px; }
+@media (max-width: 380px) { .vs-feld { grid-template-columns: 46px 1fr; padding: 6px 8px; } .vs-feld .balls { gap: 3px; } .vs-feld .ball { width: 30px; height: 30px; font-size: 13.5px; } }
 .vs-warum ol { margin: 8px 0 8px 18px; display: grid; gap: 6px; color: var(--text); font-size: 13.5px; }
 .vs-letzte { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-size: 13.5px; line-height: 1.5; }
 .vs-sz { display: block; font-size: 16px; font-weight: 700; color: var(--text-muted); margin-top: 2px; }
 .vs-liste { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; color: var(--text-muted); }
+.vs-liste { grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); }
 .vs-liste li { display: grid; grid-template-columns: 26px 1fr; gap: 8px; align-items: center; }
 .vs-liste .ball { width: 26px; height: 26px; font-size: 12px; }
 .verdict.win, .muster.win { border-color: var(--accent); }

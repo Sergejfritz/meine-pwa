@@ -496,7 +496,7 @@ function tippGeaendert(inputSync, probleme = []) {
 // Die App prüft nach jeder Ziehung den aktuellen und alle gemerkten Tipps
 function tippsAnApp() {
   if (!APP) return;
-  const offen = draws.length ? vorschlaege().filter((v) => v.d > letzte().d).map((v) => ({ nums: v.tipp, sz: v.sz, d: v.d })) : [];
+  const offen = draws.length ? vorschlaege().filter((v) => v.d > letzte().d).flatMap((v) => felderVon(v).map((t) => ({ nums: t, sz: v.sz, d: v.d }))) : [];
   app('tipps', JSON.stringify({ tipp: tippKomplett() ? { nums: sortiert(tipNums), sz: tipSz } : null, favoriten: favoriten(), vorschlaege: offen }));
 }
 
@@ -1339,6 +1339,60 @@ function vorschlaege() {
 }
 // Vorschlag für die nächste Ziehung einmalig festschreiben (vor der Ziehung, danach unveränderlich).
 // Dazu ein Zufallstipp vom selben Zeitpunkt als ehrlicher Vergleich.
+// Der Vorschlag besteht immer aus 5 Feldern (wie 5 Kästchen auf einem Lottoschein).
+// Feld 1 ist der bisherige Fritz-Tipp; die weiteren folgen denselben Regeln und haben
+// möglichst wenige Zahlen gemeinsam – so decken die Felder mehr verschiedene Zahlen ab.
+const FELDER = 5;
+const gleicheZahlen = (a, b) => a.filter((n) => b.includes(n)).length;
+function weitereFelder(erstes, anzahl) {
+  const letzteZ = new Set(letzte().n);
+  const kand = [];
+  for (let versuch = 0; versuch < 30000 && kand.length < 600; versuch++) {
+    const t = ziehe6().sort((a, b) => a - b);
+    if (t.filter((n) => n <= 31).length > 2 || musterIn(t)) continue;
+    if (t.filter((n) => letzteZ.has(n)).length > 2 || schonGezogen(t)) continue;
+    kand.push([FORMEL ? fritzWert(t) : 0, t]);
+  }
+  kand.sort((a, b) => b[0] - a[0]);
+  const pool = kand.slice(0, Math.max(anzahl * 6, Math.ceil(kand.length * 0.25))); // das beste Viertel
+  const felder = [erstes];
+  // erst höchstens 1 gemeinsame Zahl erlauben, dann 2, 3 … bis genug Felder da sind
+  for (let grenze = 1; felder.length <= anzahl && grenze <= 5; grenze++) {
+    for (const [, t] of pool) {
+      if (felder.length > anzahl) break;
+      if (felder.every((f) => gleicheZahlen(f, t) <= grenze)) felder.push(t);
+    }
+  }
+  while (felder.length <= anzahl) { const t = neuerZufallstipp(); if (felder.every((f) => gleicheZahlen(f, t) < 6)) felder.push(t); }
+  return felder;
+}
+const felderVon = (v) => { const f = Array.isArray(v.felder) ? v.felder.filter((t) => Array.isArray(t) && gueltig(t)) : []; return f.length ? f : [v.tipp]; };
+const zufallsFelderVon = (v) => { const f = Array.isArray(v.zfelder) ? v.zfelder.filter((t) => Array.isArray(t) && gueltig(t)) : []; return f.length ? f : [v.zufall]; };
+// Offenen Vorschlag (Ziehung steht noch aus) auf den heutigen Umfang bringen: 5 Felder,
+// 5 Zufallsfelder zum Vergleich, alle Kandidaten. Vor der Ziehung ist das fair – es wird
+// nur ergänzt, nichts Bestehendes geändert. Eigener fester Zufall je Ziehungstag.
+function ergaenze(v) {
+  let neu = false;
+  if (felderVon(v).length < FELDER || zufallsFelderVon(v).length < FELDER) {
+    zufall = festerZufall(`lotto-felder-${v.d}`);
+    try {
+      v.felder = weitereFelder(v.tipp, FELDER - 1);
+      v.zfelder = [v.zufall];
+      while (v.zfelder.length < FELDER) { const t = neuerZufallstipp(); if (v.zfelder.every((f) => gleicheZahlen(f, t) < 6)) v.zfelder.push(t); }
+    } finally {
+      zufall = Math.random;
+    }
+    neu = true;
+  }
+  if (!v.kand || typeof v.kand !== 'object') v.kand = {};
+  for (const k of KANDIDATEN) {
+    if (Array.isArray(v.kand[k.id]) && gueltig(v.kand[k.id])) continue;
+    v.kand[k.id] = k.tipp(draws, v.d);
+    neu = true;
+  }
+  return neu;
+}
+
 // Erst wenn die letzte fällige Ziehung geladen ist: sonst rechnet der Vorschlag mit
 // veralteten Daten („letzte Ziehung“, schon gezogene Kombinationen) und fällt anders
 // aus als auf einem Gerät mit aktuellem Stand. nachAbgleich = der Live-Abgleich ist
@@ -1355,15 +1409,19 @@ function sichereVorschlag(nachAbgleich = false) {
     d = naechsteZiehung(new Date(y, m - 1, t + 1));
   }
   const liste = vorschlaege();
-  if (liste.some((v) => v.d === d)) return false;
-  zufall = festerZufall(`lotto-vorschlag-${d}`);
-  try {
-    const kand = {};
-    for (const k of KANDIDATEN) kand[k.id] = k.tipp(draws, d);
-    liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), kand, erstellt: Date.now() });
-  } finally {
-    zufall = Math.random;
+  let neu = false;
+  if (!liste.some((v) => v.d === d)) {
+    zufall = festerZufall(`lotto-vorschlag-${d}`);
+    try {
+      liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), erstellt: Date.now() });
+    } finally {
+      zufall = Math.random;
+    }
+    neu = true;
   }
+  // offene Vorschläge (auch von älteren App-Versionen) vor der Ziehung vervollständigen
+  for (const v of liste) if (v.d > letzte().d && Date.now() < ziehungsZeit(v.d).getTime() && ergaenze(v)) neu = true;
+  if (!neu) return false;
   write(KEY.prognosen, liste.slice(-500));
   tippsAnApp();
   return true;
@@ -1389,33 +1447,39 @@ function betragFuer(b, d, tipp) {
 }
 // Ausführliche Begründung des Vorschlags (für „Mein Tipp“ und „Chancen“)
 function vorschlagHtml(n) {
-  const t = n.tipp;
+  const felder = felderVon(n);
   const sz = n.sz ?? null;
-  const geb = t.filter((x) => x <= 31).length;
-  const ausLetzter = t.filter((x) => letzte().n.includes(x)).length;
-  const zeilen = FORMEL
-    ? t.map((x) => {
+  const alle = [...new Set(felder.flat())].sort((a, b) => a - b);
+  const maxGeb = Math.max(...felder.map((t) => t.filter((x) => x <= 31).length));
+  const maxLetzte = Math.max(...felder.map((t) => t.filter((x) => letzte().n.includes(x)).length));
+  let maxGleich = 0;
+  felder.forEach((f, i) => felder.slice(i + 1).forEach((g) => { maxGleich = Math.max(maxGleich, gleicheZahlen(f, g)); }));
+  const chips = FORMEL
+    ? alle.map((x) => {
       const p = Math.round(FORMEL.beta[x - 1] * 100);
-      const txt = p < 0 ? `wird ${Math.abs(p)} % seltener getippt als der Schnitt` : p > 0 ? `wird ${p} % häufiger getippt – ausgeglichen durch die anderen` : 'durchschnittlich oft getippt';
-      return `<li><span class="ball">${x}</span><span>${txt}</span></li>`;
+      return `<li><span class="ball">${x}</span><span>${p < 0 ? `${Math.abs(p)} % seltener` : p > 0 ? `${p} % häufiger` : 'Durchschnitt'}</span></li>`;
     }).join('')
     : '';
-  const w = FORMEL ? fritzWert(t, sz) : null;
+  const w = FORMEL ? felder.reduce((sum, t) => sum + fritzWert(t, sz), 0) / felder.length : null;
+  const pGewinn = [3, 4, 5, 6].reduce((p, r) => p + pRichtige(r), 0) + pRichtige(2) * 0.1;
+  const einsatz = felder.length * PREIS;
   return `<p class="vs-datum">für <b>${datum(n.d)}</b></p>
-    <div class="balls vs-balls">${kugeln({ n: t, sz: sz ?? -1 }, null, null, true)}</div>
-    <p class="vs-zahlen">${t.join(' · ')}${sz !== null ? `<span class="vs-sz">Superzahl ${sz}</span>` : ''}</p>
-    <p class="muted small">Festgelegt am ${new Date(n.erstellt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr – danach unveränderlich, damit die Bilanz ehrlich bleibt.</p>
+    <div class="vs-felder">${felder.map((t, i) => `<button type="button" class="vs-feld" data-feld="${i}" aria-label="Feld ${i + 1} als meinen Tipp übernehmen">
+      <span class="vs-nr">Feld ${i + 1}</span><span class="balls${i === 0 ? ' vs-balls' : ''}">${kugeln({ n: t, sz: -1 }, null, null, felder.length === 1)}</span></button>`).join('')}</div>
+    ${sz !== null ? `<p class="vs-sz">Superzahl ${sz} <span class="muted small">– gilt für den ganzen Schein</span></p>` : ''}
+    <p class="muted small">${felder.length} Felder = ${geld(einsatz, 'EUR')} Einsatz (ohne Gebühr) · Feld antippen übernimmt es als deinen Tipp. Festgelegt am ${new Date(n.erstellt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr – danach unveränderlich, damit die Bilanz ehrlich bleibt.</p>
     <details class="legende vs-warum" open>
       <summary>Warum genau diese Zahlen?</summary>
       <ol>
-        <li><b>Noch nie gezogen:</b> Diese 6er-Kombination kam in ${zahl.format(draws.length)} Ziehungen seit 1955 nie vor.</li>
-        <li><b>Keine Muster:</b> keine Zahlenreihen, keine Linie auf dem Schein, ${ausLetzter ? `nur ${ausLetzter}` : 'keine'} Zahl${ausLetzter === 1 ? '' : 'en'} aus der letzten Ziehung.</li>
-        <li><b>Kaum Geburtstagszahlen:</b> nur ${geb} von 6 Zahlen liegen bei 1–31 – die tippen sehr viele Menschen.</li>
-        ${FORMEL ? `<li><b>Unbeliebte Zahlen</b> (gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen):<ul class="vs-liste">${zeilen}</ul></li>` : ''}
+        <li><b>Noch nie gezogen:</b> Keine dieser ${felder.length === 1 ? 'Kombination' : `${felder.length} Kombinationen`} kam in ${zahl.format(draws.length)} Ziehungen seit 1955 vor.</li>
+        <li><b>Keine Muster:</b> keine Zahlenreihen, keine Linie auf dem Schein, je Feld höchstens ${maxLetzte} Zahl${maxLetzte === 1 ? '' : 'en'} aus der letzten Ziehung.</li>
+        <li><b>Kaum Geburtstagszahlen:</b> je Feld höchstens ${maxGeb} von 6 Zahlen bei 1–31 – die tippen sehr viele Menschen.</li>
+        ${felder.length > 1 ? `<li><b>Breit gestreut:</b> Die Felder haben untereinander höchstens ${maxGleich} gemeinsame Zahl${maxGleich === 1 ? '' : 'en'} und decken zusammen ${alle.length} verschiedene Zahlen ab. Mit ${felder.length} Feldern gewinnt etwa jede ${Math.round(1 / (1 - (1 - pGewinn) ** felder.length))}. Ziehung mindestens ein Feld irgendetwas (mit einem Feld jede ${Math.round(1 / pGewinn)}.).</li>` : ''}
+        ${FORMEL ? `<li><b>Unbeliebte Zahlen</b> (gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen) – so oft werden sie getippt, verglichen mit dem Schnitt:<ul class="vs-liste">${chips}</ul></li>` : ''}
         ${sz !== null && FORMEL && FORMEL.sz ? `<li><b>Superzahl ${sz}:</b> wird ${Math.abs(Math.round((FORMEL.sz[sz] - 1) * 100))} % seltener getippt als der Schnitt (nur nutzbar, wenn du die Losnummer wählen kannst).</li>` : ''}
-        ${w !== null ? `<li><b>Ergebnis laut Fritz-Formel:</b> ${cent(w)} pro 1,20 € statt ${cent(FORMEL.ev0)} beim Durchschnittstipp – gewinnt er, teilst du mit weniger Leuten, also im Schnitt <b>${prozent(w / FORMEL.ev0 - 1)} mehr Geld</b>.</li>` : ''}
+        ${w !== null ? `<li><b>Ergebnis laut Fritz-Formel:</b> im Schnitt ${cent(w)} pro 1,20 € statt ${cent(FORMEL.ev0)} beim Durchschnittstipp – gewinnt ein Feld, teilst du mit weniger Leuten, also im Schnitt <b>${prozent(w / FORMEL.ev0 - 1)} mehr Geld</b>.</li>` : ''}
       </ol>
-      <p class="small"><b>Ehrlich:</b> Die Chance auf Richtige ist genau so groß wie bei jedem anderen Tipp (z. B. 3 Richtige 1 : 63). Kein System kann die Zahlen vorhersagen – der Vorschlag holt nur mehr heraus, <i>falls</i> er gewinnt.</p>
+      <p class="small"><b>Ehrlich:</b> Jedes Feld hat dieselbe Chance wie jeder andere Tipp (z. B. 3 Richtige 1 : 63). Mehr Felder heißt mehr Chancen, aber auch mehr Einsatz – im Schnitt kommt beim Lotto nur etwa die Hälfte zurück. Kein System kann die Zahlen vorhersagen.</p>
     </details>`;
 }
 // Formel-Check einer Ziehung: Wie viele Gewinner mit 3/4/5 Richtigen sagte die Formel
@@ -1473,11 +1537,14 @@ function letzteAuswertungHtml() {
   const v = vorschlaege().filter((x) => byDate.has(x.d)).sort((a, b) => (a.d < b.d ? 1 : -1))[0];
   if (!v) return '';
   const z = byDate.get(v.d);
-  const bs = bewerte(v.tipp, v.sz, z);
-  const bz = bewerte(v.zufall, v.zsz, z);
-  const treffer = v.tipp.filter((x) => z.n.includes(x));
+  const beste = (felder, sz) => felder.map((t) => ({ t, b: bewerte(t, sz, z) })).sort((x, y) => (y.b.k ? 10 - y.b.k : 0) - (x.b.k ? 10 - x.b.k : 0) || y.b.r - x.b.r)[0];
+  const fs = felderVon(v);
+  const s1 = beste(fs, v.sz);
+  const z1 = beste(zufallsFelderVon(v), v.zsz);
+  const gew = fs.filter((t) => bewerte(t, v.sz, z).k).length;
+  const treffer = s1.t.filter((x) => z.n.includes(x));
   return `<div class="vs-letzte" id="vorschlagLetzte"><b>Letzte Ziehung (${datum(v.d)}):</b> ${z.n.join(' ')}${z.sz >= 0 ? ` · SZ ${z.sz}` : ''}<br>
-    Unser Vorschlag ${v.tipp.join(' ')}${v.sz !== null && v.sz !== undefined ? ` · SZ ${v.sz}` : ''} → <b>${bs.r} Richtige${bs.szTreffer ? ' + SZ' : ''}</b>${treffer.length ? ` (${treffer.join(', ')})` : ''}${bs.k ? ' – Gewinn! 🎉' : ''} · Zufallstipp: ${bz.r} Richtige${bz.szTreffer ? ' + SZ' : ''}</div>`;
+    Unser Vorschlag${fs.length > 1 ? ` (${fs.length} Felder), bestes Feld` : ''} ${s1.t.join(' ')}${v.sz !== null && v.sz !== undefined ? ` · SZ ${v.sz}` : ''} → <b>${s1.b.r} Richtige${s1.b.szTreffer ? ' + SZ' : ''}</b>${treffer.length ? ` (${treffer.join(', ')})` : ''}${gew ? ` – ${gew === 1 && fs.length === 1 ? 'Gewinn' : plural(gew, 'Gewinn', 'Gewinne')}! 🎉` : ''} · Zufallstipp: ${z1.b.r} Richtige${z1.b.szTreffer ? ' + SZ' : ''}</div>`;
 }
 
 function renderVorschlagTipp() {
@@ -1499,7 +1566,7 @@ function renderVorschlag() {
   const n = offen[0];
   $('vorschlagNaechste').innerHTML = n
     ? `${vorschlagHtml(n)}
-       <div class="btn-row"><button class="btn btn-primary" type="button" id="vorschlagNehmen">Als meinen Tipp übernehmen</button></div>`
+       <div class="btn-row"><button class="btn btn-primary" type="button" id="vorschlagNehmen">Feld 1 als meinen Tipp übernehmen</button></div>`
     : '<p class="muted small">Der Vorschlag für die nächste Ziehung wird erstellt, sobald die aktuelle ausgewertet ist.</p>';
 
   if (!fertig.length) {
@@ -1507,22 +1574,31 @@ function renderVorschlag() {
     if (!quotenFuer(letzte().d)) ladeQuoten([letzte().d]).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
     return;
   }
-  let sumS = 0; let sumZ = 0; let gewS = 0; let gewZ = 0; let euroS = 0; let euroZ = 0; let fehlt = [];
+  // System und Zufall: alle Felder einer Ziehung zählen (ältere Vorschläge hatten nur eines)
+  const S = { r: 0, gew: 0, euro: 0, felder: 0 };
+  const Z = { r: 0, gew: 0, euro: 0, felder: 0 };
+  const fehlt = [];
+  const werte = (felder, sz, z, d, ziel) => {
+    let best = null; let euro = 0; let offen = false; let gew = 0;
+    for (const t of felder) {
+      const b = bewerte(t, sz, z);
+      const e = betragFuer(b, d, t);
+      if (e === null) offen = true;
+      ziel.r += b.r; ziel.felder++; ziel.euro += e || 0; euro += e || 0;
+      if (b.k) { ziel.gew++; gew++; }
+      if (!best || (b.k || 99) < (best.b.k || 99) || ((b.k || 99) === (best.b.k || 99) && b.r > best.b.r)) best = { t, b };
+    }
+    if (offen) fehlt.push(d);
+    return { best, euro, offen, gew, n: felder.length };
+  };
   const zeilen = fertig.map((v) => {
     const z = byDate.get(v.d);
-    const bs = bewerte(v.tipp, v.sz, z);
-    const bz = bewerte(v.zufall, v.zsz, z);
-    sumS += bs.r; sumZ += bz.r;
-    if (bs.k) gewS++;
-    if (bz.k) gewZ++;
-    const es = betragFuer(bs, v.d, v.tipp);
-    const ez = betragFuer(bz, v.d, v.zufall);
-    if (es === null || ez === null) fehlt.push(v.d);
-    euroS += es || 0; euroZ += ez || 0;
-    const txt = (b, e) => `${b.r}${b.szTreffer ? '+SZ' : ''}${b.k ? ` · <b>${e === null ? 'Gewinn' : geld(e, 'EUR')}</b>` : ''}`;
-    return `<div class="win-row"><span class="d">${datum(v.d)}</span><span class="badge">System ${txt(bs, es)} · Zufall ${txt(bz, ez)}</span>
-      <div class="balls">${kug(v.tipp, v.sz, maskeVon(z.n))}</div>
-      <div class="real">Gezogen: ${z.n.join(' ')}${z.sz >= 0 ? ` · SZ ${z.sz}` : ''}</div></div>`;
+    const s1 = werte(felderVon(v), v.sz, z, v.d, S);
+    const z1 = werte(zufallsFelderVon(v), v.zsz, z, v.d, Z);
+    const txt = (x) => `${x.best.b.r}${x.best.b.szTreffer ? '+SZ' : ''}${x.gew ? ` · <b>${x.offen ? 'Gewinn' : geld(x.euro, 'EUR')}</b>` : ''}`;
+    return `<div class="win-row"><span class="d">${datum(v.d)}</span><span class="badge">System ${txt(s1)} · Zufall ${txt(z1)}</span>
+      <div class="balls">${kug(s1.best.t, v.sz, maskeVon(z.n))}</div>
+      <div class="real">${s1.n > 1 ? `Bestes von ${s1.n} Feldern${s1.gew > 1 ? ` (${s1.gew} Gewinne)` : ''} · ` : ''}Gezogen: ${z.n.join(' ')}${z.sz >= 0 ? ` · SZ ${z.sz}` : ''}</div></div>`;
   });
   const m = fertig.length;
   const komma = (x) => x.toFixed(2).replace('.', ',');
@@ -1540,14 +1616,14 @@ function renderVorschlag() {
     return `<tr><td>${k.name}</td><td class="n">${komma(sum / mit.length)}</td><td class="n">${gew} von ${mit.length}</td><td class="n">${geld(euro, 'EUR')}</td></tr>`;
   }).join('');
   $('vorschlagBilanz').innerHTML = `<table class="classes">
-      <thead><tr><th></th><th class="n">Ø Richtige</th><th class="n">Gewinne</th><th class="n">ausgezahlt</th></tr></thead>
+      <thead><tr><th></th><th class="n">Ø Richtige je Feld</th><th class="n">Gewinn-Felder</th><th class="n">ausgezahlt</th></tr></thead>
       <tbody>
-        <tr class="hl"><td>🎯 Unser System</td><td class="n">${komma(sumS / m)}</td><td class="n">${gewS} von ${m}</td><td class="n">${geld(euroS, 'EUR')}</td></tr>
-        <tr><td>🎲 Zufallstipp</td><td class="n">${komma(sumZ / m)}</td><td class="n">${gewZ} von ${m}</td><td class="n">${geld(euroZ, 'EUR')}</td></tr>
+        <tr class="hl"><td>🎯 Unser System</td><td class="n">${komma(S.r / S.felder)}</td><td class="n">${S.gew} von ${S.felder}</td><td class="n">${geld(S.euro, 'EUR')}</td></tr>
+        <tr><td>🎲 Zufallstipp</td><td class="n">${komma(Z.r / Z.felder)}</td><td class="n">${Z.gew} von ${Z.felder}</td><td class="n">${geld(Z.euro, 'EUR')}</td></tr>
         ${kandZeilen}
         <tr class="ref"><td>Mathematisch erwartet</td><td class="n">${komma(ERWARTET_RICHTIGE)}</td><td class="n">≈ 1 von 31</td><td class="n">–</td></tr>
       </tbody></table>
-    <p class="muted small" style="margin-top:8px">${m} ${m === 1 ? 'Ziehung' : 'Ziehungen'} ausgewertet · Einsatz je ${geld(m * PREIS, 'EUR')}. Über wenige Ziehungen schwankt das stark – aussagekräftig wird die Bilanz erst nach vielen Monaten.</p>
+    <p class="muted small" style="margin-top:8px">${m} ${m === 1 ? 'Ziehung' : 'Ziehungen'} ausgewertet · ${plural(S.felder, 'Feld', 'Felder')} je Seite, Einsatz je ${geld(S.felder * PREIS, 'EUR')}. Über wenige Ziehungen schwankt das stark – aussagekräftig wird die Bilanz erst nach vielen Monaten.</p>
     <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>${kandidatenHtml(n)}${formelCheckHtml(letzte())}`;
   if (fehlt.length) ladeQuoten(fehlt).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
 }
@@ -1805,10 +1881,12 @@ function binde() {
   $('quickTip').addEventListener('click', () => { tipNums = new Set(neuerZufallstipp()); tippGeaendert(true); });
   $('klugTip').addEventListener('click', nimmFritzTipp);
   const nimmVorschlag = (e) => {
-    if (!e.target.closest('#vorschlagNehmen, #vorschlagNehmen2')) return;
-    const v = vorschlaege().find((x) => x.d > letzte().d);
+    const feld = e.target.closest('.vs-feld');
+    if (!feld && !e.target.closest('#vorschlagNehmen, #vorschlagNehmen2')) return;
+    const v = vorschlaege().filter((x) => x.d > letzte().d).sort((a, b) => (a.d < b.d ? -1 : 1))[0];
     if (!v) return;
-    tipNums = new Set(v.tipp);
+    const felder = felderVon(v);
+    tipNums = new Set(felder[feld ? Number(feld.dataset.feld) : 0] || felder[0]);
     tipSz = v.sz ?? tipSz;
     tippGeaendert(true);
     window.lottoZeigeTab('tipp');

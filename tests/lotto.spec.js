@@ -420,11 +420,30 @@ test('Vorschlag: festgeschrieben, nie gezogene Kombination, bleibt nach Neuladen
   const gezogen = new Set(LINES.map((l) => l.split(' ').slice(1, 7).join(',')));
   expect(gezogen.has(t.slice().sort((a, b) => a - b).join(','))).toBe(false);
   await expect(page.locator('#vorschlagNaechste')).toContainText('Noch nie gezogen');
+  // immer 5 Felder: je 6 Zahlen, alle verschieden, keine schon gezogen, höchstens 2 Zahlen bei 1–31
+  const felder = page.locator('#vorschlagNaechste .vs-feld');
+  await expect(felder).toHaveCount(5);
+  const alle = [];
+  for (let i = 0; i < 5; i++) alle.push((await felder.nth(i).locator('.ball').allTextContents()).map(Number));
+  expect(alle[0]).toEqual(t);
+  for (const f of alle) {
+    expect(f).toHaveLength(6);
+    expect(new Set(f).size).toBe(6);
+    expect(gezogen.has(f.join(','))).toBe(false);
+    expect(f.filter((n) => n <= 31).length).toBeLessThanOrEqual(2);
+  }
+  expect(new Set(alle.map((f) => f.join(','))).size).toBe(5);
+  await expect(page.locator('#vorschlagNaechste')).toContainText('5 Felder = 6,00 €');
   await page.reload();
   await expect(balls).toHaveCount(6);
   expect((await balls.allTextContents()).map(Number)).toEqual(t);
+  for (let i = 0; i < 5; i++) expect((await felder.nth(i).locator('.ball').allTextContents()).map(Number)).toEqual(alle[i]);
   await page.click('#vorschlagNehmen');
   await expect(page.locator('#tipInput')).toHaveValue(t.join(' '));
+  // ein Feld antippen übernimmt genau dieses Feld
+  await page.click('[data-tab=chancen]');
+  await felder.nth(3).click();
+  await expect(page.locator('#tipInput')).toHaveValue(alle[3].join(' '));
 });
 
 test('Startseite: Vorschlag steht eindeutig oben, mit Begründung für jede Zahl', async ({ page }) => {
@@ -435,13 +454,13 @@ test('Startseite: Vorschlag steht eindeutig oben, mit Begründung für jede Zahl
   await expect(karte.locator('.vs-datum')).toHaveText(/^für (Mi|Sa), \d\d\.\d\d\.\d{4}$/);
   const balls = karte.locator('.vs-balls .ball:not(.sz)');
   await expect(balls).toHaveCount(6);
-  await expect(karte.locator('.vs-balls .ball.sz')).toHaveCount(1);
+  await expect(karte.locator('.vs-feld')).toHaveCount(5);
   const t = (await balls.allTextContents()).map(Number);
-  await expect(karte.locator('.vs-zahlen')).toContainText(t.join(' · '));
-  await expect(karte.locator('.vs-sz')).toHaveText(/^Superzahl \d$/);
-  // Begründung: für jede der 6 Zahlen eine Zeile + Muster/Geburtstag/Superzahl/Formel
-  await expect(karte.locator('.vs-liste li')).toHaveCount(6);
-  for (const x of ['Noch nie gezogen', 'Keine Muster', 'Geburtstagszahlen', 'Superzahl', 'Fritz-Formel', 'Ehrlich']) {
+  await expect(karte.locator('.vs-sz')).toHaveText(/^Superzahl \d – gilt für den ganzen Schein$/);
+  // Begründung: für jede verwendete Zahl eine Angabe + Muster/Geburtstag/Streuung/Superzahl/Formel
+  const verwendet = new Set((await karte.locator('.vs-feld .ball').allTextContents()).map(Number));
+  await expect(karte.locator('.vs-liste li')).toHaveCount(verwendet.size);
+  for (const x of ['Noch nie gezogen', 'Keine Muster', 'Geburtstagszahlen', 'Breit gestreut', 'Superzahl', 'Fritz-Formel', 'Ehrlich']) {
     await expect(karte).toContainText(x);
   }
   // gleiche Ziehung → auf jedem Gerät derselbe Vorschlag (fester Zufall aus dem Datum)
@@ -476,6 +495,47 @@ test('Vorschlag wird erst mit der neuesten Ziehung berechnet (gleich auf jedem G
   await page.reload();
   await expect(balls).toHaveCount(6);
   expect((await balls.allTextContents()).map(Number)).toEqual(frisch);
+});
+
+test('Älterer offener Vorschlag (1 Feld) wird vor der Ziehung auf 5 Felder und alle Kandidaten ergänzt', async ({ page }) => {
+  const ziel = naechsterZiehungstag(NEU);
+  await page.addInitScript((d) => {
+    if (localStorage.getItem('lotto_vorschlaege')) return;
+    localStorage.setItem('lotto_vorschlaege', JSON.stringify([{ d, tipp: [14, 21, 36, 43, 47, 49], sz: 1, zufall: [8, 25, 28, 35, 36, 44], zsz: 7, erstellt: Date.now() - 3600000 }]));
+  }, ziel);
+  await mockLive(page);
+  await page.goto('/lotto/');
+  const felder = page.locator('#vorschlagTippCard .vs-feld');
+  await expect(felder).toHaveCount(5);
+  // Feld 1 bleibt, wie es festgeschrieben war
+  expect((await felder.first().locator('.ball').allTextContents()).map(Number)).toEqual([14, 21, 36, 43, 47, 49]);
+  const v = await page.evaluate(() => JSON.parse(localStorage.getItem('lotto_vorschlaege'))[0]);
+  expect(v.felder).toHaveLength(5);
+  expect(v.zfelder).toHaveLength(5);
+  expect(v.zfelder[0]).toEqual([8, 25, 28, 35, 36, 44]);
+  expect(Object.keys(v.kand).sort()).toEqual(['erde', 'mond', 'resonanz', 'sonne']);
+});
+
+test('Bilanz mit 5 Feldern: alle Felder zählen, bestes Feld wird gezeigt', async ({ page }) => {
+  await page.addInitScript((d) => {
+    if (localStorage.getItem('lotto_vorschlaege')) return;
+    localStorage.setItem('lotto_vorschlaege', JSON.stringify([{ d, tipp: [10, 20, 30, 40, 41, 42], sz: 7, zufall: [40, 41, 42, 43, 44, 45], zsz: 0, erstellt: Date.now() - 86400000,
+      felder: [[10, 20, 30, 40, 41, 42], [1, 2, 3, 4, 20, 30], [1, 2, 33, 34, 35, 36], [5, 6, 7, 37, 38, 39], [44, 45, 46, 47, 48, 49]],
+      zfelder: [[40, 41, 42, 43, 44, 45], [1, 12, 13, 14, 15, 16], [20, 21, 22, 23, 24, 25], [30, 31, 32, 33, 34, 35], [7, 8, 9, 10, 11, 12]] }]));
+  }, NEU);
+  await mockLive(page); // gezogen: 1 2 3 4 5 6, Superzahl 7
+  await page.goto('/lotto/#chancen');
+  const bilanz = page.locator('#vorschlagBilanz');
+  // System: 0 + 4 + 2 + 2 + 0 = 8 Richtige in 5 Feldern; Gewinne: 4+SZ und zweimal 2+SZ
+  await expect(bilanz.locator('tr.hl')).toContainText('1,60');
+  await expect(bilanz.locator('tr.hl')).toContainText('3 von 5');
+  await expect(bilanz.locator('tr.hl')).toContainText('264,80'); // 252,80 + 6 + 6
+  await expect(bilanz.locator('.win-row').first()).toContainText('Bestes von 5 Feldern (3 Gewinne)');
+  await expect(bilanz.locator('.badge').first()).toContainText('System 4+SZ');
+  await expect(bilanz.locator('tr', { hasText: 'Zufallstipp' })).toContainText('0 von 5');
+  await page.click('[data-tab=tipp]');
+  await expect(page.locator('#vorschlagLetzte')).toContainText('(5 Felder), bestes Feld 1 2 3 4 20 30');
+  await expect(page.locator('#vorschlagLetzte')).toContainText('3 Gewinne');
 });
 
 test('Bilanz ohne Quoten: fragt nicht pausenlos nach', async ({ page }) => {
