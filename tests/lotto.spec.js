@@ -316,6 +316,17 @@ test('Chancen: Muster-Check rechnet live und findet kein Muster', async ({ page 
   await expect(page.locator('#chancenTabelle')).toContainText('Irgendein Gewinn');
 });
 
+test('Neuronales Netz: ehrliches Testergebnis, App rechnet dieselbe Bewertung wie das Training', async ({ page }) => {
+  const netz = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'lotto', 'netz.json'), 'utf8'));
+  expect(netz.stand).toBe(BUNDLED_LAST); // nach neuen Ziehungen: node scripts/lotto-netz.mjs
+  await mockLive(page, { latest: false });
+  await page.goto('/lotto/#chancen');
+  await expect(page.locator('#netzTabelle tbody tr')).toHaveCount(3); // 2 Netze + Zufall
+  await expect(page.locator('#netzUrteil')).toContainText('Kein Netz schlägt den Zufall');
+  // gleiche Daten wie beim Training → die App findet dieselben 6 Zahlen
+  await expect(page.locator('#netzBalls .ball')).toHaveText(netz.pruefTipp.map(String));
+});
+
 test('Fritz-Tipp: kaum Geburtstagszahlen, keine Reihen, hoher Formel-Wert', async ({ page }) => {
   await mockLive(page, { latest: false });
   await page.goto('/lotto/');

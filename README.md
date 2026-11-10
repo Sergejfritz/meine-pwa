@@ -69,6 +69,14 @@ Android-App (APK-Datei) weitergegeben – nicht öffentlich verlinkt.
   exakten Gewinnchancen je Klasse und der **kluge Tipp**: gleiche Chance, aber
   ohne Geburtstags-/Muster-Zahlen, die laut echten Quoten seit 2020 rund
   20–30 % weniger pro Gewinn bringen.
+- **🧠 Neuronales Netz** – `node scripts/lotto-netz.mjs` trainiert zwei kleine
+  Netze auf allen Ziehungen (eines bewertet jede Zahl aus ihrem Verlauf, eines
+  sieht die letzten 6 Ziehungen komplett) und testet sie an den 1.500 neuesten
+  Ziehungen, die sie beim Lernen nicht kannten. Ergebnis (`lotto/netz.json`):
+  0,734 bzw. 0,720 Richtige im Schnitt bei 0,735 durch Zufall, das Fehlermaß ist
+  nicht besser als „jede Zahl 12,24 %“ – kein Netz schlägt den Zufall. Die App
+  zeigt den Test und rechnet die Bewertung von Netz A für die nächste Ziehung
+  selbst aus. Nach neuen Ziehungen in `ziehungen.txt` neu trainieren.
 - **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
   Trefferchance): Aus den echten Gewinnerzahlen von 640 Ziehungen (seit 09/2020)
   lernt eine Ridge-Regression die Beliebtheit β jeder Zahl; die gezogene

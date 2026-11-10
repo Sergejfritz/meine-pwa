@@ -212,8 +212,24 @@ async function ladeFormel() {
   } catch {}
 }
 
+// Neuronales Netz (scripts/lotto-netz.mjs) – optional: Testergebnis + Gewichte des kleinen Netzes
+let NETZ = null;
+async function ladeNetz() {
+  try {
+    const f = await (await fetch('netz.json')).json();
+    const g = f.netz && f.netz.groessen;
+    const ok = Array.isArray(f.modelle) && f.modelle.every((m) => typeof m.name === 'string' && [m.schnitt, m.drei, m.verlust].every(Number.isFinite))
+      && Number.isFinite(f.getestet) && Number.isFinite(f.basisVerlust)
+      && Array.isArray(g) && g[0] === 9 && g[g.length - 1] === 1 && Array.isArray(f.netz.W) && Array.isArray(f.netz.B)
+      && f.netz.W.length === g.length - 1 && f.netz.B.length === g.length - 1
+      && f.netz.W.every((w, l) => Array.isArray(w) && w.length === g[l] * g[l + 1] && w.every(Number.isFinite))
+      && f.netz.B.every((b, l) => Array.isArray(b) && b.length === g[l + 1] && b.every(Number.isFinite));
+    if (ok) NETZ = f;
+  } catch {}
+}
+
 async function ladeDaten() {
-  const formel = ladeFormel(); // parallel laden, wirft nie
+  const formel = Promise.all([ladeFormel(), ladeNetz()]); // parallel laden, wirft nie
   const res = await fetch('ziehungen.txt');
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const basis = parseTxt(await res.text());
@@ -1111,6 +1127,66 @@ function renderChancen() {
   $('chancenExtra').innerHTML = `Mit einem Tipp mittwochs und samstags kommt der Jackpot (6 + Superzahl) statistisch <b>alle ${zahl.format(jahre)} Jahre</b> einmal. Die Chance auf 6 Richtige ist in jeder Ziehung dieselbe – auch wenn eine Zahl „lange nicht dran war“.`;
 }
 
+// ---------- Neuronales Netz ----------
+// Bewertung aller 49 Zahlen für die nächste Ziehung durch das kleine Netz „je Zahl“.
+// Die Merkmale müssen genau denen in scripts/lotto-netz.mjs entsprechen.
+function netzBewertung() {
+  const t = draws.length;
+  const p = 6 / 49;
+  const { groessen, W, B } = NETZ.netz;
+  const out = [];
+  for (let n = 1; n <= 49; n++) {
+    let c10 = 0; let c50 = 0; let c200 = 0; let alle = 0; let pause = -1;
+    for (let k = 1; k <= t; k++) {
+      if (!draws[t - k].n.includes(n)) continue;
+      if (pause < 0) pause = k - 1;
+      if (k <= 10) c10++;
+      if (k <= 50) c50++;
+      if (k <= 200) c200++;
+      alle++;
+    }
+    if (pause < 0) pause = t;
+    const war = (k) => (t - k >= 0 && draws[t - k].n.includes(n) ? 1 : 0);
+    let a = [war(1), war(2), war(3), c10 / 10 / p - 1, c50 / 50 / p - 1, c200 / 200 / p - 1,
+      Math.min(pause, 60) / 30 - 1, (alle / (t * p) - 1) * 5, n / 24.5 - 1];
+    for (let l = 0; l < W.length; l++) {
+      const nIn = groessen[l];
+      const letzte = l === W.length - 1;
+      a = Array.from({ length: groessen[l + 1] }, (_, j) => {
+        let s = B[l][j];
+        for (let i = 0; i < nIn; i++) s += W[l][j * nIn + i] * a[i];
+        return letzte ? 1 / (1 + Math.exp(-s)) : Math.tanh(s);
+      });
+    }
+    out.push(a[0]);
+  }
+  return out;
+}
+function renderNetz() {
+  if (!NETZ) return;
+  $('netzCard').classList.remove('hidden');
+  const n = NETZ.getestet;
+  const pDrei = [3, 4, 5, 6].reduce((s, r) => s + pRichtige(r), 0);
+  const band = 3 * Math.sqrt(6 * (6 / 49) * (43 / 49) * (43 / 48)) / Math.sqrt(n);
+  const band3 = 3 * Math.sqrt(pDrei * (1 - pDrei) / n);
+  const k3 = (x) => x.toFixed(3).replace('.', ',');
+  const k4 = (x) => x.toFixed(4).replace('.', ',');
+  $('netzInfo').textContent = `Zwei neuronale Netze haben aus allen Ziehungen gelernt und wurden dann an den ${zahl.format(n)} neuesten Ziehungen (seit ${datum(NETZ.von)}) geprüft – immer nur mit Ziehungen, die sie beim Lernen noch nicht kannten.`;
+  $('netzTabelle').innerHTML = `<thead><tr><th>Netz</th><th class="n">Ø Richtige</th><th class="n">3+ Richtige</th><th class="n">Fehlermaß</th></tr></thead><tbody>${
+    NETZ.modelle.map((m) => `<tr><td>🧠 ${esc(m.name)}</td><td class="n">${k3(m.schnitt)}</td><td class="n">${prozent(m.drei, 2)}</td><td class="n">${k4(m.verlust)}</td></tr>`).join('')
+  }<tr class="ref"><td>🎲 Reiner Zufall (Mathematik)</td><td class="n">${k3(ERWARTET_RICHTIGE)}</td><td class="n">${prozent(pDrei, 2)}</td><td class="n">${k4(NETZ.basisVerlust)}</td></tr></tbody>`;
+  const besser = NETZ.modelle.filter((m) => m.schnitt > ERWARTET_RICHTIGE + band || m.drei > pDrei + band3 || m.verlust < NETZ.basisVerlust - 0.0005);
+  $('netzUrteil').innerHTML = besser.length
+    ? `⚠️ ${besser.map((m) => esc(m.name)).join(', ')} liegt über dem normalen Zufallsbereich – genauer hinsehen.`
+    : `<b>Kein Netz schlägt den Zufall.</b> Alle Werte liegen im normalen Schwankungsbereich (Ø ${(ERWARTET_RICHTIGE - band).toFixed(2).replace('.', ',')}–${(ERWARTET_RICHTIGE + band).toFixed(2).replace('.', ',')} Richtige, 3+ Richtige ${prozent(Math.max(0, pDrei - band3), 1)}–${prozent(pDrei + band3, 1)}). `
+      + 'Das Fehlermaß zeigt, wie gut die vorhergesagten Chancen passen (kleiner = besser): Kein Netz ist besser als die einfache Annahme „jede Zahl 12,24 %“.';
+  const p = netzBewertung();
+  const tipp = p.map((v, i) => [v, i + 1]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 6).map((x) => x[1]).sort((a, b) => a - b);
+  $('netzTipp').innerHTML = `<p class="small" style="margin-top:10px"><b>Was Netz A für die nächste Ziehung am höchsten bewertet:</b></p>
+    <div class="balls" id="netzBalls" style="margin:6px 0">${kugeln({ n: tipp, sz: -1 }, null, null)}</div>
+    <p class="muted small">Das Netz gibt allen 49 Zahlen fast dieselbe Chance: zwischen ${prozent(Math.min(...p), 2)} und ${prozent(Math.max(...p), 2)} (Grundchance 12,24 %). Es hat also selbst gelernt, dass die Vergangenheit nichts verrät – diese 6 Zahlen haben dieselbe Chance wie jeder andere Tipp.</p>`;
+}
+
 // Muster, die Massen von Spielern tippen (sortierter Tipp) – die Formel kennt nur
 // einzelne Zahlen, solche Kombinationen sind aber noch viel häufiger getippt
 function musterIn(t) {
@@ -1584,7 +1660,7 @@ function zeigeTab(name) {
   if (!draws.length) return;
   if (name === 'archiv') renderArchiv();
   if (name === 'statistik') renderStatistik();
-  if (name === 'chancen') { renderVorschlag(); renderChancen(); renderFritz(); }
+  if (name === 'chancen') { renderVorschlag(); renderChancen(); renderNetz(); renderFritz(); }
   if (name === 'simulator') renderSimTipp();
 }
 

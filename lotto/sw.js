@@ -1,6 +1,6 @@
 // Service Worker des Lotto-Simulators (eigener Bereich: nur /lotto/).
 // Netzwerk zuerst (immer aktuelle Ziehungen/Version), offline aus dem Cache.
-const CACHE = 'lotto-v2';
+const CACHE = 'lotto-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -8,6 +8,7 @@ const ASSETS = [
   './lotto.js',
   './ziehungen.txt',
   './formel.json',
+  './netz.json',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',
