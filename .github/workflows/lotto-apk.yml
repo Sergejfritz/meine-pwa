@@ -21,8 +21,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Mit Secret LOTTO_KEY_PASSWORD entsteht die signierte Release-APK
-      # (gleicher Schlüssel wie downloads/lotto.apk), sonst eine Debug-APK.
+      # Nur Bauprobe – die APK wird nirgends hochgeladen (private App).
+      # Mit Secret LOTTO_KEY_PASSWORD als signierte Release-APK, sonst Debug.
       - name: APK bauen
         working-directory: android
         env:
@@ -33,10 +33,3 @@ jobs:
           else
             ./gradlew --no-daemon assembleDebug
           fi
-
-      - name: APK hochladen
-        uses: actions/upload-artifact@v4
-        with:
-          name: lotto-apk
-          path: android/app/build/outputs/apk/**/*.apk
-          retention-days: 14

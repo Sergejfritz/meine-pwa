@@ -21,7 +21,6 @@ const KEY = {
   quoten: 'lotto_quoten',
   theme: 'lotto_theme',
   tab: 'lotto_tab',
-  update: 'lotto_app_update',
   prognosen: 'lotto_vorschlaege',
 };
 
@@ -1615,30 +1614,6 @@ function renderAppKarte() {
   $('btnNotifyTest').disabled = !an;
   $('appInfo').textContent = `${an ? '✓ Benachrichtigungen sind an.' : 'Benachrichtigungen sind aus.'} · App-Version ${app('version') || '?'}`;
 }
-// Neue APK? Die App fragt höchstens alle 6 Stunden die Versionsdatei ab, die
-// scripts/lotto-apk.sh neben die APK legt, und zeigt dann einen Download-Knopf.
-const UPDATE_URL = 'https://sergejfritz.github.io/meine-pwa/downloads/version.json';
-async function pruefeAppUpdate() {
-  if (!APP) return;
-  const meine = Number(app('versionCode'));
-  if (!Number.isInteger(meine) || meine <= 0) return;
-  let info = read(KEY.update);
-  if (!info || !(Date.now() - info.geprueft < 6 * 60 * MIN)) {
-    try {
-      const v = await holeJson(UPDATE_URL, 10000);
-      if (!Number.isInteger(v.versionCode)) return;
-      info = { code: v.versionCode, name: String(v.versionName || ''), geprueft: Date.now() };
-      write(KEY.update, info);
-    } catch {
-      return;
-    }
-  }
-  if (info.code > meine) {
-    $('updateText').textContent = `Version ${info.name} ist da (du hast ${app('version') || '?'}). Herunterladen, öffnen und „Aktualisieren“ tippen – deine Tipps bleiben erhalten.`;
-    $('updateCard').classList.remove('hidden');
-  }
-}
-
 // Aufrufe aus der App (Java): Status neu zeichnen, Bereich wechseln, Zurück-Taste
 window.lottoAppStatus = renderAppKarte;
 window.lottoZeigeTab = (name) => { zeigeTab(name); window.scrollTo({ top: 0 }); };
@@ -1756,9 +1731,6 @@ async function init() {
   renderFavs();
   binde();
   renderAppKarte();
-  pruefeAppUpdate();
-  // Im Browser auf Android: Hinweis auf die installierbare App (APK)
-  if (!APP && /Android/i.test(navigator.userAgent)) $('apkLink').classList.remove('hidden');
   const anker = location.hash.slice(1);
   zeigeTab($('tab-' + anker) ? anker : read(KEY.tab) || 'tipp');
 

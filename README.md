@@ -51,8 +51,9 @@ und per **WhatsApp / Teilen** weitergeben – **auch offline**.
 
 ## 🍀 Lotto-Simulator (privat)
 
-Eigene kleine App unter **`/lotto/`** (🔗 https://sergejfritz.github.io/meine-pwa/lotto/),
-nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Service Worker).
+Eigene kleine App im Ordner **`lotto/`**, nicht mit TechDoku verlinkt (eigenes
+Manifest + Service Worker). Sie ist nur für den Eigengebrauch gedacht und wird als
+Android-App (APK-Datei) weitergegeben – nicht öffentlich verlinkt.
 
 - **Mein Tipp** – 6 Zahlen eintippen oder im Schein antippen (+ optional
   Superzahl): sofort sichtbar, **ob und in welchem Jahr** man mit ihnen gewonnen
@@ -109,10 +110,9 @@ nicht mit TechDoku verlinkt und separat installierbar (eigenes Manifest + Servic
 
 ### 📱 Android-App (APK)
 
-Download aufs Handy: **https://sergejfritz.github.io/meine-pwa/downloads/lotto.apk**
-(im Handy-Browser öffnen → installieren; einmalig „Installation aus dieser Quelle
-erlauben“ bestätigen). Auf der Lotto-Seite erscheint im Android-Browser dafür
-auch ein Knopf „📲 Als Android-App installieren“.
+Die App ist privat: Die APK liegt **nicht** im Repo und wird nirgends zum
+Download angeboten, sondern nur als Datei weitergegeben (auf dem Handy öffnen →
+installieren; einmalig „Installation aus dieser Quelle erlauben“ bestätigen).
 
 - Kleine native App (`android/`, Java, ohne Fremdbibliotheken), die genau die
   Web-App aus `lotto/` als App-Inhalt mitbringt – **alles offline**, neue
@@ -121,17 +121,16 @@ auch ein Knopf „📲 Als Android-App installieren“.
   die neuen Zahlen und ob der aktuelle oder ein gemerkter Tipp gewonnen hat –
   mit echtem Gewinnbetrag, sobald die Quoten feststehen.
 - Systemleisten passend zu Hell/Dunkel, Zurück-Taste springt erst zu „Mein Tipp“.
-- **Update-Hinweis:** Die App prüft höchstens alle 6 Stunden
-  `downloads/version.json` und bietet eine neuere APK zum Herunterladen an.
-  Ist das Repository privat, gibt es (im kostenlosen Tarif) kein GitHub Pages –
-  dann bleibt der Hinweis still weg und neue APKs kommen direkt per Datei.
-- Neu bauen: `LOTTO_KEY_PASSWORD=… scripts/lotto-apk.sh` (legt
-  `downloads/lotto.apk` und `downloads/version.json` ab). Der Signatur-Schlüssel `android/lotto-app.p12` ist
+- Die App geht nur für die Lottozahlen ins Netz (WestLotto, Ersatz:
+  LottoNumberArchive) – keine Update-Prüfung, kein Download-Link.
+- Neu bauen: `LOTTO_KEY_PASSWORD=… scripts/lotto-apk.sh` (legt `build/lotto.apk`
+  ab, außerhalb des Repos). Der Signatur-Schlüssel `android/lotto-app.p12` ist
   passwortgeschützt; das Passwort steht bewusst **nicht** im Repo. Nur mit
-  demselben Schlüssel lässt sich eine neue Version über die alte installieren
-  (gespeicherte Tipps bleiben erhalten).
-- Die CI (`.github/workflows/lotto-apk.yml`) baut die APK bei jeder Änderung mit;
-  ist das Repo-Secret `LOTTO_KEY_PASSWORD` gesetzt, signiert.
+  demselben Schlüssel **und Passwort** lässt sich eine neue Version über die
+  alte installieren (gespeicherte Tipps bleiben erhalten) – geht das Passwort
+  verloren, muss die App einmal deinstalliert und neu installiert werden.
+- Die CI (`.github/workflows/lotto-apk.yml`) prüft nur, ob die App baut; sie
+  lädt keine APK hoch.
 
 ---
 
@@ -157,7 +156,6 @@ vendor/tessdata/    Deutsches OCR-Sprachmodell (deu.traineddata.gz)
 tests/              Playwright End-to-End-Tests + statischer Server
 lotto/              Lotto-Simulator (eigene Mini-App, siehe oben)
 android/            Android-App (APK) für den Lotto-Simulator
-downloads/          fertige lotto.apk zum Herunterladen
 scripts/            Hilfsskripte (Ziehungsdatei erneuern, APK bauen)
 ```
 

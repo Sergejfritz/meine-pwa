@@ -238,22 +238,10 @@ async function mockApp(page) {
   });
 }
 const appLog = (page, art) => page.evaluate((a) => window.__appLog.filter((e) => e[0] === a), art);
-const isUpdateDatei = (url) => url.hostname === 'sergejfritz.github.io' && url.pathname.endsWith('/downloads/version.json');
-async function mockUpdate(page, versionCode) {
-  await page.route(isUpdateDatei, (route) => (versionCode === null ? route.abort() : route.fulfill({
-    contentType: 'application/json',
-    headers: { 'Access-Control-Allow-Origin': '*' },
-    body: JSON.stringify({ versionCode, versionName: '1.0.neu' }),
-  })));
-}
-
 test('App: Benachrichtigungen schalten, Tipps und Theme gehen an die App', async ({ page }) => {
   await mockApp(page);
-  await mockUpdate(page, null);
   await mockLive(page, { latest: false });
   await page.goto('/lotto/');
-  await expect(page.locator('#apkLink')).toBeHidden(); // in der App kein Download-Hinweis
-
   await page.click('[data-tab=archiv]');
   await expect(page.locator('#appCard')).toBeVisible();
   await expect(page.locator('#appInfo')).toContainText('1.0.test');
@@ -281,7 +269,6 @@ test('App: Benachrichtigungen schalten, Tipps und Theme gehen an die App', async
 
 test('App: Zurück-Taste und Sprung per #Bereich', async ({ page }) => {
   await mockApp(page);
-  await mockUpdate(page, null);
   await mockLive(page, { latest: false });
   await page.goto('/lotto/#statistik');
   await expect(page.locator('#tab-statistik')).toBeVisible();
@@ -292,12 +279,17 @@ test('App: Zurück-Taste und Sprung per #Bereich', async ({ page }) => {
   await expect(page.locator('#tab-archiv')).toBeVisible();
 });
 
-test('Browser: APK-Download nur auf Android, App-Karte nie', async ({ page }) => {
+test('Browser: keine App-Karte, kein Download-Link, Anfragen nur an die Lotto-Quellen', async ({ page }) => {
+  const fremd = [];
+  page.on('request', (r) => {
+    const u = new URL(r.url());
+    if (u.hostname !== 'localhost' && !isWestlotto(u) && !isArchiv(u)) fremd.push(r.url());
+  });
   await mockLive(page, { latest: false });
   await page.goto('/lotto/');
-  const android = /Android/i.test(await page.evaluate(() => navigator.userAgent));
-  await expect(page.locator('#apkLink')).toBeVisible({ visible: android });
-  await expect(page.locator('#apkLink')).toHaveAttribute('href', '../downloads/lotto.apk');
+  await expect(page.locator('#dataInfo')).toContainText('Ziehungen');
+  await expect(page.locator('a[href*="apk"]')).toHaveCount(0);
+  expect(fremd).toEqual([]);
   await page.click('[data-tab=archiv]');
   await expect(page.locator('#appCard')).toBeHidden();
 });
@@ -368,24 +360,6 @@ test('Fritz-Formel: beliebte Zahlen sind weniger wert als unbeliebte', async ({ 
   await tippe(page, '1 2 3 4 5 6');
   await page.click('[data-tab=chancen]');
   await expect(page.locator('#fritzDein .fritz-warn')).toContainText('Muster');
-});
-
-test('App: Hinweis auf neue Version nur, wenn es eine neuere gibt', async ({ page }) => {
-  await mockApp(page);
-  await mockLive(page, { latest: false });
-  await mockUpdate(page, 101);
-  await page.goto('/lotto/');
-  await expect(page.locator('#updateCard')).toBeVisible();
-  await expect(page.locator('#updateText')).toContainText('1.0.neu');
-  await expect(page.locator('#updateLink')).toHaveAttribute('href', /downloads\/lotto\.apk$/);
-
-  // gleiche Version → kein Hinweis (gespeicherte Prüfung vorher verwerfen)
-  await page.evaluate(() => localStorage.removeItem('lotto_app_update'));
-  await page.unroute(isUpdateDatei);
-  await mockUpdate(page, 100);
-  await page.reload();
-  await expect(page.locator('#dataInfo')).toContainText('Ziehungen');
-  await expect(page.locator('#updateCard')).toBeHidden();
 });
 
 test('Fritz-Formel: Superzahl zählt – unbeliebte 0 ist mehr wert als beliebte 7', async ({ page }) => {
