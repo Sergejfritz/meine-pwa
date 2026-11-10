@@ -77,6 +77,11 @@ Android-App (APK-Datei) weitergegeben – nicht öffentlich verlinkt.
   nicht besser als „jede Zahl 12,24 %“ – kein Netz schlägt den Zufall. Die App
   zeigt den Test und rechnet die Bewertung von Netz A für die nächste Ziehung
   selbst aus. Nach neuen Ziehungen in `ziehungen.txt` neu trainieren.
+- **🔭 Kandidaten-Beobachtung** – von 15 geprüften Umwelt-Faktoren (Jahreszeit,
+  Monat, Mondphase, Mond-/Sonnenabstand, Gezeitenkraft, Luftdruck, Temperatur,
+  Feuchte, Wind, Regen …) war keiner auffällig; die zwei „besten“, Sonnenabstand
+  und Mondphase, tippen ab jetzt vor jeder Ziehung mit (vorher festgeschrieben)
+  und stehen in der Bilanz neben System und Zufall.
 - **🧮 Fritz-Formel** – eigene Rechnung für den *Wert* eines Tipps (nicht die
   Trefferchance): Aus den echten Gewinnerzahlen von 640 Ziehungen (seit 09/2020)
   lernt eine Ridge-Regression die Beliebtheit β jeder Zahl; die gezogene

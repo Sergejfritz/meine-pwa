@@ -487,7 +487,8 @@ test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen
   await page.addInitScript((d) => {
     if (localStorage.getItem('lotto_vorschlaege')) return;
     localStorage.setItem('lotto_vorschlaege', JSON.stringify([
-      { d, tipp: [1, 2, 3, 10, 20, 30], sz: 7, zufall: [40, 41, 42, 43, 44, 45], zsz: 0, erstellt: Date.now() - 86400000 },
+      { d, tipp: [1, 2, 3, 10, 20, 30], sz: 7, zufall: [40, 41, 42, 43, 44, 45], zsz: 0,
+        kand: { sonne: [1, 2, 3, 4, 5, 6], mond: [10, 11, 12, 13, 14, 15] }, erstellt: Date.now() - 86400000 },
     ]));
   }, NEU);
   await mockLive(page); // neue Ziehung NEU: 1 2 3 4 5 6, Superzahl 7
@@ -498,6 +499,19 @@ test('Bilanz: Vorschlag und Zufallstipp werden mit der echten Ziehung verglichen
   await expect(bilanz.locator('tr.hl')).toContainText('1 von 1');
   await expect(bilanz).toContainText('Gezogen: 1 2 3 4 5 6');
   await expect(bilanz.locator('.badge').first()).toContainText('System 3+SZ');
+  // Kandidaten-Beobachtung: vorher festgeschriebene Tipps zählen mit (Sonne 6 Richtige, Mond 0)
+  await expect(bilanz.locator('tr', { hasText: 'Sonnenabstand' })).toContainText('6,00');
+  await expect(bilanz.locator('tr', { hasText: 'Sonnenabstand' })).toContainText('1 von 1');
+  await expect(bilanz.locator('tr', { hasText: 'Mondphase' })).toContainText('0,00');
+  // … und für die nächste Ziehung tippt jeder Kandidat 6 gültige Zahlen, vorher festgeschrieben
+  await expect(page.locator('#kandidaten .win-row')).toHaveCount(2);
+  const neu = await page.evaluate((d) => JSON.parse(localStorage.getItem('lotto_vorschlaege')).filter((v) => v.d > d), NEU);
+  expect(neu).toHaveLength(1);
+  for (const k of ['sonne', 'mond']) {
+    expect(neu[0].kand[k]).toHaveLength(6);
+    expect(new Set(neu[0].kand[k]).size).toBe(6);
+    expect(neu[0].kand[k].every((n) => Number.isInteger(n) && n >= 1 && n <= 49)).toBe(true);
+  }
   // Formel-Check: vorhergesagte vs. echte Gewinnerzahl der letzten Ziehung
   const check = page.locator('#formelCheck');
   await expect(check.locator('tbody tr')).toHaveCount(3);

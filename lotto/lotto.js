@@ -1333,6 +1333,47 @@ function vorschlaege() {
   return Array.isArray(v) ? v.filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && Array.isArray(x.tipp) && gueltig(x.tipp)
     && Array.isArray(x.zufall) && gueltig(x.zufall) && gueltigeSz(x.sz ?? null) && gueltigeSz(x.zsz ?? null)) : [];
 }
+// ---------- Kandidaten-Beobachtung: Umwelt-Faktoren, die ab jetzt mitgezählt werden ----------
+// In allen bisherigen Ziehungen waren Sonnenabstand und Mondphase die „auffälligsten“ von
+// 15 geprüften Umwelt-Faktoren – aber noch im Zufallsbereich. Alte Ziehungen weiter zu
+// durchsuchen beweist nichts; deshalb tippt jeder Kandidat ab jetzt jede Ziehung mit
+// (vorher festgeschrieben) und die Bilanz zeigt, ob er den Zufall schlägt.
+// Sonne/Mond nach den Näherungsformeln des Astronomical Almanac, 18 Uhr Weltzeit am Ziehungstag.
+function himmel(iso) {
+  const rad = Math.PI / 180;
+  const n = Date.parse(`${iso}T18:00:00Z`) / 86400000 + 2440587.5 - 2451545.0;
+  const T = n / 36525;
+  const g = (357.528 + 0.9856003 * n) * rad;
+  const ls = 280.460 + 0.9856474 * n + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g);
+  const R = 1.00014 - 0.01671 * Math.cos(g) - 0.00014 * Math.cos(2 * g); // Sonnenabstand in AE
+  const a = (x, y) => (x + y * T) * rad;
+  const lm = 218.32 + 481267.881 * T + 6.29 * Math.sin(a(135.0, 477198.87)) - 1.27 * Math.sin(a(259.3, -413335.36))
+    + 0.66 * Math.sin(a(235.7, 890534.22)) + 0.21 * Math.sin(a(269.9, 954397.74)) - 0.19 * Math.sin(a(357.5, 35999.05)) - 0.11 * Math.sin(a(186.5, 966404.03));
+  const elong = (((lm - ls) % 360) + 360) % 360; // 0 = Neumond, 180 = Vollmond
+  return { R, phase: Math.floor(((elong + 22.5) % 360) / 45) };
+}
+const MONDPHASEN = ['Neumond', 'zunehmende Sichel', 'erstes Viertel', 'zunehmender Mond', 'Vollmond', 'abnehmender Mond', 'letztes Viertel', 'abnehmende Sichel'];
+const SONNENSTUFEN = ['sehr nah (Winter)', 'nah', 'mittel', 'fern', 'sehr fern (Sommer)'];
+const KANDIDATEN = [
+  { id: 'sonne', name: '🌞 Sonnenabstand', gruppe: (h) => (h.R < 0.9865 ? 0 : h.R < 0.9950 ? 1 : h.R < 1.0055 ? 2 : h.R < 1.0140 ? 3 : 4), text: (g) => SONNENSTUFEN[g] },
+  { id: 'mond', name: '🌙 Mondphase', gruppe: (h) => h.phase, text: (g) => MONDPHASEN[g] },
+];
+// Tipp eines Kandidaten für den Ziehungstag d: die 6 Zahlen, die unter derselben Bedingung
+// bisher am häufigsten kamen (gedämpft, damit wenige Ziehungen nicht überbewertet werden)
+function kandidatTipp(k, d) {
+  const ziel = k.gruppe(himmel(d));
+  const cnt = new Array(50).fill(0);
+  let anzahl = 0;
+  for (const z of draws) {
+    if (z.d >= d || k.gruppe(himmel(z.d)) !== ziel) continue;
+    anzahl++;
+    for (const n of z.n) cnt[n]++;
+  }
+  const wert = (n) => (cnt[n] + 20) / (anzahl * 6 / 49 + 20);
+  const tipp = Array.from({ length: 49 }, (_, i) => i + 1).sort((x, y) => wert(y) - wert(x) || x - y).slice(0, 6).sort((x, y) => x - y);
+  return { tipp, gruppe: ziel, anzahl };
+}
+
 // Vorschlag für die nächste Ziehung einmalig festschreiben (vor der Ziehung, danach unveränderlich).
 // Dazu ein Zufallstipp vom selben Zeitpunkt als ehrlicher Vergleich.
 // Erst wenn die letzte fällige Ziehung geladen ist: sonst rechnet der Vorschlag mit
@@ -1354,7 +1395,9 @@ function sichereVorschlag(nachAbgleich = false) {
   if (liste.some((v) => v.d === d)) return false;
   zufall = festerZufall(`lotto-vorschlag-${d}`);
   try {
-    liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), erstellt: Date.now() });
+    const kand = {};
+    for (const k of KANDIDATEN) kand[k.id] = kandidatTipp(k, d).tipp;
+    liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), kand, erstellt: Date.now() });
   } finally {
     zufall = Math.random;
   }
@@ -1445,6 +1488,20 @@ function formelCheckHtml(z) {
     <p class="muted small" style="margin-top:6px">Diesmal lag die Formel in ${besser} von ${c.zeilen.length} Klassen näher dran.${FORMEL.pruefung && FORMEL.pruefung[3] ? ` Über ${FORMEL.pruefung.ziehungen} Test-Ziehungen: Ø ${prozent(FORMEL.pruefung[3].formel, 1)} Abweichung statt ${prozent(FORMEL.pruefung[3].gleich, 1)} (3 Richtige).` : ''} Sie sagt <i>nicht</i> voraus, welche Zahlen kommen – nur, wie viele Leute sie getippt haben.</p>`;
 }
 
+// Was die beobachteten Kandidaten für die nächste Ziehung tippen (n = offener Vorschlag)
+function kandidatenHtml(n) {
+  if (!n || !n.kand) return '';
+  const h = himmel(n.d);
+  const zeilen = KANDIDATEN.filter((k) => Array.isArray(n.kand[k.id]) && gueltig(n.kand[k.id])).map((k) =>
+    `<div class="win-row"><span class="d">${k.name}</span><span class="badge">${esc(k.text(k.gruppe(h)))}</span>
+      <div class="balls">${kugeln({ n: n.kand[k.id], sz: -1 }, null, null)}</div></div>`).join('');
+  if (!zeilen) return '';
+  return `<h3 style="margin-top:16px">🔭 Kandidaten unter Beobachtung</h3>
+    <p class="muted small">Von 15 geprüften Umwelt-Faktoren (Jahreszeit, Mond, Gezeitenkraft, Luftdruck, Wetter …) waren diese zwei am auffälligsten – aber noch im Zufallsbereich. Ob wirklich etwas dran ist, zeigt nur die Zukunft: Jeder Kandidat tippt ab jetzt vor jeder Ziehung die 6 Zahlen, die unter derselben Bedingung bisher am häufigsten kamen, und steht oben in der Bilanz. Tipps für ${datum(n.d)}:</p>
+    <div class="top-wins" id="kandidaten" style="margin-top:8px">${zeilen}</div>
+    <p class="muted small" style="margin-top:6px">Erst wenn ein Kandidat über viele Monate klar über 0,73 Richtigen im Schnitt liegt, wäre das ein echter Fund.</p>`;
+}
+
 // Kurz-Ergebnis der letzten ausgewerteten Vorschläge (für die Startseite)
 function letzteAuswertungHtml() {
   const byDate = new Map(draws.map((z) => [z.d, z]));
@@ -1481,7 +1538,7 @@ function renderVorschlag() {
     : '<p class="muted small">Der Vorschlag für die nächste Ziehung wird erstellt, sobald die aktuelle ausgewertet ist.</p>';
 
   if (!fertig.length) {
-    $('vorschlagBilanz').innerHTML = `<p class="muted small">Ab jetzt wird jeder Vorschlag nach der Ziehung mit den echten Zahlen verglichen – neben einem Zufallstipp, der zur selben Zeit festgelegt wurde. ${n ? `Erste Auswertung nach der Ziehung am ${datum(n.d)}.` : ''}</p>${formelCheckHtml(letzte())}`;
+    $('vorschlagBilanz').innerHTML = `<p class="muted small">Ab jetzt wird jeder Vorschlag nach der Ziehung mit den echten Zahlen verglichen – neben einem Zufallstipp, der zur selben Zeit festgelegt wurde. ${n ? `Erste Auswertung nach der Ziehung am ${datum(n.d)}.` : ''}</p>${kandidatenHtml(n)}${formelCheckHtml(letzte())}`;
     if (!quotenFuer(letzte().d)) ladeQuoten([letzte().d]).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
     return;
   }
@@ -1504,15 +1561,29 @@ function renderVorschlag() {
   });
   const m = fertig.length;
   const komma = (x) => x.toFixed(2).replace('.', ',');
+  // Kandidaten: nur Ziehungen, für die ihr Tipp vorher festgeschrieben war
+  const kandZeilen = KANDIDATEN.map((k) => {
+    const mit = fertig.filter((v) => v.kand && Array.isArray(v.kand[k.id]) && gueltig(v.kand[k.id]));
+    if (!mit.length) return `<tr><td>${k.name}</td><td class="n">–</td><td class="n">0 von 0</td><td class="n">–</td></tr>`;
+    let sum = 0; let gew = 0; let euro = 0;
+    for (const v of mit) {
+      const b = bewerte(v.kand[k.id], null, byDate.get(v.d));
+      sum += b.r;
+      if (b.k) gew++;
+      euro += betragFuer(b, v.d, v.kand[k.id]) || 0;
+    }
+    return `<tr><td>${k.name}</td><td class="n">${komma(sum / mit.length)}</td><td class="n">${gew} von ${mit.length}</td><td class="n">${geld(euro, 'EUR')}</td></tr>`;
+  }).join('');
   $('vorschlagBilanz').innerHTML = `<table class="classes">
       <thead><tr><th></th><th class="n">Ø Richtige</th><th class="n">Gewinne</th><th class="n">ausgezahlt</th></tr></thead>
       <tbody>
         <tr class="hl"><td>🎯 Unser System</td><td class="n">${komma(sumS / m)}</td><td class="n">${gewS} von ${m}</td><td class="n">${geld(euroS, 'EUR')}</td></tr>
         <tr><td>🎲 Zufallstipp</td><td class="n">${komma(sumZ / m)}</td><td class="n">${gewZ} von ${m}</td><td class="n">${geld(euroZ, 'EUR')}</td></tr>
+        ${kandZeilen}
         <tr class="ref"><td>Mathematisch erwartet</td><td class="n">${komma(ERWARTET_RICHTIGE)}</td><td class="n">≈ 1 von 31</td><td class="n">–</td></tr>
       </tbody></table>
     <p class="muted small" style="margin-top:8px">${m} ${m === 1 ? 'Ziehung' : 'Ziehungen'} ausgewertet · Einsatz je ${geld(m * PREIS, 'EUR')}. Über wenige Ziehungen schwankt das stark – aussagekräftig wird die Bilanz erst nach vielen Monaten.</p>
-    <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>${formelCheckHtml(letzte())}`;
+    <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>${kandidatenHtml(n)}${formelCheckHtml(letzte())}`;
   if (fehlt.length) ladeQuoten(fehlt).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
 }
 
