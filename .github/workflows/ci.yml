@@ -8,7 +8,9 @@ on:
 jobs:
   test:
     name: Playwright E2E
-    runs-on: ubuntu-latest
+    # feste Version: Playwright kann auf dem neuesten Runner-Abbild (Ubuntu 26.04)
+    # die Browser-Abhängigkeiten noch nicht installieren
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

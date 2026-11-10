@@ -1,0 +1,2002 @@
+// Lotto-Simulator 6aus49 – privat, läuft komplett im Browser.
+// Daten: alle Ziehungen seit 1955 (ziehungen.txt, mitgeliefert). Neue Ziehungen
+// kommen LIVE über die öffentliche Schnittstelle von WestLotto (offizielle
+// Landeslotterie, Zahlen + echte Quoten, auch rückwirkend per Datum) und werden
+// lokal gespeichert. Ersatzquelle: LottoNumberArchive. Mitgelieferte Datei neu
+// erzeugen:  node scripts/lotto-daten.mjs
+
+import { himmel, ziehungsort } from './himmel.js';
+import { KANDIDATEN } from './kandidaten.js';
+import { starte, ziehung, zeichne, SCHRITTE_PRO_SEKUNDE } from './trommel.js';
+
+const LIVE = 'https://www.westlotto.de/wlinfo/WL_InfoService?client=jsn&gruppe=ZahlenUndQuoten&spielart=LOTTO';
+const ARCHIV = 'https://johannesfriedrich.github.io/LottoNumberArchive/Lottonumbers_complete.json';
+const PREIS = 1.2;               // € pro Tipp (seit 09/2020, ohne Gebühren)
+const DM_KURS = 1.95583;         // 1 € = 1,95583 DM
+const ZIEHUNGEN_PRO_JAHR = 104;  // mittwochs + samstags
+const MIN = 60 * 1000;
+
+const KEY = {
+  tipp: 'lotto_tipp',
+  favs: 'lotto_favoriten',
+  neu: 'lotto_neue_ziehungen',
+  check: 'lotto_letzter_check',
+  live: 'lotto_live',
+  quoten: 'lotto_quoten',
+  theme: 'lotto_theme',
+  tab: 'lotto_tab',
+  prognosen: 'lotto_vorschlaege',
+};
+
+// In der Android-App gibt es window.LottoApp (Benachrichtigungen, Systemleisten).
+// Im Browser fehlt es – dann laufen alle app()-Aufrufe ins Leere.
+const APP = typeof window.LottoApp === 'object' && window.LottoApp ? window.LottoApp : null;
+function app(methode, ...args) {
+  if (!APP) return undefined;
+  try { return APP[methode](...args); } catch { return undefined; }
+}
+
+// Gewinnklassen nach heutigem Schema (seit 2013). Quoten = grobe Durchschnitte.
+const KLASSEN = [
+  null,
+  { label: '6 Richtige + Superzahl', kurz: '6+SZ', quote: 10_000_000 },
+  { label: '6 Richtige', kurz: '6', quote: 800_000 },
+  { label: '5 Richtige + Superzahl', kurz: '5+SZ', quote: 12_000 },
+  { label: '5 Richtige', kurz: '5', quote: 4_000 },
+  { label: '4 Richtige + Superzahl', kurz: '4+SZ', quote: 180 },
+  { label: '4 Richtige', kurz: '4', quote: 45 },
+  { label: '3 Richtige + Superzahl', kurz: '3+SZ', quote: 20 },
+  { label: '3 Richtige', kurz: '3', quote: 11 },
+  { label: '2 Richtige + Superzahl', kurz: '2+SZ', quote: 6 },
+];
+
+function klasse(richtige, szTreffer) {
+  if (richtige === 6) return szTreffer ? 1 : 2;
+  if (richtige === 5) return szTreffer ? 3 : 4;
+  if (richtige === 4) return szTreffer ? 5 : 6;
+  if (richtige === 3) return szTreffer ? 7 : 8;
+  if (richtige === 2 && szTreffer) return 9;
+  return 0;
+}
+
+const $ = (id) => document.getElementById(id);
+const zahl = new Intl.NumberFormat('de-DE');
+// minimumFractionDigits mit angeben – ältere Browser/WebViews werfen sonst einen RangeError
+const eurFmt = new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const eur = (v) => eurFmt.format(v);
+const WT = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+const plural = (n, eins, mehr) => `${zahl.format(n)} ${n === 1 ? eins : mehr}`;
+const esc = (t) => String(t).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
+function read(key) { try { return JSON.parse(localStorage.getItem(key)); } catch { return null; } }
+function write(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} }
+
+// ---------- Datum ----------
+function datum(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const wt = WT[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
+  return `${wt}, ${String(d).padStart(2, '0')}.${String(m).padStart(2, '0')}.${y}`;
+}
+function localIso(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// Ziehungszeit: mittwochs 18:25, samstags 19:25 Uhr.
+function ziehungsZeit(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d, new Date(y, m - 1, d).getDay() === 3 ? 18 : 19, 25);
+}
+const LIVE_NACH = 20 * MIN; // so lange nach der Ziehung stehen die Zahlen meist online
+
+// Letzter Ziehungstag, dessen Zahlen schon veröffentlicht sein sollten.
+function letzteFaelligeZiehung(now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  for (let i = 0; i < 8; i++, d.setDate(d.getDate() - 1)) {
+    const wd = d.getDay();
+    if ((wd === 3 || wd === 6) && (i > 0 || now - ziehungsZeit(localIso(d)) >= LIVE_NACH)) return localIso(d);
+  }
+  return localIso(d);
+}
+function naechsteZiehung(now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  for (let i = 0; i < 8; i++, d.setDate(d.getDate() + 1)) {
+    const wd = d.getDay();
+    if ((wd === 3 || wd === 6) && (i > 0 || now < ziehungsZeit(localIso(d)))) return localIso(d);
+  }
+  return localIso(d);
+}
+// Alle Mittwoche/Samstage strikt zwischen zwei Daten (für verpasste Ziehungen).
+function ziehungstageZwischen(von, bis) {
+  const out = [];
+  const [y, m, d] = von.split('-').map(Number);
+  const t = new Date(y, m - 1, d + 1);
+  for (let iso = localIso(t); iso < bis; t.setDate(t.getDate() + 1), iso = localIso(t)) {
+    if (t.getDay() === 3 || t.getDay() === 6) out.push(iso);
+  }
+  return out;
+}
+const uhrzeit = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+
+// ---------- Daten ----------
+let draws = [];        // [{ d: 'JJJJ-MM-TT', n: [6 Zahlen sortiert], sz: 0–9 oder -1 }]
+let bundledLast = '';  // letzte Ziehung in der mitgelieferten Datei
+
+function gueltig(n) {
+  return n.length === 6 && new Set(n).size === 6 && n.every((x) => Number.isInteger(x) && x >= 1 && x <= 49);
+}
+function parseTxt(txt) {
+  const out = [];
+  for (const line of txt.split('\n')) {
+    const p = line.trim().split(/\s+/);
+    if (p.length !== 8 || !/^\d{4}-\d{2}-\d{2}$/.test(p[0])) continue;
+    const n = p.slice(1, 7).map(Number);
+    const sz = p[7] === '-' ? -1 : Number(p[7]);
+    if (!gueltig(n) || !(sz === -1 || (Number.isInteger(sz) && sz >= 0 && sz <= 9))) continue;
+    out.push({ d: p[0], n, sz });
+  }
+  return out;
+}
+const toLine = (z) => `${z.d} ${z.n.join(' ')} ${z.sz < 0 ? '-' : z.sz}`;
+
+// Ersatzquelle: komplettes LottoNumberArchive (eine Datei mit allen Ziehungen)
+function parseArchiv(json) {
+  const out = [];
+  for (const r of (json && json.data) || []) {
+    const m = /^(\d{2})\.(\d{2})\.(\d{4})$/.exec((r && r.date) || '');
+    if (!m || !Array.isArray(r.Lottozahl)) continue;
+    const n = r.Lottozahl.slice().sort((a, b) => a - b);
+    if (!gueltig(n)) continue;
+    const sz = Number.isInteger(r.Superzahl) && r.Superzahl >= 0 && r.Superzahl <= 9 ? r.Superzahl : -1;
+    out.push({ d: `${m[3]}-${m[2]}-${m[1]}`, n, sz });
+  }
+  return out;
+}
+
+// Live-Quelle: WestLotto → { z: Ziehung, quoten, folge: nächste Ziehung } oder null
+function parseLive(json) {
+  const h = json && json.head;
+  const zg = json && json.zahlen && json.zahlen.hauptlotterie && (json.zahlen.hauptlotterie.ziehungen || [])[0];
+  if (!h || !/^\d{4}-\d{2}-\d{2}$/.test(h.datum || '') || !zg || !Array.isArray(zg.zahlenSortiert)) return null;
+  const n = zg.zahlenSortiert.map(Number).sort((a, b) => a - b);
+  if (!gueltig(n)) return null;
+  const ziffer = (v, lo, hi) => {
+    const x = v === '' || v === null || v === undefined ? NaN : Number(v);
+    return Number.isInteger(x) && x >= lo && x <= hi ? x : -1;
+  };
+  const sz = ziffer(zg.superzahl, 0, 9);
+  const zz = ziffer(zg.zusatzzahl, 1, 49);
+  const a = json.auswertung && json.auswertung.quoten && json.auswertung.quoten.hauptlotterie;
+  const qz = a && (a.ziehungen || [])[0];
+  let quoten = null;
+  if (qz && Array.isArray(qz.gewinnklassen)) {
+    const k = qz.gewinnklassen
+      .filter((x) => x && typeof x.kurzbeschreibung === 'string' && Number.isFinite(x.quote))
+      .map((x) => [x.kurzbeschreibung.replace(/\s+/g, ' ').trim(), x.quote,
+        Number.isFinite(x.anzahl) ? x.anzahl : null, Number.isFinite(x.jackpot) ? x.jackpot : null]);
+    // Direkt nach der Ziehung stehen die Quoten noch nicht fest (alle 0)
+    // Spieleinsatz → Zahl der Tipps (für den Formel-Check)
+    const se = json.auswertung.spieleinsatz && Number(json.auswertung.spieleinsatz.hauptlotterie);
+    if (k.some((x) => x[1] > 0)) quoten = { w: qz.waehrung === 'DM' ? 'DM' : 'EUR', zz, k, ...(se > 0 ? { e: se } : {}) };
+  }
+  const f = h.folgeZiehung;
+  const folge = f && /^\d{4}-\d{2}-\d{2}$/.test(f.datum || '')
+    ? { d: f.datum, schluss: typeof f.annahmeschluss === 'string' ? f.annahmeschluss : null } : null;
+  return { z: { d: h.datum, n, sz }, quoten, folge };
+}
+
+async function holeJson(url, ms = 15000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Ergänzt 'basis' um alle Ziehungen aus 'extra', die neuer als die mitgelieferten sind.
+function merge(basis, extra) {
+  const map = new Map(basis.map((z) => [z.d, z]));
+  for (const z of extra) if (z.d > bundledLast) map.set(z.d, z);
+  return [...map.values()].sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : 0));
+}
+
+// Fritz-Formel (scripts/lotto-formel.mjs) – optional: ohne sie fehlt nur die Formel-Karte
+let FORMEL = null;
+async function ladeFormel() {
+  try {
+    const f = await (await fetch('formel.json')).json();
+    const ok = Array.isArray(f.beta) && f.beta.length === 49 && f.beta.every(Number.isFinite)
+      && f.klassen && Object.values(f.klassen).every((k) => Number.isFinite(k.p) && Number.isFinite(k.r)
+        && (Number.isFinite(k.fest) || (Number.isFinite(k.topf) && Number.isFinite(k.gewinner) && Number.isFinite(k.kappa))))
+      && (f.sz === undefined || (Array.isArray(f.sz) && f.sz.length === 10 && f.sz.every(Number.isFinite)));
+    if (ok) FORMEL = f;
+  } catch {}
+}
+
+// Neuronales Netz (scripts/lotto-netz.mjs) – optional: Testergebnis + Gewichte des kleinen Netzes
+let NETZ = null;
+async function ladeNetz() {
+  try {
+    const f = await (await fetch('netz.json')).json();
+    const g = f.netz && f.netz.groessen;
+    const ok = Array.isArray(f.modelle) && f.modelle.every((m) => typeof m.name === 'string' && [m.schnitt, m.drei, m.verlust].every(Number.isFinite))
+      && Number.isFinite(f.getestet) && Number.isFinite(f.basisVerlust)
+      && Array.isArray(g) && g[0] === 9 && g[g.length - 1] === 1 && Array.isArray(f.netz.W) && Array.isArray(f.netz.B)
+      && f.netz.W.length === g.length - 1 && f.netz.B.length === g.length - 1
+      && f.netz.W.every((w, l) => Array.isArray(w) && w.length === g[l] * g[l + 1] && w.every(Number.isFinite))
+      && f.netz.B.every((b, l) => Array.isArray(b) && b.length === g[l + 1] && b.every(Number.isFinite));
+    if (ok) NETZ = f;
+  } catch {}
+}
+
+async function ladeDaten() {
+  const formel = Promise.all([ladeFormel(), ladeNetz()]); // parallel laden, wirft nie
+  const res = await fetch('ziehungen.txt');
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const basis = parseTxt(await res.text());
+  if (!basis.length) throw new Error('Keine Ziehungen in ziehungen.txt');
+  bundledLast = basis[basis.length - 1].d;
+  const extra = parseTxt((read(KEY.neu) || []).join('\n'));
+  draws = merge(basis, extra);
+  await formel;
+}
+
+const letzte = () => draws[draws.length - 1];
+const jahre = () => [...new Set(draws.map((z) => z.d.slice(0, 4)))];
+
+// Echte Quoten je Ziehungstag (ändern sich nie mehr → dauerhaft gespeichert)
+let quotenCache = {};
+function ladeQuotenCache() {
+  const q = read(KEY.quoten);
+  quotenCache = q && typeof q === 'object' && !Array.isArray(q) ? q : {};
+}
+const quotenFuer = (d) => {
+  const q = quotenCache[d];
+  return q && Array.isArray(q.k) ? q : null;
+};
+const quotenLaden = new Set();
+// Erfolglose Abrufe (kein Netz, Quoten stehen noch nicht fest) frühestens nach 10 Minuten
+// wiederholen – sonst fragt eine Ansicht, die nach dem Laden neu zeichnet, pausenlos nach.
+const quotenVersuch = new Map();
+// Ergebnis: Anzahl neu geladener Quoten
+async function ladeQuoten(daten, fortschritt, erzwingen = false) {
+  const jetzt = Date.now();
+  const offen = [...new Set(daten)].filter((d) => !quotenFuer(d) && !quotenLaden.has(d)
+    && (erzwingen || !(jetzt - quotenVersuch.get(d) < 10 * MIN)));
+  offen.forEach((d) => quotenLaden.add(d));
+  let i = 0;
+  let fertig = 0;
+  let geladen = 0;
+  const arbeiter = async () => {
+    while (i < offen.length) {
+      const d = offen[i++];
+      let ok = false;
+      try {
+        const r = parseLive(await holeJson(`${LIVE}&datum=${d}`));
+        if (r && r.z.d === d && r.quoten) { quotenCache[d] = r.quoten; ok = true; geladen++; }
+      } catch {}
+      if (!ok) quotenVersuch.set(d, Date.now());
+      quotenLaden.delete(d);
+      fertig++;
+      if (fortschritt) fortschritt(fertig, offen.length);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(4, offen.length) }, arbeiter));
+  if (geladen) write(KEY.quoten, quotenCache);
+  return geladen;
+}
+
+let liveStand = read(KEY.live); // { d, folge, geprueft } der letzten erfolgreichen Live-Abfrage
+const liveFrisch = () => !!(liveStand && Date.now() - liveStand.geprueft < 12 * 60 * MIN);
+
+function zeigeDatenInfo() {
+  const j = jahre();
+  $('dataInfo').innerHTML = `${zahl.format(draws.length)} Ziehungen · ${j[0]}–${j[j.length - 1]}` +
+    (liveFrisch() ? ' · <span class="live-dot" title="Live mit WestLotto abgeglichen">live</span>' : '');
+}
+
+// Holt die neueste Ziehung live (plus verpasste Ziehungen) – Ergebnis: Liste neuer Ziehungen.
+async function holeLive() {
+  const live = parseLive(await holeJson(LIVE));
+  if (!live) throw new Error('Live-Daten unvollständig');
+  liveStand = { d: live.z.d, folge: live.folge, geprueft: Date.now() };
+  write(KEY.live, liveStand);
+  if (live.quoten) { quotenCache[live.z.d] = live.quoten; write(KEY.quoten, quotenCache); }
+  const out = [];
+  const vorhanden = new Set(draws.map((z) => z.d));
+  let fehlend = ziehungstageZwischen(bundledLast, live.z.d).filter((d) => !vorhanden.has(d));
+  if (fehlend.length > 8) {
+    // längere Pause → alles auf einmal aus dem Archiv holen
+    try { out.push(...parseArchiv(await holeJson(ARCHIV, 20000))); } catch {}
+    // was das Archiv (noch) nicht kennt oder wenn es nicht erreichbar ist: einzeln nachholen
+    const da = new Set(out.map((z) => z.d));
+    fehlend = fehlend.filter((d) => !da.has(d)).slice(-60);
+  }
+  for (let i = 0; i < fehlend.length; i += 4) {
+    const teil = fehlend.slice(i, i + 4);
+    const res = await Promise.all(teil.map((d) => holeJson(`${LIVE}&datum=${d}`).then(parseLive, () => null)));
+    res.forEach((r, j) => {
+      if (!r || r.z.d !== teil[j]) return;
+      out.push(r.z);
+      if (r.quoten) quotenCache[r.z.d] = r.quoten;
+    });
+  }
+  if (fehlend.length) write(KEY.quoten, quotenCache);
+  out.push(live.z); // zuletzt: die Live-Ziehung hat Vorrang vor dem Archiv
+  return out;
+}
+
+let updating = false;
+async function aktualisieren(manuell = false) {
+  if (updating || !draws.length) return;
+  const faellig = letzteFaelligeZiehung();
+  if (!manuell) {
+    const fehlt = letzte().d < faellig;
+    if (!fehlt && quotenFuer(letzte().d) && liveFrisch()) { planeCheck(); return; }
+    const seit = Date.now() - (Number(read(KEY.check)) || 0);
+    if (seit < (fehlt ? 2 * MIN : 30 * MIN)) { vorschlagNachAbgleich(); planeCheck(); return; }
+  }
+  updating = true;
+  $('btnUpdate').disabled = true;
+  $('updateStatus').textContent = 'Live-Abgleich …';
+  const quotenVorher = !!quotenFuer(letzte().d);
+  try {
+    write(KEY.check, Date.now());
+    let neu;
+    let quelle = 'live von WestLotto';
+    try {
+      neu = await holeLive();
+    } catch {
+      quelle = 'aus dem LottoNumberArchive';
+      neu = parseArchiv(await holeJson(ARCHIV, 20000));
+      if (!neu.length) throw new Error('Leere Antwort');
+    }
+    const gespeichert = merge([], [...parseTxt((read(KEY.neu) || []).join('\n')), ...neu]);
+    write(KEY.neu, gespeichert.map(toLine));
+    const vorher = draws.length;
+    draws = merge(draws, gespeichert);
+    const plus = draws.length - vorher;
+    if (plus > 0) allesNeuZeichnen();
+    else {
+      zeigeDatenInfo();
+      if (!quotenVorher && quotenFuer(letzte().d)) allesNeuZeichnen();
+      else if (aktiverTab === 'archiv') renderLetzteZiehung();
+    }
+    $('updateStatus').textContent = plus
+      ? `✓ ${plural(plus, 'neue Ziehung', 'neue Ziehungen')} ${quelle} geladen.`
+      : letzte().d < faellig
+        ? `Die Zahlen vom ${datum(faellig)} sind noch nicht da – ich schaue alle 2 Minuten nach.`
+        : `✓ Aktuell – ${quelle} geprüft um ${uhrzeit(Date.now())} Uhr.`;
+  } catch {
+    $('updateStatus').textContent = 'Keine Verbindung – es werden die gespeicherten Ziehungen genutzt.';
+  } finally {
+    updating = false;
+    $('btnUpdate').disabled = false;
+    vorschlagNachAbgleich();
+    planeCheck();
+  }
+}
+
+// Solange die Seite offen ist: nach jeder Ziehung automatisch live nachsehen.
+let checkTimer = null;
+function planeCheck() {
+  clearTimeout(checkTimer);
+  if (!draws.length) return;
+  const now = new Date();
+  const faellig = letzteFaelligeZiehung(now);
+  let ms;
+  if (letzte().d < faellig) ms = now - ziehungsZeit(faellig) > 12 * 60 * MIN ? 30 * MIN : 2 * MIN;
+  else if (!quotenFuer(letzte().d)) ms = 30 * MIN;
+  else ms = ziehungsZeit(naechsteZiehung(now)) - now + LIVE_NACH;
+  checkTimer = setTimeout(() => aktualisieren(false), Math.min(Math.max(ms, MIN), 2 ** 31 - 1));
+}
+
+// ---------- Tipp ----------
+let tipNums = new Set();
+let tipSz = null;
+
+const tippKomplett = () => tipNums.size === 6;
+const sortiert = (set) => [...set].sort((a, b) => a - b);
+function maskeVon(nums) {
+  const m = new Uint8Array(50);
+  for (const n of nums) m[n] = 1;
+  return m;
+}
+// Zufallsquelle: normal Math.random; für den Vorschlag einer Ziehung ein fester
+// Zufall aus dem Datum (gleiches Datum → auf jedem Gerät derselbe Vorschlag)
+let zufall = Math.random;
+function festerZufall(text) {
+  let h = 2166136261;
+  for (const c of text) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  let a = h >>> 0;
+  return () => { // mulberry32
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function ziehe6() {
+  const pool = Array.from({ length: 49 }, (_, i) => i + 1);
+  const out = [];
+  for (let j = 0; j < 6; j++) {
+    const x = j + Math.floor(zufall() * (49 - j));
+    [pool[j], pool[x]] = [pool[x], pool[j]];
+    out.push(pool[j]);
+  }
+  return out;
+}
+const gueltigeSz = (sz) => sz === null || (Number.isInteger(sz) && sz >= 0 && sz <= 9);
+
+function baueSchein() {
+  const g = $('tipGrid');
+  for (let n = 1; n <= 49; n++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = n;
+    b.dataset.n = n;
+    b.setAttribute('aria-pressed', 'false');
+    g.append(b);
+  }
+  g.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (!b) return;
+    const n = Number(b.dataset.n);
+    if (tipNums.has(n)) tipNums.delete(n);
+    else if (tipNums.size < 6) tipNums.add(n);
+    else { setHinweis('Schon 6 Zahlen gewählt – erst eine abwählen.', 'warn'); return; }
+    tippGeaendert(true);
+  });
+
+  const p = $('szPicker');
+  const opts = [['keine', null], ...Array.from({ length: 10 }, (_, i) => [String(i), i])];
+  for (const [txt, val] of opts) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = txt;
+    b.setAttribute('role', 'radio');
+    b.dataset.sz = val === null ? '' : val;
+    b.setAttribute('aria-label', val === null ? 'Keine Superzahl' : `Superzahl ${val}`);
+    p.append(b);
+  }
+  p.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    tipSz = b.dataset.sz === '' ? null : Number(b.dataset.sz);
+    tippGeaendert(false);
+  });
+}
+
+function setHinweis(text, art = '') {
+  const h = $('tipHint');
+  h.textContent = text;
+  h.className = 'hint' + (art ? ' ' + art : '');
+}
+
+function tippGeaendert(inputSync, probleme = []) {
+  for (const b of $('tipGrid').children) b.setAttribute('aria-pressed', String(tipNums.has(Number(b.dataset.n))));
+  for (const b of $('szPicker').children) {
+    const v = b.dataset.sz === '' ? null : Number(b.dataset.sz);
+    b.setAttribute('aria-checked', String(v === tipSz));
+  }
+  if (inputSync) $('tipInput').value = sortiert(tipNums).join(' ');
+
+  if (probleme.length) setHinweis(probleme.join(' · '), 'warn');
+  else if (tippKomplett()) setHinweis('✓ 6 Zahlen gewählt – Auswertung siehe unten', 'ok');
+  else setHinweis(`Noch ${plural(6 - tipNums.size, 'Zahl', 'Zahlen')} wählen.`);
+
+  write(KEY.tipp, { nums: sortiert(tipNums), sz: tipSz });
+  tippsAnApp();
+  renderErgebnis();
+}
+
+// Die App prüft nach jeder Ziehung den aktuellen und alle gemerkten Tipps
+function tippsAnApp() {
+  if (!APP) return;
+  const offen = draws.length ? vorschlaege().filter((v) => v.d > letzte().d).flatMap((v) => felderVon(v).map((t) => ({ nums: t, sz: v.sz, d: v.d }))) : [];
+  app('tipps', JSON.stringify({ tipp: tippKomplett() ? { nums: sortiert(tipNums), sz: tipSz } : null, favoriten: favoriten(), vorschlaege: offen }));
+}
+
+function leseEingabe() {
+  const tokens = $('tipInput').value.match(/\d+/g) || [];
+  const nums = [];
+  const probleme = [];
+  for (const t of tokens) {
+    const n = Number(t);
+    if (n < 1 || n > 49) { probleme.push(`${t} ist keine Lottozahl (1–49)`); continue; }
+    if (nums.includes(n)) { probleme.push(`${n} doppelt`); continue; }
+    if (nums.length === 6) { probleme.push('mehr als 6 Zahlen – der Rest zählt nicht'); break; }
+    nums.push(n);
+  }
+  tipNums = new Set(nums);
+  tippGeaendert(false, probleme);
+}
+
+// ---------- Gemerkte Tipps ----------
+function favoriten() {
+  const f = read(KEY.favs);
+  return Array.isArray(f) ? f.filter((x) => x && Array.isArray(x.nums) && gueltig(x.nums) && gueltigeSz(x.sz)) : [];
+}
+function renderFavs() {
+  const favs = favoriten();
+  $('favs').classList.toggle('hidden', !favs.length);
+  $('favList').innerHTML = favs.map((f, i) =>
+    `<span class="fav"><button type="button" data-load="${i}">${f.nums.join(' ')}${f.sz !== null ? ` · SZ ${f.sz}` : ''}</button>` +
+    `<button type="button" class="fav-del" data-del="${i}" aria-label="Gemerkten Tipp löschen">✕</button></span>`).join('');
+}
+function merkeTipp() {
+  if (!tippKomplett()) { setHinweis('Erst 6 Zahlen wählen, dann merken.', 'warn'); return; }
+  const neu = { nums: sortiert(tipNums), sz: tipSz };
+  const key = JSON.stringify(neu);
+  const favs = favoriten().filter((f) => JSON.stringify({ nums: f.nums, sz: f.sz }) !== key);
+  favs.unshift(neu);
+  write(KEY.favs, favs.slice(0, 12));
+  renderFavs();
+  tippsAnApp();
+  setHinweis('⭐ Tipp gemerkt.', 'ok');
+}
+
+// ---------- Auswertung über alle Ziehungen ----------
+function auswerten(nums, sz) {
+  const mask = maskeVon(nums);
+  const anzahl = new Array(10).fill(0);
+  const zuletzt = new Array(10).fill(null);
+  const gewinne = [];
+  const proJahr = new Map();
+  for (const z of draws) {
+    let r = 0;
+    for (const n of z.n) r += mask[n];
+    const szTreffer = sz !== null && z.sz === sz;
+    const k = klasse(r, szTreffer);
+    if (!k) continue;
+    anzahl[k]++;
+    zuletzt[k] = z;
+    const g = { z, k, r, szTreffer };
+    gewinne.push(g);
+    const y = z.d.slice(0, 4);
+    if (!proJahr.has(y)) proJahr.set(y, []);
+    proJahr.get(y).push(g);
+  }
+  return { mask, anzahl, zuletzt, gewinne, proJahr };
+}
+// Stufe für die Jahres-Übersicht: 1 = kleiner Gewinn, 2 = 4 R., 3 = 5 R., 4 = 6 R.
+const stufe = (r) => (r >= 6 ? 4 : r === 5 ? 3 : r === 4 ? 2 : 1);
+
+function kugeln(z, mask, sz, gross = false) {
+  const g = gross ? ' big' : '';
+  let h = z.n.map((n) => `<span class="ball${g}${mask && mask[n] ? ' hit' : ''}">${n}</span>`).join('');
+  if (z.sz >= 0) {
+    const hit = sz !== null && sz !== undefined && z.sz === sz ? ' hit' : '';
+    h += `<span class="ball sz${g}${hit}" title="Superzahl" aria-label="Superzahl ${z.sz}">${z.sz}</span>`;
+  }
+  return h;
+}
+function gewinnZeile(g, mask, sz) {
+  return `<div class="win-row"><span class="d">${datum(g.z.d)}</span><span class="badge">${KLASSEN[g.k].label}</span>` +
+    `<div class="balls">${kugeln(g.z, mask, sz)}</div>` +
+    `<div class="real" data-d="${g.z.d}" data-r="${g.r}" data-s="${g.szTreffer ? 1 : 0}"></div></div>`;
+}
+
+// ---------- Echte Quoten (damalige Gewinnklassen, inkl. Zusatzzahl & DM) ----------
+const zahl2 = new Intl.NumberFormat('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const geld = (v, w) => `${zahl2.format(v)} ${w === 'DM' ? 'DM' : '€'}`;
+const inEuro = (v, w) => (w === 'DM' ? v / DM_KURS : v);
+
+// Welche Gewinnklasse galt damals für r Richtige (+ SZ / + ZZ)?
+function damals(r, szTreffer, q, mask) {
+  const kand = [];
+  if (szTreffer) kand.push(`${r} + SZ`);
+  if (q.zz > 0 && mask[q.zz]) kand.push(`${r} + ZZ`);
+  kand.push(`${r}`);
+  for (const c of kand) {
+    const k = q.k.find((x) => x[0] === c);
+    if (k) return { kurz: c, quote: k[1], jackpot: k[3] };
+  }
+  return null;
+}
+function klassenText(kurz) {
+  return esc(kurz).replace(/^(\d)/, '$1 Richtige').replace('+ SZ', '+ Superzahl').replace('+ ZZ', '+ Zusatzzahl');
+}
+function betragText(k, w) {
+  if (k.quote > 0) return `<b>${geld(k.quote, w)}</b>${w === 'DM' ? ` (≈ ${geld(inEuro(k.quote, w), 'EUR')})` : ''}`;
+  if (k.jackpot) return `<b>Jackpot ≈ ${geld(k.jackpot, w)}</b> (damals hat ihn niemand geknackt)`;
+  return 'damals ohne Gewinner – keine Quote festgelegt';
+}
+function fuelleQuoten() {
+  const mask = maskeVon(tipNums);
+  for (const el of document.querySelectorAll('#result .real[data-d]')) {
+    const q = quotenFuer(el.dataset.d);
+    if (!q) continue;
+    const k = damals(Number(el.dataset.r), el.dataset.s === '1', q, mask);
+    el.innerHTML = k
+      ? `Damals: ${klassenText(k.kurz)} → ${betragText(k, q.w)}`
+      : 'Damals gab es für diesen Treffer noch keine Gewinnklasse.';
+    el.classList.add('da');
+  }
+}
+
+function renderErgebnis() {
+  const box = $('result');
+  if (!draws.length) return;
+  if (!tippKomplett()) {
+    box.innerHTML = `<div class="card muted">Wähle 6 Zahlen – dann siehst du sofort, ob und in welchem Jahr du mit ihnen gewonnen hättest. Geprüft wird gegen alle ${zahl.format(draws.length)} Ziehungen seit 1955.</div>`;
+    return;
+  }
+  const nums = sortiert(tipNums);
+  const sz = tipSz;
+  const a = auswerten(nums, sz);
+  const alleJahre = jahre();
+  const besteListe = a.gewinne.slice().sort((x, y) => x.k - y.k || (x.z.d < y.z.d ? -1 : 1));
+  const bester = besteListe[0];
+  const sechser = a.anzahl[1] + a.anzahl[2];
+
+  // 1) Urteil
+  let kopf;
+  let text;
+  let cls = 'verdict card';
+  if (sechser) {
+    cls += ' jackpot';
+    kopf = '🎉 Jackpot – 6 Richtige!';
+    const tage = besteListe.filter((g) => g.k <= 2).map((g) => `<b>${datum(g.z.d)}</b>`);
+    text = `Mit genau diesen Zahlen hättest du am ${tage.join(' und am ')} sechs Richtige gehabt.`;
+  } else if (bester) {
+    cls += ' win';
+    kopf = `Ja – ${zahl.format(a.gewinne.length)}-mal gewonnen!`;
+    const mal = a.anzahl[bester.k];
+    text = `Bester Treffer: <b>${KLASSEN[bester.k].label}</b> am <b>${datum(bester.z.d)}</b>${mal > 1 ? ` (insgesamt ${mal}×)` : ''}.`;
+  } else {
+    kopf = 'Leider nie gewonnen.';
+    text = 'Mit diesen Zahlen wäre in keiner einzigen Ziehung ein Gewinn herausgekommen.';
+  }
+  const lz = letzte();
+  let rL = 0;
+  for (const n of lz.n) rL += a.mask[n];
+  const kL = klasse(rL, sz !== null && lz.sz === sz);
+  let betragL = '';
+  const qL = quotenFuer(lz.d);
+  if (kL && qL) {
+    const k = damals(rL, kL % 2 === 1, qL, a.mask);
+    if (k) betragL = ` → ${betragText(k, qL.w)}`;
+  }
+  const letzteTxt = `Letzte Ziehung (${datum(lz.d)}): ${rL} Richtige${kL && kL % 2 === 1 ? ' + Superzahl' : ''} – ${kL ? `<b>Gewinn (${KLASSEN[kL].label})</b>${betragL}` : 'kein Gewinn'}.`;
+  const verdict = `<div class="${cls}">
+    <div class="verdict-big">${kopf}</div>
+    <p>${text}</p>
+    <p class="muted small">Gewonnen hättest du in ${a.proJahr.size} von ${alleJahre.length} Jahren – geprüft gegen ${zahl.format(draws.length)} Ziehungen (${alleJahre[0]}–${alleJahre[alleJahre.length - 1]}).</p>
+    <p class="best small">${letzteTxt}</p>
+    ${FORMEL ? `<p class="small" style="margin-top:6px">🧮 Fritz-Formel: Dein Tipp ist im Schnitt <b>${cent(fritzWert(nums, sz))}</b> pro 1,20 € wert (Ø-Tipp ${cent(FORMEL.ev0)}) – besser als ${rangText(fritzRang(fritzWert(nums, sz)))} aller Tipps.</p>` : ''}
+  </div>`;
+
+  // 2) Jahres-Übersicht
+  const zellen = alleJahre.map((y) => {
+    const liste = a.proJahr.get(y);
+    if (!liste) return `<button type="button" data-lvl="0" disabled title="${y}: kein Gewinn">${y}</button>`;
+    const bestR = Math.max(...liste.map((g) => g.r));
+    const lvl = stufe(bestR);
+    const best = liste.reduce((m, g) => (g.k < m.k ? g : m));
+    return `<button type="button" data-lvl="${lvl}" data-jahr="${y}" title="${y}: ${plural(liste.length, 'Gewinn', 'Gewinne')}, bester: ${KLASSEN[best.k].label}" aria-label="${y}: ${plural(liste.length, 'Gewinn', 'Gewinne')}, bester ${KLASSEN[best.k].label}">${y}</button>`;
+  }).join('');
+  const jahresKarte = `<div class="card">
+    <h3>In welchen Jahren hättest du gewonnen?</h3>
+    <div class="year-strip" id="yearStrip">${zellen}</div>
+    <div class="legend">
+      <span><i style="background:var(--lvl0)"></i>kein Gewinn</span>
+      <span><i style="background:var(--lvl1)"></i>3 Richtige / 2 + SZ</span>
+      <span><i style="background:var(--lvl2)"></i>4 Richtige</span>
+      <span><i style="background:var(--lvl3)"></i>5 Richtige</span>
+      <span><i style="background:var(--lvl4)"></i>6 Richtige</span>
+    </div>
+    <p class="muted small" style="margin-top:8px">Jahr antippen → alle Gewinne dieses Jahres.</p>
+  </div>`;
+
+  // 3) Größte Treffer (ab 4 Richtigen)
+  const gross = besteListe.filter((g) => g.r >= 4);
+  const grossKarte = `<div class="card">
+    <h3>Deine größten Treffer</h3>
+    ${gross.length
+      ? `<div class="top-wins">${gross.slice(0, 15).map((g) => gewinnZeile(g, a.mask, sz)).join('')}</div>${gross.length > 15 ? `<p class="muted small" style="margin-top:8px">… und ${gross.length - 15} weitere mit 4 Richtigen.</p>` : ''}`
+      : '<p class="muted">Nie mehr als 3 Richtige.</p>'}
+  </div>`;
+
+  // 4) Gewinnklassen
+  const zeilen = KLASSEN.slice(1).map((kl, i) => {
+    const k = i + 1;
+    const z = a.zuletzt[k];
+    return `<tr class="${a.anzahl[k] ? '' : 'zero'}"><td>${kl.label}</td><td class="n">${zahl.format(a.anzahl[k])}×</td><td class="date">${z ? datum(z.d) : '–'}</td></tr>`;
+  }).join('');
+  const klassenKarte = `<div class="card">
+    <h3>Gewinnklassen</h3>
+    <table class="classes">
+      <thead><tr><th>Treffer</th><th class="n">Anzahl</th><th class="n">zuletzt</th></tr></thead>
+      <tbody>${zeilen}</tbody>
+    </table>
+    <p class="muted small" style="margin-top:8px">${sz === null
+      ? 'Ohne Superzahl werden nur die Richtigen gewertet. Wähle oben deine Superzahl für die „+ SZ“-Klassen.'
+      : 'Superzahl gibt es seit Dezember 1991 – ältere Ziehungen zählen nur mit Richtigen.'} Bewertet nach den heutigen Gewinnklassen; die frühere Zusatzzahl ist nicht berücksichtigt.</p>
+  </div>`;
+
+  // 5) Bilanz
+  const einsatz = draws.length * PREIS;
+  const gewinn = a.anzahl.reduce((s, n, k) => s + (k ? n * KLASSEN[k].quote : 0), 0);
+  const saldo = gewinn - einsatz;
+  const bilanzKarte = `<div class="card">
+    <h3>Bilanz, wenn du jede Ziehung gespielt hättest</h3>
+    <div class="money">
+      <div><small>Einsatz</small><b>${eur(einsatz)}</b></div>
+      <div><small>Gewinne ca.</small><b>${eur(gewinn)}</b></div>
+      <div><small>Ergebnis ca.</small><b class="${saldo >= 0 ? 'pos' : 'neg'}">${saldo >= 0 ? '+' : '−'}${eur(Math.abs(saldo))}</b></div>
+    </div>
+    <p class="muted small" style="margin-top:8px">Grobe Schätzung zu heutigen Preisen (1,20 € pro Tipp) und mit durchschnittlichen Gewinnquoten – echte Quoten schwanken je Ziehung stark.</p>
+    ${a.gewinne.length ? `<div class="echt" id="echtBox"><button class="btn" id="btnEcht" type="button">💶 Mit echten Quoten nachrechnen</button>
+      <span class="muted small">lädt die damaligen Auszahlungen live (${plural(a.gewinne.length, 'Abruf', 'Abrufe')}, danach gespeichert)</span></div>` : ''}
+  </div>`;
+
+  // 6) Alle Gewinne nach Jahr
+  const jahreMitGewinn = [...a.proJahr.keys()].sort().reverse();
+  const details = jahreMitGewinn.map((y) => {
+    const liste = a.proJahr.get(y);
+    const best = liste.reduce((m, g) => (g.k < m.k ? g : m));
+    return `<details class="year" id="jahr-${y}">
+      <summary><span class="yr">${y}</span><span class="info">${plural(liste.length, 'Gewinn', 'Gewinne')} · bester: ${KLASSEN[best.k].label}</span></summary>
+      <div class="rows">${liste.slice().reverse().map((g) => gewinnZeile(g, a.mask, sz)).join('')}</div>
+    </details>`;
+  }).join('');
+  const jahrKarte = jahreMitGewinn.length ? `<div class="card"><h3>Alle Gewinne nach Jahr</h3>${details}</div>` : '';
+
+  box.innerHTML = verdict + jahresKarte + grossKarte + klassenKarte + bilanzKarte + jahrKarte;
+  auswertung = a;
+  fuelleQuoten();
+  if (a.gewinne.every((g) => quotenFuer(g.z.d))) zeigeEchteBilanz();
+  // echte Beträge der größten Treffer gleich nachladen (gespeichert → nur einmal)
+  ladeQuoten(gross.slice(0, 15).map((g) => g.z.d)).then(fuelleQuoten);
+}
+
+let auswertung = null;
+// Summe der echten damaligen Auszahlungen aller Gewinne (DM in € umgerechnet)
+function zeigeEchteBilanz() {
+  const box = $('echtBox');
+  if (!box || !auswertung) return;
+  let summe = 0;
+  let ohne = 0;
+  let fehlt = 0;
+  for (const g of auswertung.gewinne) {
+    const q = quotenFuer(g.z.d);
+    if (!q) { fehlt++; continue; }
+    const k = damals(g.r, g.szTreffer, q, auswertung.mask);
+    if (!k) ohne++;
+    else summe += inEuro(k.quote > 0 ? k.quote : (k.jackpot || 0), q.w);
+  }
+  box.innerHTML = `<div class="echt-sum"><small>Echte Gewinne (damalige Quoten)</small><b>${geld(summe, 'EUR')}</b></div>
+    <p class="muted small">${ohne ? `${plural(ohne, 'Treffer zählte', 'Treffer zählten')} damals noch nicht als Gewinn. ` : ''}${fehlt ? `${plural(fehlt, 'Quote', 'Quoten')} nicht abrufbar. ` : ''}DM-Beträge sind in Euro umgerechnet.</p>`;
+}
+async function echteBilanzLaden() {
+  if (!auswertung) return;
+  const btn = $('btnEcht');
+  if (btn) btn.disabled = true;
+  const a = auswertung;
+  await ladeQuoten(a.gewinne.map((g) => g.z.d), (fertig, gesamt) => {
+    const b = $('btnEcht');
+    if (b) b.textContent = `Lade Quoten … ${fertig}/${gesamt}`;
+  }, true);
+  if (auswertung !== a) return; // Tipp wurde inzwischen geändert
+  fuelleQuoten();
+  zeigeEchteBilanz();
+}
+
+function zeigeJahr(y) {
+  const det = document.getElementById('jahr-' + y);
+  if (!det) return;
+  det.open = true;
+  det.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'start' });
+  det.classList.add('flash');
+  setTimeout(() => det.classList.remove('flash'), 1400);
+}
+
+// ---------- Archiv ----------
+function renderLetzteZiehung() {
+  const z = letzte();
+  const mask = tipNums.size ? maskeVon(tipNums) : null;
+  const q = quotenFuer(z.d);
+  const quotenTab = q
+    ? `<table class="classes quoten"><thead><tr><th>Klasse</th><th class="n">Gewinner</th><th class="n">Quote</th></tr></thead><tbody>${
+      q.k.map(([kurz, quote, anzahl, jackpot]) => `<tr><td>${esc(kurz)}</td><td class="n">${anzahl === null ? '–' : zahl.format(anzahl)}</td>` +
+        `<td class="n">${quote > 0 ? geld(quote, q.w) : jackpot ? `Jackpot ${geld(jackpot, q.w)}` : '–'}</td></tr>`).join('')}</tbody></table>`
+    : '<p class="muted small" style="margin-top:10px">Die Gewinnquoten stehen meist ein paar Stunden nach der Ziehung fest – sie werden automatisch nachgeladen.</p>';
+  // nächste Ziehung: Angabe von WestLotto, sonst selbst berechnet (immer nach der letzten bekannten)
+  const heute = localIso(new Date());
+  const lf = liveStand && liveStand.folge;
+  const folge = lf && typeof lf.d === 'string' && lf.d > z.d && lf.d >= heute ? lf : null;
+  let naechste = folge ? folge.d : naechsteZiehung();
+  if (naechste <= z.d) naechste = naechsteZiehung(new Date(ziehungsZeit(z.d).getTime() + MIN));
+  const schluss = folge && folge.schluss && !Number.isNaN(Date.parse(folge.schluss))
+    ? ` · Annahmeschluss ${uhrzeit(Date.parse(folge.schluss))} Uhr` : '';
+  $('lastDraw').innerHTML = `<div class="when">${datum(z.d)}${z.sz >= 0 ? ` · Superzahl ${z.sz}` : ''}</div>
+    <div class="balls">${kugeln(z, mask, tipSz, true)}</div>
+    ${quotenTab}
+    <p class="muted small" style="margin-top:10px">Nächste Ziehung: ${datum(naechste)}${schluss}</p>`;
+}
+
+function renderArchiv() {
+  renderLetzteZiehung();
+  const sel = $('yearSelect');
+  const js = jahre().reverse();
+  if (sel.options.length !== js.length) {
+    const alt = sel.value;
+    sel.innerHTML = js.map((y) => `<option value="${y}">${y}</option>`).join('');
+    sel.value = js.includes(alt) ? alt : js[0];
+  }
+  const y = sel.value;
+  const mask = tipNums.size ? maskeVon(tipNums) : null;
+  const liste = draws.filter((z) => z.d.startsWith(y)).reverse();
+  $('archivInfo').textContent = `${plural(liste.length, 'Ziehung', 'Ziehungen')} in ${y}` + (mask ? ' · deine Zahlen sind markiert' : '');
+  $('drawList').innerHTML = liste.map((z) => {
+    let badge = '';
+    if (mask) {
+      let r = 0;
+      for (const n of z.n) r += mask[n];
+      const k = tippKomplett() ? klasse(r, tipSz !== null && z.sz === tipSz) : 0;
+      if (k) badge = `<span class="badge">${KLASSEN[k].kurz}</span>`;
+    }
+    const [, mm, dd] = z.d.split('-');
+    return `<div class="draw-row"><span class="d">${dd}.${mm}.<small>${datum(z.d).slice(0, 2)}</small></span>` +
+      `<div class="balls">${kugeln(z, mask, tipSz)}</div>${badge || '<span></span>'}</div>`;
+  }).join('');
+}
+
+// ---------- Statistik ----------
+function zeitraum(v) {
+  const last = letzte().d;
+  if (v === '100') return draws.slice(-100);
+  if (v === '10j' || v === '1j') {
+    const cut = `${Number(last.slice(0, 4)) - (v === '10j' ? 10 : 1)}${last.slice(4)}`;
+    return draws.filter((z) => z.d > cut);
+  }
+  return draws;
+}
+
+let statAuswahl = null;
+function renderStatistik() {
+  const range = zeitraum($('statRange').value);
+  const cnt = new Array(50).fill(0);
+  for (const z of range) for (const n of z.n) cnt[n]++;
+  const werte = cnt.slice(1);
+  const min = Math.min(...werte);
+  const max = Math.max(...werte);
+  const zuletztIdx = new Array(50).fill(-1);
+  draws.forEach((z, i) => { for (const n of z.n) zuletztIdx[n] = i; });
+
+  $('statInfo').textContent = `${plural(range.length, 'Ziehung', 'Ziehungen')} vom ${datum(range[0].d)} bis ${datum(letzte().d)} – im Schnitt ${zahl.format(Math.round(range.length * 6 / 49))}× pro Zahl.`;
+
+  let h = '';
+  for (let n = 1; n <= 49; n++) {
+    const p = max > min ? (cnt[n] - min) / (max - min) : 0.5;
+    const mix = Math.round(8 + p * 84);
+    h += `<button type="button" data-n="${n}" class="${mix > 55 ? 'hot' : ''}${statAuswahl === n ? ' sel' : ''}" ` +
+      `style="background:rgba(193,98,60,${(mix / 100).toFixed(2)});background:color-mix(in srgb, var(--accent) ${mix}%, var(--surface))" aria-label="Zahl ${n}: ${cnt[n]}-mal gezogen">` +
+      `<b>${n}</b><small>${zahl.format(cnt[n])}×</small></button>`;
+  }
+  $('heat').innerHTML = h;
+
+  const nums = Array.from({ length: 49 }, (_, i) => i + 1);
+  const rang = (liste, info) => `<div class="rank">${liste.map((n) => `<div><span class="ball">${n}</span>${info(n)}</div>`).join('')}</div>`;
+  $('topHot').innerHTML = rang(nums.slice().sort((a, b) => cnt[b] - cnt[a] || a - b).slice(0, 6), (n) => `${zahl.format(cnt[n])}-mal`);
+  $('topCold').innerHTML = rang(nums.slice().sort((a, b) => cnt[a] - cnt[b] || a - b).slice(0, 6), (n) => `${zahl.format(cnt[n])}-mal`);
+  const seit = (n) => draws.length - 1 - zuletztIdx[n];
+  $('topDue').innerHTML = rang(nums.slice().sort((a, b) => seit(b) - seit(a) || a - b).slice(0, 6),
+    (n) => `seit ${plural(seit(n), 'Ziehung', 'Ziehungen')}`);
+
+  const szCnt = new Array(10).fill(0);
+  let szSumme = 0;
+  for (const z of range) if (z.sz >= 0) { szCnt[z.sz]++; szSumme++; }
+  const szMax = Math.max(...szCnt);
+  $('szBars').innerHTML = szSumme
+    ? szCnt.map((c, i) => `<div class="bar-row" title="Superzahl ${i}: ${c}-mal"><b>${i}</b><div class="track"><div class="fill" style="width:${szMax ? (c / szMax) * 100 : 0}%"></div></div><span class="v">${zahl.format(c)}×</span></div>`).join('')
+    : '<p class="muted">Im gewählten Zeitraum gab es noch keine Superzahl.</p>';
+
+  if (statAuswahl) zeigeZahlInfo(statAuswahl, cnt, range.length, zuletztIdx);
+}
+
+function zeigeZahlInfo(n, cnt, anzahl, zuletztIdx) {
+  statAuswahl = n;
+  for (const b of $('heat').children) b.classList.toggle('sel', Number(b.dataset.n) === n);
+  const i = zuletztIdx[n];
+  const vor = draws.length - 1 - i;
+  $('numInfo').innerHTML = `<b>Zahl ${n}</b>: im Zeitraum ${zahl.format(cnt[n])}-mal gezogen ` +
+    `(in ${(cnt[n] / anzahl * 100).toFixed(1).replace('.', ',')} % der Ziehungen). ` +
+    `Zuletzt am ${datum(draws[i].d)}${vor ? ` – vor ${plural(vor, 'Ziehung', 'Ziehungen')}` : ' – in der letzten Ziehung'}.`;
+}
+
+// ---------- Chancen & Muster-Check ----------
+// Alle Prüfungen rechnen live über sämtliche Ziehungen – kein fest eingebautes Ergebnis.
+const binom = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i; return r; };
+const KOMBIS = binom(49, 6); // 13.983.816
+const pRichtige = (r) => (binom(6, r) * binom(43, 6 - r)) / KOMBIS;
+const ERWARTET_RICHTIGE = 36 / 49; // Ø Richtige eines beliebigen Tipps
+
+// Normalverteilung & Chi²-Restwahrscheinlichkeit (Wilson-Hilferty, für 9–48 Freiheitsgrade genau genug)
+function phi(z) {
+  const t = 1 / (1 + 0.3275911 * Math.abs(z) / Math.SQRT2);
+  const e = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-(z * z) / 2);
+  return 0.5 * (1 + (z >= 0 ? e : -e));
+}
+function chi2p(x, k) {
+  const z = (Math.pow(x / k, 1 / 3) - (1 - 2 / (9 * k))) / Math.sqrt(2 / (9 * k));
+  return 1 - phi(z);
+}
+const prozent = (v, st = 0) => `${(v * 100).toFixed(st).replace('.', ',')} %`;
+const chance = (p) => `1 : ${zahl.format(Math.round(1 / p))}`;
+
+let musterCache = null;
+function musterAnalyse() {
+  if (musterCache && musterCache.n === draws.length) return musterCache;
+  const N = draws.length;
+  const p = 6 / 49;
+  // 1) Kommen alle 49 Zahlen gleich oft? (Chi², korrigiert für „6 aus 49 ohne Zurücklegen“)
+  const cnt = new Array(50).fill(0);
+  for (const z of draws) for (const n of z.n) cnt[n]++;
+  const werte = cnt.slice(1);
+  const chi = werte.reduce((s, c) => s + (c - N * p) ** 2, 0) / (N * p * (1 - p)) * (48 / 49);
+  // 2) Superzahl
+  const sz = new Array(10).fill(0);
+  let szN = 0;
+  for (const z of draws) if (z.sz >= 0) { sz[z.sz]++; szN++; }
+  const chiSz = sz.reduce((s, c) => s + (c - szN / 10) ** 2 / (szN / 10), 0);
+  // 3) Wiederholer aus der Vorziehung
+  let rep = 0;
+  for (let i = 1; i < N; i++) {
+    const vor = new Set(draws[i - 1].n);
+    for (const n of draws[i].n) if (vor.has(n)) rep++;
+  }
+  // 4) Setzen sich Häufigkeiten fort? 1. Hälfte vs. 2. Hälfte
+  const h = Math.floor(N / 2);
+  const a = new Array(50).fill(0);
+  const b = new Array(50).fill(0);
+  draws.forEach((z, i) => { for (const n of z.n) (i < h ? a : b)[n]++; });
+  const korr = pearson(a.slice(1), b.slice(1));
+  // 5) Rhythmus: Sind die Abstände zwischen zwei Auftritten einer Zahl so verteilt wie
+  //    bei reinem Zufall (geometrisch)? Ein echter Rhythmus würde Abstände bevorzugen.
+  const P = 6 / 49;
+  const zuletzt = new Array(50).fill(-1);
+  const abst = new Array(41).fill(0);
+  let nAbst = 0;
+  draws.forEach((z, t) => {
+    for (const n of z.n) {
+      if (zuletzt[n] >= 0) { abst[Math.min(t - zuletzt[n], 40)]++; nAbst++; }
+      zuletzt[n] = t;
+    }
+  });
+  let chiAbst = 0;
+  for (let g = 1; g <= 40; g++) {
+    const e = nAbst * (g < 40 ? P * (1 - P) ** (g - 1) : (1 - P) ** 39);
+    chiAbst += (abst[g] - e) ** 2 / e;
+  }
+  // 6) Wiederkehr nach genau k Ziehungen (k = 1 … 52, also bis zu einem halben Jahr)
+  const mengen = draws.map((z) => new Set(z.n));
+  let lagZ = 0; let lagK = 1;
+  for (let k = 1; k <= 52; k++) {
+    let hit = 0; let tot = 0;
+    for (let t = 0; t + k < N; t++) for (const n of draws[t].n) { tot++; if (mengen[t + k].has(n)) hit++; }
+    const zk = (hit / tot - P) / Math.sqrt(P * (1 - P) / tot);
+    if (Math.abs(zk) > Math.abs(lagZ)) { lagZ = zk; lagK = k; }
+  }
+  // Bei 52 geprüften Abständen: Wahrscheinlichkeit, dass der stärkste so groß ausfällt
+  const pLag = 1 - (1 - 2 * (1 - phi(Math.abs(lagZ)))) ** 52;
+  // 7) Mittwoch vs. Samstag: gleiche Verteilung der Zahlen?
+  const mi = new Array(50).fill(0); const sa = new Array(50).fill(0); let nMi = 0; let nSa = 0;
+  for (const z of draws) {
+    const w = new Date(`${z.d}T12:00:00Z`).getUTCDay();
+    if (w === 3) { nMi++; for (const n of z.n) mi[n]++; } else if (w === 6) { nSa++; for (const n of z.n) sa[n]++; }
+  }
+  let chiTag = 0;
+  if (nMi && nSa) {
+    for (let n = 1; n <= 49; n++) {
+      const tot = mi[n] + sa[n];
+      const em = (tot * nMi) / (nMi + nSa); const es = (tot * nSa) / (nMi + nSa);
+      if (em > 0 && es > 0) chiTag += (mi[n] - em) ** 2 / em + (sa[n] - es) ** 2 / es;
+    }
+  }
+  // 8) Rückrechnung: hätten Strategien besser getroffen als Zufall?
+  const START = 200;
+  const strategien = backtest(START);
+  musterCache = {
+    n: N, min: Math.min(...werte), max: Math.max(...werte), minZ: werte.indexOf(Math.min(...werte)) + 1,
+    maxZ: werte.indexOf(Math.max(...werte)) + 1, pZahlen: chi2p(chi, 48), pSz: szN ? chi2p(chiSz, 9) : null, szN,
+    rep: rep / (N - 1), korr, strategien, getestet: N - START,
+    pAbst: chi2p(chiAbst, 39), lagZ, lagK, pLag, nMi, nSa, pTag: nMi && nSa ? chi2p(chiTag, 48) : null,
+  };
+  return musterCache;
+}
+function pearson(x, y) {
+  const mx = x.reduce((s, v) => s + v, 0) / x.length;
+  const my = y.reduce((s, v) => s + v, 0) / y.length;
+  let sxy = 0; let sxx = 0; let syy = 0;
+  for (let i = 0; i < x.length; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; }
+  return sxy / Math.sqrt(sxx * syy);
+}
+// Spielt jede Strategie über alle Ziehungen nach: Tipp = die 6 Zahlen nach Regel,
+// nur mit dem Wissen bis zum Vortag, gemessen an der echten Ziehung
+function backtest(start) {
+  const N = draws.length;
+  const regeln = [
+    { art: 'heiss100', name: '🔥 Heißeste 6 der letzten 100 Ziehungen' },
+    { art: 'heissAlle', name: '🔥 Heißeste 6 aller bisherigen Ziehungen' },
+    { art: 'kalt100', name: '🧊 Kälteste 6 der letzten 100 Ziehungen' },
+    { art: 'ueberfaellig', name: '⏳ Die 6 am längsten nicht gezogenen' },
+    { art: 'rhythmus', name: '🔁 Rhythmus: die 6, die nach ihrem eigenen Takt „dran“ wären' },
+  ];
+  // Rhythmus je Zahl: wie oft kam sie bisher nach genau g Ziehungen Pause wieder?
+  // (geglättet zur Grundchance 6/49, damit seltene Abstände nicht überbewertet werden)
+  const RMAX = 400;
+  const rTreffer = Array.from({ length: 50 }, () => new Array(RMAX).fill(0));
+  const rRisiko = Array.from({ length: 50 }, () => new Array(RMAX).fill(0));
+  const pause = new Array(50).fill(0);
+  const takt = (n) => { const g = Math.min(pause[n], RMAX - 1); return (rTreffer[n][g] + (6 / 49) * 8) / (rRisiko[n][g] + 8); };
+  const zuletzt = new Array(50).fill(-1);
+  const gesamt = new Array(50).fill(0);
+  const fenster = new Array(50).fill(0); // Häufigkeit in den letzten 100 Ziehungen
+  const erg = regeln.map(() => ({ summe: 0, drei: 0 }));
+  const nums = Array.from({ length: 49 }, (_, i) => i + 1);
+  const top6 = (wert) => nums.slice().sort((x, y) => wert(y) - wert(x) || x - y).slice(0, 6);
+  for (let t = 0; t < N; t++) {
+    if (t >= start) {
+      const tipps = {
+        heiss100: top6((n) => fenster[n]),
+        heissAlle: top6((n) => gesamt[n]),
+        kalt100: top6((n) => -fenster[n]),
+        ueberfaellig: top6((n) => -zuletzt[n]),
+        rhythmus: top6(takt),
+      };
+      const gezogen = new Set(draws[t].n);
+      regeln.forEach((r, i) => {
+        const treffer = tipps[r.art].filter((n) => gezogen.has(n)).length;
+        erg[i].summe += treffer;
+        if (treffer >= 3) erg[i].drei++;
+      });
+    }
+    const gez = new Set(draws[t].n);
+    for (let n = 1; n <= 49; n++) {
+      const g = Math.min(pause[n], RMAX - 1);
+      rRisiko[n][g]++;
+      if (gez.has(n)) { rTreffer[n][g]++; pause[n] = 0; } else pause[n]++;
+    }
+    for (const n of draws[t].n) { zuletzt[n] = t; gesamt[n]++; fenster[n]++; }
+    if (t >= 100) for (const n of draws[t - 100].n) fenster[n]--;
+  }
+  return regeln.map((r, i) => ({ name: r.name, schnitt: erg[i].summe / (N - start), drei: erg[i].drei / (N - start) }));
+}
+
+function renderChancen() {
+  const m = musterAnalyse();
+  const pDrei = [3, 4, 5, 6].reduce((s, r) => s + pRichtige(r), 0);
+  // Schwankung, die bei reinem Zufall normal ist: ±3 Standardfehler – bei 5 Strategien
+  // × 2 Kennzahlen = 10 Vergleichen ist ein einzelner Ausreißer über 2 Standardfehler normal
+  const band = 3 * Math.sqrt(6 * (6 / 49) * (43 / 49) * (43 / 48)) / Math.sqrt(m.getestet);
+  const band3 = 3 * Math.sqrt(pDrei * (1 - pDrei) / m.getestet);
+  const besser = m.strategien.filter((x) => x.schnitt > ERWARTET_RICHTIGE + band || x.drei > pDrei + band3);
+  const auffaellig = m.pZahlen < 0.01 || (m.pSz !== null && m.pSz < 0.01) || besser.length > 0
+    || m.pAbst < 0.01 || m.pLag < 0.01 || (m.pTag !== null && m.pTag < 0.01);
+
+  $('musterUrteil').innerHTML = auffaellig
+    ? '<div class="verdict-big">Auffälligkeit gefunden – genauer hinsehen</div><p>Mindestens eine Prüfung weicht stärker ab, als Zufall es erwarten lässt. Details unten.</p>'
+    : `<div class="verdict-big">Nein – es gibt kein Muster.</div>
+       <p>${zahl.format(m.n)} Ziehungen seit 1955 verhalten sich genau so, wie es reiner Zufall erwarten lässt. Für die nächste Ziehung hat <b>jede Zahl dieselbe Chance von 6 aus 49 = ${prozent(6 / 49, 1)}</b> – egal wie oft sie früher kam.</p>`;
+  $('musterCard').classList.toggle('win', !auffaellig);
+
+  const ok = (b) => (b ? '✅' : '⚠️');
+  const tests = [
+    [m.pZahlen >= 0.01, 'Kommen alle Zahlen gleich oft?',
+      `Ja. Die ${m.maxZ} kam am häufigsten (${zahl.format(m.max)}×), die ${m.minZ} am seltensten (${zahl.format(m.min)}×). So große Unterschiede entstehen bei reinem Zufall in ${prozent(m.pZahlen)} der Fälle – völlig normal.`],
+    [m.pSz === null || m.pSz >= 0.01, 'Ist die Superzahl gleichmäßig?',
+      m.pSz === null ? 'Noch keine Superzahlen im Datenbestand.' : `Ja – ${zahl.format(m.szN)} Superzahlen, Abweichungen im Zufallsbereich (p = ${prozent(m.pSz)}).`],
+    [Math.abs(m.rep - ERWARTET_RICHTIGE) < 0.05, 'Beeinflusst eine Ziehung die nächste?',
+      `Nein. Im Schnitt tauchen ${m.rep.toFixed(3).replace('.', ',')} Zahlen der Vorziehung wieder auf – Zufall erwartet ${ERWARTET_RICHTIGE.toFixed(3).replace('.', ',')}.`],
+    [Math.abs(m.korr) < 0.3, 'Setzen sich „heiße“ Zahlen fort?',
+      `Nein. Wie oft eine Zahl in der ersten Hälfte aller Ziehungen kam, sagt nichts über die zweite Hälfte (Zusammenhang r = ${m.korr.toFixed(2).replace('.', ',')}; 0 = keiner).`],
+    [m.pAbst >= 0.01, 'Haben die Zahlen einen Rhythmus?',
+      `Nein. Die Pausen zwischen zwei Auftritten einer Zahl sind genau so verteilt wie beim Würfeln – am häufigsten ist sogar „gleich in der nächsten Ziehung“, danach wird jede längere Pause seltener (p = ${prozent(m.pAbst)}).`],
+    [m.pLag >= 0.01, 'Kommt eine Zahl nach festem Takt wieder (alle 1–52 Ziehungen)?',
+      `Nein. Der auffälligste Takt war „nach ${m.lagK} Ziehungen“ mit ${m.lagZ > 0 ? 'etwas mehr' : 'etwas weniger'} Wiederkehr als erwartet (z = ${m.lagZ.toFixed(2).replace('.', ',')}). Bei 52 geprüften Takten ist so ein Ausreißer in ${prozent(m.pLag)} der Fälle reiner Zufall.`],
+    [m.pTag === null || m.pTag >= 0.01, 'Fallen mittwochs andere Zahlen als samstags?',
+      m.pTag === null ? 'Noch zu wenige Ziehungen.' : `Nein. ${zahl.format(m.nMi)} Mittwochs- und ${zahl.format(m.nSa)} Samstagsziehungen verteilen sich gleich (p = ${prozent(m.pTag)}).`],
+  ];
+  $('musterTests').innerHTML = tests.map(([gut, frage, text]) =>
+    `<div class="check"><span class="ico" aria-hidden="true">${ok(gut)}</span><div><b>${frage}</b><span>${text}</span></div></div>`).join('');
+
+  $('backtestInfo').textContent = `Jede Regel wurde über ${zahl.format(m.getestet)} echte Ziehungen nachgespielt – immer nur mit dem Wissen bis zum Vortag.`;
+  $('backtestTabelle').innerHTML = `<thead><tr><th>Strategie</th><th class="n">Ø Richtige</th><th class="n">3+ Richtige</th></tr></thead><tbody>${
+    m.strategien.map((x) => `<tr><td>${x.name}</td><td class="n">${x.schnitt.toFixed(3).replace('.', ',')}</td><td class="n">${prozent(x.drei, 2)}</td></tr>`).join('')
+  }<tr class="ref"><td>🎲 Reiner Zufall (Mathematik)</td><td class="n">${ERWARTET_RICHTIGE.toFixed(3).replace('.', ',')}</td><td class="n">${prozent(pDrei, 2)}</td></tr></tbody>`;
+  $('backtestUrteil').innerHTML = besser.length
+    ? `⚠️ ${besser.map((x) => x.name).join(', ')} liegt über dem normalen Zufallsbereich – bei mehreren getesteten Regeln kann das trotzdem Zufall sein.`
+    : `<b>Keine Strategie schlägt den Zufall.</b> Alle Werte liegen im normalen Schwankungsbereich `
+      + `(Ø ${(ERWARTET_RICHTIGE - band).toFixed(2).replace('.', ',')}–${(ERWARTET_RICHTIGE + band).toFixed(2).replace('.', ',')} Richtige, `
+      + `3+ Richtige ${prozent(pDrei - band3, 1)}–${prozent(pDrei + band3, 1)}). Kleine Ausreißer nach oben oder unten sind bei so vielen Vergleichen ganz normal.`;
+
+  const ziehung = naechsteZiehung();
+  $('chancenInfo').textContent = `Nächste Ziehung: ${datum(ziehung)} · gilt für jeden Tipp, jede Woche gleich.`;
+  const zeilen = KLASSEN.slice(1).map((kl, i) => {
+    const k = i + 1;
+    const r = 6 - Math.floor((k - 1) / 2);
+    const mitSz = k % 2 === 1;
+    const p = pRichtige(r) * (mitSz ? 0.1 : 0.9);
+    return `<tr><td>${kl.label}</td><td class="n">${chance(p)}</td><td class="n">${p < 0.0001 ? '&lt; 0,01 %' : prozent(p, 2)}</td></tr>`;
+  }).join('');
+  const pGewinn = pDrei + pRichtige(2) * 0.1;
+  $('chancenTabelle').innerHTML = `<thead><tr><th>Gewinnklasse</th><th class="n">Chance</th><th class="n">in %</th></tr></thead><tbody>${zeilen}
+    <tr class="hl"><td>Irgendein Gewinn</td><td class="n">${chance(pGewinn)}</td><td class="n">${prozent(pGewinn, 1)}</td></tr></tbody>`;
+  const jahre = Math.round((1 / (pRichtige(6) * 0.1)) / ZIEHUNGEN_PRO_JAHR);
+  $('chancenExtra').innerHTML = `Mit einem Tipp mittwochs und samstags kommt der Jackpot (6 + Superzahl) statistisch <b>alle ${zahl.format(jahre)} Jahre</b> einmal. Die Chance auf 6 Richtige ist in jeder Ziehung dieselbe – auch wenn eine Zahl „lange nicht dran war“.`;
+}
+
+// ---------- Neuronales Netz ----------
+// Bewertung aller 49 Zahlen für die nächste Ziehung durch das kleine Netz „je Zahl“.
+// Die Merkmale müssen genau denen in scripts/lotto-netz.mjs entsprechen.
+function netzBewertung() {
+  const t = draws.length;
+  const p = 6 / 49;
+  const { groessen, W, B } = NETZ.netz;
+  const out = [];
+  for (let n = 1; n <= 49; n++) {
+    let c10 = 0; let c50 = 0; let c200 = 0; let alle = 0; let pause = -1;
+    for (let k = 1; k <= t; k++) {
+      if (!draws[t - k].n.includes(n)) continue;
+      if (pause < 0) pause = k - 1;
+      if (k <= 10) c10++;
+      if (k <= 50) c50++;
+      if (k <= 200) c200++;
+      alle++;
+    }
+    if (pause < 0) pause = t;
+    const war = (k) => (t - k >= 0 && draws[t - k].n.includes(n) ? 1 : 0);
+    let a = [war(1), war(2), war(3), c10 / 10 / p - 1, c50 / 50 / p - 1, c200 / 200 / p - 1,
+      Math.min(pause, 60) / 30 - 1, (alle / (t * p) - 1) * 5, n / 24.5 - 1];
+    for (let l = 0; l < W.length; l++) {
+      const nIn = groessen[l];
+      const letzte = l === W.length - 1;
+      a = Array.from({ length: groessen[l + 1] }, (_, j) => {
+        let s = B[l][j];
+        for (let i = 0; i < nIn; i++) s += W[l][j * nIn + i] * a[i];
+        return letzte ? 1 / (1 + Math.exp(-s)) : Math.tanh(s);
+      });
+    }
+    out.push(a[0]);
+  }
+  return out;
+}
+function renderNetz() {
+  if (!NETZ) return;
+  $('netzCard').classList.remove('hidden');
+  const n = NETZ.getestet;
+  const pDrei = [3, 4, 5, 6].reduce((s, r) => s + pRichtige(r), 0);
+  const band = 3 * Math.sqrt(6 * (6 / 49) * (43 / 49) * (43 / 48)) / Math.sqrt(n);
+  const band3 = 3 * Math.sqrt(pDrei * (1 - pDrei) / n);
+  const k3 = (x) => x.toFixed(3).replace('.', ',');
+  const k4 = (x) => x.toFixed(4).replace('.', ',');
+  $('netzInfo').textContent = `Zwei neuronale Netze haben aus allen Ziehungen gelernt und wurden dann an den ${zahl.format(n)} neuesten Ziehungen (seit ${datum(NETZ.von)}) geprüft – immer nur mit Ziehungen, die sie beim Lernen noch nicht kannten.`;
+  $('netzTabelle').innerHTML = `<thead><tr><th>Netz</th><th class="n">Ø Richtige</th><th class="n">3+ Richtige</th><th class="n">Fehlermaß</th></tr></thead><tbody>${
+    NETZ.modelle.map((m) => `<tr><td>🧠 ${esc(m.name)}</td><td class="n">${k3(m.schnitt)}</td><td class="n">${prozent(m.drei, 2)}</td><td class="n">${k4(m.verlust)}</td></tr>`).join('')
+  }<tr class="ref"><td>🎲 Reiner Zufall (Mathematik)</td><td class="n">${k3(ERWARTET_RICHTIGE)}</td><td class="n">${prozent(pDrei, 2)}</td><td class="n">${k4(NETZ.basisVerlust)}</td></tr></tbody>`;
+  const besser = NETZ.modelle.filter((m) => m.schnitt > ERWARTET_RICHTIGE + band || m.drei > pDrei + band3 || m.verlust < NETZ.basisVerlust - 0.0005);
+  $('netzUrteil').innerHTML = besser.length
+    ? `⚠️ ${besser.map((m) => esc(m.name)).join(', ')} liegt über dem normalen Zufallsbereich – genauer hinsehen.`
+    : `<b>Kein Netz schlägt den Zufall.</b> Alle Werte liegen im normalen Schwankungsbereich (Ø ${(ERWARTET_RICHTIGE - band).toFixed(2).replace('.', ',')}–${(ERWARTET_RICHTIGE + band).toFixed(2).replace('.', ',')} Richtige, 3+ Richtige ${prozent(Math.max(0, pDrei - band3), 1)}–${prozent(pDrei + band3, 1)}). `
+      + 'Das Fehlermaß zeigt, wie gut die vorhergesagten Chancen passen (kleiner = besser): Kein Netz ist besser als die einfache Annahme „jede Zahl 12,24 %“.';
+  const p = netzBewertung();
+  const tipp = p.map((v, i) => [v, i + 1]).sort((a, b) => b[0] - a[0] || a[1] - b[1]).slice(0, 6).map((x) => x[1]).sort((a, b) => a - b);
+  $('netzTipp').innerHTML = `<p class="small" style="margin-top:10px"><b>Was Netz A für die nächste Ziehung am höchsten bewertet:</b></p>
+    <div class="balls" id="netzBalls" style="margin:6px 0">${kugeln({ n: tipp, sz: -1 }, null, null)}</div>
+    <p class="muted small">Das Netz gibt allen 49 Zahlen fast dieselbe Chance: zwischen ${prozent(Math.min(...p), 2)} und ${prozent(Math.max(...p), 2)} (Grundchance 12,24 %). Es hat also selbst gelernt, dass die Vergangenheit nichts verrät – diese 6 Zahlen haben dieselbe Chance wie jeder andere Tipp.</p>`;
+}
+
+// Muster, die Massen von Spielern tippen (sortierter Tipp) – die Formel kennt nur
+// einzelne Zahlen, solche Kombinationen sind aber noch viel häufiger getippt
+function musterIn(t) {
+  if (t.some((n, i) => i >= 2 && t[i - 1] === n - 1 && t[i - 2] === n - 2)) return 'Zahlenreihe';
+  const zeile = new Array(7).fill(0);
+  const spalte = new Array(7).fill(0);
+  for (const n of t) { zeile[Math.floor((n - 1) / 7)]++; spalte[(n - 1) % 7]++; }
+  if (Math.max(...zeile) > 3 || Math.max(...spalte) > 3) return 'Linie auf dem Schein';
+  const abst = t.slice(1).map((n, i) => n - t[i]);
+  if (abst.every((d) => d === abst[0])) return 'gleiche Abstände';
+  return null;
+}
+
+// Fritz-Formel: Erwartungswert eines Tipps in € (pro 1,20 € Einsatz).
+// sz = deine Superzahl (oder null = unbekannt → durchschnittlich beliebt)
+function fritzWert(t, sz = null) {
+  const b = t.reduce((s, n) => s + FORMEL.beta[n - 1], 0);
+  const sigma = sz !== null && FORMEL.sz ? FORMEL.sz[sz] : 1;
+  let w = 0;
+  for (const [name, k] of Object.entries(FORMEL.klassen)) {
+    if (Number.isFinite(k.fest)) { w += k.p * k.fest; continue; }
+    // Mitgewinner mit gleicher Superzahl (σ) bzw. ohne sie ((1 − 0,1σ)/0,9)
+    const szFaktor = name.includes('SZ') ? sigma : (1 - 0.1 * sigma) / 0.9;
+    const mu = k.gewinner * Math.exp(k.kappa * b * (k.r / 6 - (6 - k.r) / 43)) * szFaktor;
+    w += k.p * k.topf * (mu < 1e-9 ? 1 : (1 - Math.exp(-mu)) / mu);
+  }
+  return w;
+}
+// Rang unter allen möglichen Tipps (Stichprobe von 20.000 Zufallstipps, einmal berechnet)
+let fritzVerteilung = null;
+function fritzRang(w) {
+  if (!fritzVerteilung) {
+    fritzVerteilung = Array.from({ length: 20000 }, () => fritzWert(ziehe6(), Math.floor(Math.random() * 10))).sort((a, b) => a - b);
+  }
+  let lo = 0; let hi = fritzVerteilung.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (fritzVerteilung[m] < w) lo = m + 1; else hi = m; }
+  return lo / fritzVerteilung.length;
+}
+
+// Fritz-Tipp: zufällig unter den besten Tipps laut Formel – ohne Muster, kaum
+// Geburtstagszahlen, höchstens 2 Zahlen der letzten Ziehung. So wird es nicht
+// jedes Mal derselbe Tipp (den würden dann womöglich auch andere spielen).
+function fritzTipp() {
+  const letzteZ = new Set(draws.length ? letzte().n : []);
+  const kandidaten = [];
+  for (let versuch = 0; versuch < 20000 && kandidaten.length < 400; versuch++) {
+    const t = ziehe6().sort((a, b) => a - b);
+    if (t.filter((n) => n <= 31).length > 2 || musterIn(t)) continue;
+    if (t.filter((n) => letzteZ.has(n)).length > 2 || schonGezogen(t)) continue;
+    kandidaten.push([FORMEL ? fritzWert(t) : 0, t]);
+  }
+  if (!kandidaten.length) return ziehe6().sort((a, b) => a - b);
+  kandidaten.sort((a, b) => b[0] - a[0]);
+  const beste = kandidaten.slice(0, Math.max(1, Math.ceil(kandidaten.length * 0.05)));
+  return beste[Math.floor(zufall() * beste.length)][1];
+}
+// die zwei am seltensten getippten Superzahlen (laut Formel-Daten)
+function fritzSuperzahl() {
+  if (!FORMEL || !FORMEL.sz) return null;
+  const rang = FORMEL.sz.map((v, j) => [v, j]).sort((a, b) => a[0] - b[0]);
+  return rang[Math.floor(zufall() * 2)][1];
+}
+function nimmFritzTipp() {
+  tipNums = new Set(fritzTipp());
+  const sz = fritzSuperzahl();
+  if (sz !== null) tipSz = sz;
+  tippGeaendert(true);
+  setHinweis(FORMEL
+    ? `🧮 Fritz-Tipp: bringt laut Formel im Schnitt ${(fritzWert(sortiert(tipNums), tipSz) * 100).toFixed(1).replace('.', ',')} Cent statt ${(FORMEL.ev0 * 100).toFixed(1).replace('.', ',')} – gleiche Chance, höhere Quoten.`
+      + (sz !== null ? ` Superzahl ${sz}: wird am seltensten getippt (nur nutzbar, wenn du die Losnummer wählen kannst).` : '')
+    : '🧮 Fritz-Tipp: kaum Geburtstagszahlen, keine Muster – gleiche Chance, im Schnitt höhere Quoten.', 'ok');
+}
+const cent = (w) => `${(w * 100).toFixed(1).replace('.', ',')} ct`;
+const szText = (v) => { const p = Math.round((v - 1) * 100); return p === 0 ? '±0 %' : `${p > 0 ? '+' : '−'}${Math.abs(p)} %`; };
+// Rang als Text – an den Rändern ehrlich statt „0 %“ / „100 %“
+const rangText = (r) => (r >= 0.99 ? 'über 99 %' : r < 0.01 ? 'unter 1 %' : prozent(r));
+
+function renderFritz() {
+  if (!FORMEL) return;
+  $('fritzCard').classList.remove('hidden');
+  $('fritzN').textContent = zahl.format(FORMEL.ziehungen);
+  if (tippKomplett()) {
+    const t = sortiert(tipNums);
+    const w = fritzWert(t, tipSz);
+    const plus = w / FORMEL.ev0 - 1;
+    const b = t.reduce((s, n) => s + FORMEL.beta[n - 1], 0);
+    const muster = musterIn(t);
+    const szInfo = tipSz !== null && FORMEL.sz ? ` · Superzahl ${tipSz} (${szText(FORMEL.sz[tipSz])})` : ' · ohne Superzahl (= Durchschnitt)';
+    $('fritzDein').innerHTML = `<p class="small"><b>Dein Tipp ${t.join(' ')}</b>${szInfo} · Beliebtheit B(T) = ${b >= 0 ? '+' : '−'}${Math.abs(b).toFixed(3).replace('.', ',')}</p>
+      <div class="money">
+        <div><small>Wert pro 1,20 €</small><b>${cent(w)}</b></div>
+        <div><small>Ø-Tipp</small><b>${cent(FORMEL.ev0)}</b></div>
+        <div><small>Besser als</small><b>${rangText(fritzRang(w))}</b></div>
+      </div>
+      <p class="small" style="margin-top:8px">${plus >= 0 ? `Ein Gewinn mit diesem Tipp bringt im Schnitt <b>${prozent(plus)} mehr</b>` : `Ein Gewinn mit diesem Tipp bringt im Schnitt <b>${prozent(-plus)} weniger</b>`} als mit einem Durchschnittstipp – weil ${plus >= 0 ? 'weniger' : 'mehr'} Mitspieler diese Zahlen tippen. Unter 1,20 € bleibt jeder Tipp: Lotto ist im Schnitt immer ein Verlustgeschäft.</p>
+      ${muster ? `<p class="fritz-warn">⚠️ Dein Tipp enthält ein Muster (${muster}) – so etwas tippen extrem viele; die Formel unterschätzt das eher.</p>` : ''}`;
+  } else {
+    $('fritzDein').innerHTML = '<p class="muted small">Wähle unter „Mein Tipp“ 6 Zahlen – dann rechnet die Formel deinen Tipp aus.</p>';
+  }
+  const max = Math.max(...FORMEL.beta.map(Math.abs));
+  let h = '';
+  for (let n = 1; n <= 49; n++) {
+    const v = FORMEL.beta[n - 1];
+    const st = Math.round((Math.abs(v) / max) * 80);
+    const farbe = v >= 0 ? 'var(--accent)' : 'var(--cool)';
+    const gerundet = Math.round(Math.abs(v) * 100);
+    const pz = gerundet === 0 ? '±0 %' : `${v >= 0 ? '+' : '−'}${gerundet} %`;
+    h += `<button type="button" tabindex="-1" class="${st > 50 ? 'hot' : ''}" style="background:color-mix(in srgb, ${farbe} ${st}%, var(--surface))" `
+      + `aria-label="Zahl ${n}: ${pz} Mitgewinner gegenüber dem Schnitt"><b>${n}</b><small>${pz}</small></button>`;
+  }
+  $('fritzHeat').innerHTML = h;
+  if (FORMEL.sz) {
+    const maxSz = Math.max(...FORMEL.sz.map((v) => Math.abs(v - 1)));
+    $('fritzSz').innerHTML = FORMEL.sz.map((v, j) => {
+      const st = Math.round((Math.abs(v - 1) / maxSz) * 80);
+      const farbe = v >= 1 ? 'var(--accent)' : 'var(--cool)';
+      return `<span class="${st > 50 ? 'hot' : ''}${tipSz === j ? ' sel' : ''}" style="background:color-mix(in srgb, ${farbe} ${st}%, var(--surface))" `
+        + `aria-label="Superzahl ${j}: ${szText(v)}"><b>${j}</b><small>${szText(v)}</small></span>`;
+    }).join('');
+    $('fritzSzBox').classList.remove('hidden');
+  }
+  const pf = FORMEL.pruefung;
+  $('fritzQualitaet').textContent = `Gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen (${datum(FORMEL.von)} – ${datum(FORMEL.stand)}). `
+    + (pf && pf[3]
+      ? `Test an den letzten ${pf.ziehungen} Ziehungen, die die Formel jeweils noch nicht kannte: Die Zahl der Gewinner mit 3 Richtigen lag im Schnitt nur ${prozent(pf[3].formel, 1)} daneben (ohne Formel: ${prozent(pf[3].gleich, 1)}), bei 4 Richtigen ${prozent(pf[4].formel, 1)} (ohne: ${prozent(pf[4].gleich, 1)}). `
+      : `Das Modell sagt die Zahl der Mitgewinner einer Ziehung zu ${prozent(FORMEL.r2)} voraus – geprüft an Ziehungen, die es beim Lernen nicht kannte (10-fache Kreuzvalidierung). `)
+    + `Ein Ø-Tipp bringt ${cent(FORMEL.ev0)} pro 1,20 € zurück – passt zur offiziellen Ausschüttung von rund 50 %.`;
+}
+
+// ---------- Vorschlag für die nächste Ziehung + ehrliche Bilanz ----------
+// Jede schon einmal gezogene 6er-Kombination wird nie vorgeschlagen.
+let gezogeneKombis = null;
+function schonGezogen(t) {
+  if (!gezogeneKombis) gezogeneKombis = new Set(draws.map((z) => z.n.join(',')));
+  return gezogeneKombis.has(t.slice().sort((a, b) => a - b).join(','));
+}
+function neuerZufallstipp() {
+  let t;
+  do t = ziehe6().sort((a, b) => a - b); while (schonGezogen(t));
+  return t;
+}
+function vorschlaege() {
+  const v = read(KEY.prognosen);
+  return Array.isArray(v) ? v.filter((x) => x && /^\d{4}-\d{2}-\d{2}$/.test(x.d) && Array.isArray(x.tipp) && gueltig(x.tipp)
+    && Array.isArray(x.zufall) && gueltig(x.zufall) && gueltigeSz(x.sz ?? null) && gueltigeSz(x.zsz ?? null)) : [];
+}
+// Vorschlag für die nächste Ziehung einmalig festschreiben (vor der Ziehung, danach unveränderlich).
+// Dazu ein Zufallstipp vom selben Zeitpunkt als ehrlicher Vergleich.
+// Der Vorschlag besteht immer aus 5 Feldern (wie 5 Kästchen auf einem Lottoschein).
+// Feld 1 ist der bisherige Fritz-Tipp; die weiteren folgen denselben Regeln und haben
+// möglichst wenige Zahlen gemeinsam – so decken die Felder mehr verschiedene Zahlen ab.
+const FELDER = 5;
+const gleicheZahlen = (a, b) => a.filter((n) => b.includes(n)).length;
+function weitereFelder(erstes, anzahl) {
+  const letzteZ = new Set(letzte().n);
+  const kand = [];
+  for (let versuch = 0; versuch < 30000 && kand.length < 600; versuch++) {
+    const t = ziehe6().sort((a, b) => a - b);
+    if (t.filter((n) => n <= 31).length > 2 || musterIn(t)) continue;
+    if (t.filter((n) => letzteZ.has(n)).length > 2 || schonGezogen(t)) continue;
+    kand.push([FORMEL ? fritzWert(t) : 0, t]);
+  }
+  kand.sort((a, b) => b[0] - a[0]);
+  const pool = kand.slice(0, Math.max(anzahl * 6, Math.ceil(kand.length * 0.25))); // das beste Viertel
+  const felder = [erstes];
+  // erst höchstens 1 gemeinsame Zahl erlauben, dann 2, 3 … bis genug Felder da sind
+  for (let grenze = 1; felder.length <= anzahl && grenze <= 5; grenze++) {
+    for (const [, t] of pool) {
+      if (felder.length > anzahl) break;
+      if (felder.every((f) => gleicheZahlen(f, t) <= grenze)) felder.push(t);
+    }
+  }
+  while (felder.length <= anzahl) { const t = neuerZufallstipp(); if (felder.every((f) => gleicheZahlen(f, t) < 6)) felder.push(t); }
+  return felder;
+}
+const felderVon = (v) => { const f = Array.isArray(v.felder) ? v.felder.filter((t) => Array.isArray(t) && gueltig(t)) : []; return f.length ? f : [v.tipp]; };
+const zufallsFelderVon = (v) => { const f = Array.isArray(v.zfelder) ? v.zfelder.filter((t) => Array.isArray(t) && gueltig(t)) : []; return f.length ? f : [v.zufall]; };
+// Offenen Vorschlag (Ziehung steht noch aus) auf den heutigen Umfang bringen: 5 Felder,
+// 5 Zufallsfelder zum Vergleich, alle Kandidaten. Vor der Ziehung ist das fair – es wird
+// nur ergänzt, nichts Bestehendes geändert. Eigener fester Zufall je Ziehungstag.
+function ergaenze(v) {
+  let neu = false;
+  if (felderVon(v).length < FELDER || zufallsFelderVon(v).length < FELDER) {
+    zufall = festerZufall(`lotto-felder-${v.d}`);
+    try {
+      v.felder = weitereFelder(v.tipp, FELDER - 1);
+      v.zfelder = [v.zufall];
+      while (v.zfelder.length < FELDER) { const t = neuerZufallstipp(); if (v.zfelder.every((f) => gleicheZahlen(f, t) < 6)) v.zfelder.push(t); }
+    } finally {
+      zufall = Math.random;
+    }
+    neu = true;
+  }
+  if (!v.kand || typeof v.kand !== 'object') v.kand = {};
+  for (const k of KANDIDATEN) {
+    if (Array.isArray(v.kand[k.id]) && gueltig(v.kand[k.id])) continue;
+    v.kand[k.id] = k.tipp(draws, v.d);
+    neu = true;
+  }
+  return neu;
+}
+
+// Erst wenn die letzte fällige Ziehung geladen ist: sonst rechnet der Vorschlag mit
+// veralteten Daten („letzte Ziehung“, schon gezogene Kombinationen) und fällt anders
+// aus als auf einem Gerät mit aktuellem Stand. nachAbgleich = der Live-Abgleich ist
+// durch; fehlen die Zahlen dann auch Stunden nach der Ziehung noch (kein Netz), wird
+// trotzdem festgelegt. Ergebnis: true, wenn ein neuer Vorschlag entstanden ist.
+function sichereVorschlag(nachAbgleich = false) {
+  if (!draws.length) return false;
+  const faellig = letzteFaelligeZiehung();
+  if (letzte().d < faellig && !(nachAbgleich && Date.now() - ziehungsZeit(faellig) > 3 * 60 * MIN)) return false;
+  let d = naechsteZiehung();
+  // Uhr des Geräts hinkt der schon eingetragenen Ziehung hinterher → Ziehungstag danach
+  if (d <= letzte().d) {
+    const [y, m, t] = letzte().d.split('-').map(Number);
+    d = naechsteZiehung(new Date(y, m - 1, t + 1));
+  }
+  const liste = vorschlaege();
+  let neu = false;
+  if (!liste.some((v) => v.d === d)) {
+    zufall = festerZufall(`lotto-vorschlag-${d}`);
+    try {
+      liste.push({ d, tipp: fritzTipp(), sz: fritzSuperzahl(), zufall: neuerZufallstipp(), zsz: Math.floor(zufall() * 10), erstellt: Date.now() });
+    } finally {
+      zufall = Math.random;
+    }
+    neu = true;
+  }
+  // offene Vorschläge (auch von älteren App-Versionen) vor der Ziehung vervollständigen
+  for (const v of liste) if (v.d > letzte().d && Date.now() < ziehungsZeit(v.d).getTime() && ergaenze(v)) neu = true;
+  if (!neu) return false;
+  write(KEY.prognosen, liste.slice(-500));
+  tippsAnApp();
+  return true;
+}
+// nach dem Live-Abgleich: Vorschlag festlegen (falls noch keiner da ist) und anzeigen
+function vorschlagNachAbgleich() {
+  if (!sichereVorschlag(true)) return;
+  renderVorschlagTipp();
+  if (aktiverTab === 'chancen') renderVorschlag();
+}
+function bewerte(tipp, sz, z) {
+  const gez = new Set(z.n);
+  const r = tipp.filter((n) => gez.has(n)).length;
+  const szTreffer = sz !== null && sz !== undefined && z.sz >= 0 && z.sz === sz;
+  return { r, szTreffer, k: klasse(r, szTreffer) };
+}
+function betragFuer(b, d, tipp) {
+  if (!b.k) return 0;
+  const q = quotenFuer(d);
+  if (!q) return null;
+  const k = damals(b.r, b.szTreffer, q, maskeVon(tipp));
+  return k ? inEuro(k.quote > 0 ? k.quote : (k.jackpot || 0), q.w) : 0;
+}
+// Ausführliche Begründung des Vorschlags (für „Mein Tipp“ und „Chancen“)
+function vorschlagHtml(n) {
+  const felder = felderVon(n);
+  const sz = n.sz ?? null;
+  const alle = [...new Set(felder.flat())].sort((a, b) => a - b);
+  const maxGeb = Math.max(...felder.map((t) => t.filter((x) => x <= 31).length));
+  const maxLetzte = Math.max(...felder.map((t) => t.filter((x) => letzte().n.includes(x)).length));
+  let maxGleich = 0;
+  felder.forEach((f, i) => felder.slice(i + 1).forEach((g) => { maxGleich = Math.max(maxGleich, gleicheZahlen(f, g)); }));
+  const chips = FORMEL
+    ? alle.map((x) => {
+      const p = Math.round(FORMEL.beta[x - 1] * 100);
+      return `<li><span class="ball">${x}</span><span>${p < 0 ? `${Math.abs(p)} % seltener` : p > 0 ? `${p} % häufiger` : 'Durchschnitt'}</span></li>`;
+    }).join('')
+    : '';
+  const w = FORMEL ? felder.reduce((sum, t) => sum + fritzWert(t, sz), 0) / felder.length : null;
+  const pGewinn = [3, 4, 5, 6].reduce((p, r) => p + pRichtige(r), 0) + pRichtige(2) * 0.1;
+  const einsatz = felder.length * PREIS;
+  return `<p class="vs-datum">für <b>${datum(n.d)}</b></p>
+    <div class="vs-felder">${felder.map((t, i) => `<button type="button" class="vs-feld" data-feld="${i}" aria-label="Feld ${i + 1} als meinen Tipp übernehmen">
+      <span class="vs-nr">Feld ${i + 1}</span><span class="balls${i === 0 ? ' vs-balls' : ''}">${kugeln({ n: t, sz: -1 }, null, null, felder.length === 1)}</span></button>`).join('')}</div>
+    ${sz !== null ? `<p class="vs-sz">Superzahl ${sz} <span class="muted small">– gilt für den ganzen Schein</span></p>` : ''}
+    <p class="muted small">${felder.length} Felder = ${geld(einsatz, 'EUR')} Einsatz (ohne Gebühr) · Feld antippen übernimmt es als deinen Tipp. Festgelegt am ${new Date(n.erstellt).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} Uhr – danach unveränderlich, damit die Bilanz ehrlich bleibt.</p>
+    <details class="legende vs-warum" open>
+      <summary>Warum genau diese Zahlen?</summary>
+      <ol>
+        <li><b>Noch nie gezogen:</b> Keine dieser ${felder.length === 1 ? 'Kombination' : `${felder.length} Kombinationen`} kam in ${zahl.format(draws.length)} Ziehungen seit 1955 vor.</li>
+        <li><b>Keine Muster:</b> keine Zahlenreihen, keine Linie auf dem Schein, je Feld höchstens ${maxLetzte} Zahl${maxLetzte === 1 ? '' : 'en'} aus der letzten Ziehung.</li>
+        <li><b>Kaum Geburtstagszahlen:</b> je Feld höchstens ${maxGeb} von 6 Zahlen bei 1–31 – die tippen sehr viele Menschen.</li>
+        ${felder.length > 1 ? `<li><b>Breit gestreut:</b> Die Felder haben untereinander höchstens ${maxGleich} gemeinsame Zahl${maxGleich === 1 ? '' : 'en'} und decken zusammen ${alle.length} verschiedene Zahlen ab. Mit ${felder.length} Feldern gewinnt etwa jede ${Math.round(1 / (1 - (1 - pGewinn) ** felder.length))}. Ziehung mindestens ein Feld irgendetwas (mit einem Feld jede ${Math.round(1 / pGewinn)}.).</li>` : ''}
+        ${FORMEL ? `<li><b>Unbeliebte Zahlen</b> (gelernt aus ${zahl.format(FORMEL.ziehungen)} Ziehungen) – so oft werden sie getippt, verglichen mit dem Schnitt:<ul class="vs-liste">${chips}</ul></li>` : ''}
+        ${sz !== null && FORMEL && FORMEL.sz ? `<li><b>Superzahl ${sz}:</b> wird ${Math.abs(Math.round((FORMEL.sz[sz] - 1) * 100))} % seltener getippt als der Schnitt (nur nutzbar, wenn du die Losnummer wählen kannst).</li>` : ''}
+        ${w !== null ? `<li><b>Ergebnis laut Fritz-Formel:</b> im Schnitt ${cent(w)} pro 1,20 € statt ${cent(FORMEL.ev0)} beim Durchschnittstipp – gewinnt ein Feld, teilst du mit weniger Leuten, also im Schnitt <b>${prozent(w / FORMEL.ev0 - 1)} mehr Geld</b>.</li>` : ''}
+      </ol>
+      <p class="small"><b>Ehrlich:</b> Jedes Feld hat dieselbe Chance wie jeder andere Tipp (z. B. 3 Richtige 1 : 63). Mehr Felder heißt mehr Chancen, aber auch mehr Einsatz – im Schnitt kommt beim Lotto nur etwa die Hälfte zurück. Kein System kann die Zahlen vorhersagen.</p>
+    </details>`;
+}
+// Formel-Check einer Ziehung: Wie viele Gewinner mit 3/4/5 Richtigen sagte die Formel
+// voraus – und wie viele hätte es gegeben, wenn alle Zahlen gleich beliebt wären?
+function formelCheck(z) {
+  const q = quotenFuer(z.d);
+  if (!FORMEL || !FORMEL.gesamt || !q || !(q.e > 0)) return null;
+  const tipps = q.e / PREIS;
+  const b = z.n.reduce((s, x) => s + FORMEL.beta[x - 1], 0);
+  const anzahl = (name) => { const k = q.k.find((x) => x[0] === name); return k && Number.isFinite(k[2]) ? k[2] : null; };
+  const zeilen = [];
+  for (const r of [3, 4, 5]) {
+    const g = FORMEL.gesamt[r];
+    const a = anzahl(String(r));
+    const b2 = anzahl(`${r} + SZ`);
+    if (!g || a === null || b2 === null) continue;
+    zeilen.push({ r, echt: a + b2, formel: tipps * Math.exp(g.c + g.kappa * b), gleich: tipps * pRichtige(r) });
+  }
+  return zeilen.length ? { b, zeilen } : null;
+}
+function formelCheckHtml(z) {
+  const c = formelCheck(z);
+  if (!c) return '';
+  const abw = (v, echt) => { const p = Math.round((v / echt - 1) * 100); return p === 0 ? '±0 %' : `${p > 0 ? '+' : '−'}${Math.abs(p)} %`; };
+  const besser = c.zeilen.filter((x) => Math.abs(x.formel / x.echt - 1) < Math.abs(x.gleich / x.echt - 1)).length;
+  return `<h3 style="margin-top:16px">🔍 Formel-Check: Ziehung vom ${datum(z.d)}</h3>
+    <p class="muted small">Die gezogenen Zahlen ${z.n.join(' ')} waren laut Formel ${c.b < -0.02 ? 'eher unbeliebt' : c.b > 0.02 ? 'eher beliebt' : 'durchschnittlich beliebt'} (Beliebtheit ${c.b >= 0 ? '+' : '−'}${Math.abs(c.b * 100).toFixed(1).replace('.', ',')} %). Vorhergesagt vs. echte Gewinnerzahl:</p>
+    <table class="classes" id="formelCheck">
+      <thead><tr><th>Richtige</th><th class="n">ohne Formel</th><th class="n">Fritz-Formel</th><th class="n">echt</th></tr></thead>
+      <tbody>${c.zeilen.map((x) => `<tr><td>${x.r} Richtige</td><td class="n">${zahl.format(Math.round(x.gleich))}<br><span class="muted small">${abw(x.gleich, x.echt)}</span></td>
+        <td class="n">${zahl.format(Math.round(x.formel))}<br><span class="muted small">${abw(x.formel, x.echt)}</span></td><td class="n"><b>${zahl.format(x.echt)}</b></td></tr>`).join('')}</tbody>
+    </table>
+    <p class="muted small" style="margin-top:6px">Diesmal lag die Formel in ${besser} von ${c.zeilen.length} Klassen näher dran.${FORMEL.pruefung && FORMEL.pruefung[3] ? ` Über ${FORMEL.pruefung.ziehungen} Test-Ziehungen: Ø ${prozent(FORMEL.pruefung[3].formel, 1)} Abweichung statt ${prozent(FORMEL.pruefung[3].gleich, 1)} (3 Richtige).` : ''} Sie sagt <i>nicht</i> voraus, welche Zahlen kommen – nur, wie viele Leute sie getippt haben.</p>`;
+}
+
+// Was die beobachteten Kandidaten für die nächste Ziehung tippen (n = offener Vorschlag)
+function kandidatenHtml(n) {
+  if (!n || !n.kand) return '';
+  const zeilen = KANDIDATEN.filter((k) => Array.isArray(n.kand[k.id]) && gueltig(n.kand[k.id])).map((k) =>
+    `<div class="win-row"><span class="d">${k.name}</span><span class="badge">${esc(k.text(n.d))}</span>
+      <div class="balls">${kugeln({ n: n.kand[k.id], sz: -1 }, null, null)}</div></div>`).join('');
+  if (!zeilen) return '';
+  const h = himmel(n.d);
+  const ort = ziehungsort(n.d);
+  return `<h3 style="margin-top:16px">🔭 Kandidaten unter Beobachtung</h3>
+    <p class="muted small">Geprüft wurden 16 Umwelt-Einflüsse (Jahreszeit, Mond, Gezeiten, Luftdruck, Wetter, Schwerkraft …) und alle 1.176 Zahlenpaare. Sicher nachweisbar war nichts. Die auffälligsten Kandidaten tippen deshalb ab jetzt vor jeder Ziehung mit – vorher festgeschrieben – und stehen oben in der Bilanz. Die <b>Resonanz-Formel</b> verbindet Sonne, Mond, Schwerkraft und die „Verträglichkeit“ der Zahlenpaare; sie hätte in der Rückrechnung 94 statt 66 Dreier getroffen, was aber auch sinnlose Zufalls-Einteilungen in 1 von 40 Versuchen schaffen.</p>
+    <p class="small" id="schwerkraftInfo" style="margin-top:6px">🌍 Schwerkraft in ${esc(ort.name)} zur Ziehung am ${datum(n.d)}: <b>${h.g.toFixed(7).replace('.', ',')} m/s²</b> – Mond und Sonne machen sie um ${Math.abs(h.dg).toFixed(2).replace('.', ',')} Millionstel m/s² ${h.dg >= 0 ? 'größer' : 'kleiner'} (Mond ${h.mondHoehe >= 0 ? `${Math.round(h.mondHoehe)}° über` : `${Math.round(-h.mondHoehe)}° unter`} dem Horizont).</p>
+    <div class="top-wins" id="kandidaten" style="margin-top:8px">${zeilen}</div>
+    <p class="muted small" style="margin-top:6px">Erst wenn ein Kandidat über viele Monate klar über 0,73 Richtigen im Schnitt liegt, wäre das ein echter Fund.</p>`;
+}
+
+// Kurz-Ergebnis der letzten ausgewerteten Vorschläge (für die Startseite)
+function letzteAuswertungHtml() {
+  const byDate = new Map(draws.map((z) => [z.d, z]));
+  const v = vorschlaege().filter((x) => byDate.has(x.d)).sort((a, b) => (a.d < b.d ? 1 : -1))[0];
+  if (!v) return '';
+  const z = byDate.get(v.d);
+  const beste = (felder, sz) => felder.map((t) => ({ t, b: bewerte(t, sz, z) })).sort((x, y) => (y.b.k ? 10 - y.b.k : 0) - (x.b.k ? 10 - x.b.k : 0) || y.b.r - x.b.r)[0];
+  const fs = felderVon(v);
+  const s1 = beste(fs, v.sz);
+  const z1 = beste(zufallsFelderVon(v), v.zsz);
+  const gew = fs.filter((t) => bewerte(t, v.sz, z).k).length;
+  const treffer = s1.t.filter((x) => z.n.includes(x));
+  return `<div class="vs-letzte" id="vorschlagLetzte"><b>Letzte Ziehung (${datum(v.d)}):</b> ${z.n.join(' ')}${z.sz >= 0 ? ` · SZ ${z.sz}` : ''}<br>
+    Unser Vorschlag${fs.length > 1 ? ` (${fs.length} Felder), bestes Feld` : ''} ${s1.t.join(' ')}${v.sz !== null && v.sz !== undefined ? ` · SZ ${v.sz}` : ''} → <b>${s1.b.r} Richtige${s1.b.szTreffer ? ' + SZ' : ''}</b>${treffer.length ? ` (${treffer.join(', ')})` : ''}${gew ? ` – ${gew === 1 && fs.length === 1 ? 'Gewinn' : plural(gew, 'Gewinn', 'Gewinne')}! 🎉` : ''} · Zufallstipp: ${z1.b.r} Richtige${z1.b.szTreffer ? ' + SZ' : ''}</div>`;
+}
+
+function renderVorschlagTipp() {
+  if (!draws.length) return;
+  const n = vorschlaege().filter((v) => v.d > letzte().d).sort((a, b) => (a.d < b.d ? -1 : 1))[0];
+  $('vorschlagTippCard').classList.toggle('hidden', !n);
+  if (n) $('vorschlagTipp').innerHTML = vorschlagHtml(n) + letzteAuswertungHtml();
+}
+
+function renderVorschlag() {
+  if (!draws.length) return;
+  sichereVorschlag();
+  const liste = vorschlaege();
+  const byDate = new Map(draws.map((z) => [z.d, z]));
+  const offen = liste.filter((v) => !byDate.has(v.d)).sort((a, b) => (a.d < b.d ? -1 : 1));
+  const fertig = liste.filter((v) => byDate.has(v.d)).sort((a, b) => (a.d < b.d ? 1 : -1));
+  const kug = (t, sz, mask) => kugeln({ n: t, sz: sz ?? -1 }, mask, sz);
+
+  const n = offen[0];
+  $('vorschlagNaechste').innerHTML = n
+    ? `${vorschlagHtml(n)}
+       <div class="btn-row"><button class="btn btn-primary" type="button" id="vorschlagNehmen">Feld 1 als meinen Tipp übernehmen</button></div>`
+    : '<p class="muted small">Der Vorschlag für die nächste Ziehung wird erstellt, sobald die aktuelle ausgewertet ist.</p>';
+
+  if (!fertig.length) {
+    $('vorschlagBilanz').innerHTML = `<p class="muted small">Ab jetzt wird jeder Vorschlag nach der Ziehung mit den echten Zahlen verglichen – neben einem Zufallstipp, der zur selben Zeit festgelegt wurde. ${n ? `Erste Auswertung nach der Ziehung am ${datum(n.d)}.` : ''}</p>${kandidatenHtml(n)}${formelCheckHtml(letzte())}`;
+    if (!quotenFuer(letzte().d)) ladeQuoten([letzte().d]).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
+    return;
+  }
+  // System und Zufall: alle Felder einer Ziehung zählen (ältere Vorschläge hatten nur eines)
+  const S = { r: 0, gew: 0, euro: 0, felder: 0 };
+  const Z = { r: 0, gew: 0, euro: 0, felder: 0 };
+  const fehlt = [];
+  const werte = (felder, sz, z, d, ziel) => {
+    let best = null; let euro = 0; let offen = false; let gew = 0;
+    for (const t of felder) {
+      const b = bewerte(t, sz, z);
+      const e = betragFuer(b, d, t);
+      if (e === null) offen = true;
+      ziel.r += b.r; ziel.felder++; ziel.euro += e || 0; euro += e || 0;
+      if (b.k) { ziel.gew++; gew++; }
+      if (!best || (b.k || 99) < (best.b.k || 99) || ((b.k || 99) === (best.b.k || 99) && b.r > best.b.r)) best = { t, b };
+    }
+    if (offen) fehlt.push(d);
+    return { best, euro, offen, gew, n: felder.length };
+  };
+  const zeilen = fertig.map((v) => {
+    const z = byDate.get(v.d);
+    const s1 = werte(felderVon(v), v.sz, z, v.d, S);
+    const z1 = werte(zufallsFelderVon(v), v.zsz, z, v.d, Z);
+    const txt = (x) => `${x.best.b.r}${x.best.b.szTreffer ? '+SZ' : ''}${x.gew ? ` · <b>${x.offen ? 'Gewinn' : geld(x.euro, 'EUR')}</b>` : ''}`;
+    return `<div class="win-row"><span class="d">${datum(v.d)}</span><span class="badge">System ${txt(s1)} · Zufall ${txt(z1)}</span>
+      <div class="balls">${kug(s1.best.t, v.sz, maskeVon(z.n))}</div>
+      <div class="real">${s1.n > 1 ? `Bestes von ${s1.n} Feldern${s1.gew > 1 ? ` (${s1.gew} Gewinne)` : ''} · ` : ''}Gezogen: ${z.n.join(' ')}${z.sz >= 0 ? ` · SZ ${z.sz}` : ''}</div></div>`;
+  });
+  const m = fertig.length;
+  const komma = (x) => x.toFixed(2).replace('.', ',');
+  // Kandidaten: nur Ziehungen, für die ihr Tipp vorher festgeschrieben war
+  const kandZeilen = KANDIDATEN.map((k) => {
+    const mit = fertig.filter((v) => v.kand && Array.isArray(v.kand[k.id]) && gueltig(v.kand[k.id]));
+    if (!mit.length) return `<tr><td>${k.name}</td><td class="n">–</td><td class="n">0 von 0</td><td class="n">–</td></tr>`;
+    let sum = 0; let gew = 0; let euro = 0;
+    for (const v of mit) {
+      const b = bewerte(v.kand[k.id], null, byDate.get(v.d));
+      sum += b.r;
+      if (b.k) gew++;
+      euro += betragFuer(b, v.d, v.kand[k.id]) || 0;
+    }
+    return `<tr><td>${k.name}</td><td class="n">${komma(sum / mit.length)}</td><td class="n">${gew} von ${mit.length}</td><td class="n">${geld(euro, 'EUR')}</td></tr>`;
+  }).join('');
+  $('vorschlagBilanz').innerHTML = `<table class="classes">
+      <thead><tr><th></th><th class="n">Ø Richtige je Feld</th><th class="n">Gewinn-Felder</th><th class="n">ausgezahlt</th></tr></thead>
+      <tbody>
+        <tr class="hl"><td>🎯 Unser System</td><td class="n">${komma(S.r / S.felder)}</td><td class="n">${S.gew} von ${S.felder}</td><td class="n">${geld(S.euro, 'EUR')}</td></tr>
+        <tr><td>🎲 Zufallstipp</td><td class="n">${komma(Z.r / Z.felder)}</td><td class="n">${Z.gew} von ${Z.felder}</td><td class="n">${geld(Z.euro, 'EUR')}</td></tr>
+        ${kandZeilen}
+        <tr class="ref"><td>Mathematisch erwartet</td><td class="n">${komma(ERWARTET_RICHTIGE)}</td><td class="n">≈ 1 von 31</td><td class="n">–</td></tr>
+      </tbody></table>
+    <p class="muted small" style="margin-top:8px">${m} ${m === 1 ? 'Ziehung' : 'Ziehungen'} ausgewertet · ${plural(S.felder, 'Feld', 'Felder')} je Seite, Einsatz je ${geld(S.felder * PREIS, 'EUR')}. Über wenige Ziehungen schwankt das stark – aussagekräftig wird die Bilanz erst nach vielen Monaten.</p>
+    <div class="top-wins" style="margin-top:10px">${zeilen.slice(0, 20).join('')}</div>${kandidatenHtml(n)}${formelCheckHtml(letzte())}`;
+  if (fehlt.length) ladeQuoten(fehlt).then((neu) => { if (neu && aktiverTab === 'chancen') renderVorschlag(); });
+}
+
+// ---------- Simulator ----------
+function renderSimTipp() {
+  const ok = tippKomplett();
+  if (ok) {
+    const z = { n: sortiert(tipNums), sz: tipSz === null ? -1 : tipSz };
+    $('simTip').innerHTML = `<div class="balls">${kugeln(z, maskeVon(z.n), tipSz)}</div>` +
+      `<p class="muted small" style="margin-top:8px">${tipSz === null ? 'Ohne Superzahl – im Dauerlauf wird eine zufällige genommen. ' : ''}Ändern unter „Mein Tipp“.</p>`;
+  } else {
+    $('simTip').innerHTML = `<p>Noch kein vollständiger Tipp (6 Zahlen).</p>
+      <div class="btn-row"><button class="btn" type="button" data-act="quick">🎲 Quicktipp nehmen</button>
+      <button class="btn btn-ghost" type="button" data-act="goto">Zahlen selbst wählen</button></div>`;
+  }
+  $('btnLive').disabled = !ok || liveLaeuft;
+  $('btnSim').disabled = !ok && !sim.running;
+  // Standbild der gefüllten Trommel, solange noch keine Ziehung lief
+  if (!liveLaeuft && !$('liveBalls').children.length) trommelBild(starte({ saat: 1 }));
+}
+
+// Eine Ziehung in der Physik-Trommel: gerechnet mit der Schwerkraft des nächsten Ziehungstags.
+let liveLaeuft = false;
+function trommelBild(simu) {
+  const cv = $('trommel');
+  const b = cv.clientWidth || 340;
+  const h = Math.round(b * 1.12);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  if (cv.width !== Math.round(b * dpr)) { cv.width = Math.round(b * dpr); cv.height = Math.round(h * dpr); }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  zeichne(ctx, simu, b, h);
+}
+function liveZiehung() {
+  if (!tippKomplett() || liveLaeuft) return;
+  liveLaeuft = true;
+  $('btnLive').disabled = true;
+  const mask = maskeVon(tipNums);
+  const stage = $('liveBalls');
+  stage.innerHTML = '';
+  $('liveResult').textContent = '';
+  const tag = naechsteZiehung();
+  const simu = starte({ saat: Math.floor(Math.random() * 4294967296), g: himmel(tag).g });
+  let gezeigt = 0;
+  let szGezeigt = false;
+  const kugel = (txt, cls) => {
+    const s = document.createElement('span');
+    s.className = 'ball big' + cls;
+    s.textContent = txt;
+    stage.append(s);
+  };
+  const zeigeNeue = () => {
+    for (; gezeigt < simu.haupt.gezogen.length; gezeigt++) { const n = simu.haupt.gezogen[gezeigt]; kugel(n, mask[n] ? ' hit' : ''); }
+    if (!szGezeigt && simu.sz.gezogen.length) { szGezeigt = true; kugel(simu.sz.gezogen[0], ' sz' + (tipSz !== null && simu.sz.gezogen[0] === tipSz ? ' hit' : '')); }
+  };
+  const ende = () => {
+    zeigeNeue();
+    trommelBild(simu);
+    const zug = simu.haupt.gezogen;
+    const sz = simu.sz.gezogen[0];
+    const szTreffer = tipSz !== null && sz === tipSz;
+    let r = 0;
+    for (const n of zug) r += mask[n];
+    const k = klasse(r, szTreffer);
+    $('liveResult').innerHTML = `${r} Richtige${szTreffer ? ' + Superzahl' : ''} – ` +
+      (k ? `🎉 Gewinn: ${KLASSEN[k].label} (ca. ${eur(KLASSEN[k].quote)})` : 'leider kein Gewinn.');
+    liveLaeuft = false;
+    $('btnLive').disabled = !tippKomplett();
+  };
+  if (reduceMotion()) { while (!simu.fertig) simu.schritt(); ende(); return; }
+  let zuletzt = performance.now();
+  let rest = 0;
+  const bild = (jetzt) => {
+    // feste Rechenschritte, egal wie schnell das Handy zeichnet (höchstens 0,1 s auf einmal nachholen)
+    rest += Math.min(0.1, (jetzt - zuletzt) / 1000) * SCHRITTE_PRO_SEKUNDE;
+    zuletzt = jetzt;
+    for (; rest >= 1 && !simu.fertig; rest--) simu.schritt();
+    zeigeNeue();
+    trommelBild(simu);
+    if (simu.fertig) ende(); else requestAnimationFrame(bild);
+  };
+  requestAnimationFrame(bild);
+}
+
+// Chaos-Test: dieselbe Startlage zweimal – einmal mit der Schwerkraft der letzten Ziehung,
+// einmal mit der der nächsten. Der Unterschied (Mond + Sonne) ist winzig, das Ergebnis völlig anders.
+function chaosTest() {
+  if (!draws.length) return;
+  const d1 = letzte().d;
+  const d2 = naechsteZiehung() > d1 ? naechsteZiehung() : naechsteZiehung(new Date(ziehungsZeit(d1).getTime() + MIN));
+  const g1 = himmel(d1).g;
+  const g2 = himmel(d2).g;
+  const saat = Math.floor(Math.random() * 4294967296);
+  const a = ziehung({ saat, g: g1 });
+  const b = ziehung({ saat, g: g2 });
+  const gleich = a.zahlen.filter((n) => b.zahlen.includes(n)).length;
+  const g7 = (g) => g.toFixed(7).replace('.', ',');
+  const reihe = (z, andere) => kugeln({ n: z.zahlen, sz: z.sz }, maskeVon(z.zahlen.filter((n) => andere.zahlen.includes(n))), andere.sz);
+  $('chaosErgebnis').innerHTML = `
+    <div class="win-row"><span class="d">${datum(d1)}</span><span class="badge">g = ${g7(g1)} m/s²</span><div class="balls" id="chaosA">${reihe(a, b)}</div></div>
+    <div class="win-row"><span class="d">${datum(d2)}</span><span class="badge">g = ${g7(g2)} m/s²</span><div class="balls" id="chaosB">${reihe(b, a)}</div></div>
+    <p class="small" style="margin-top:8px">Exakt dieselbe Startlage aller 49 Kugeln – nur die Schwerkraft ist um <b>${(Math.abs(g2 / g1 - 1) * 100).toFixed(7).replace('.', ',')} %</b> anders (so viel ändern Mond und Sonne zwischen diesen beiden Tagen). Ergebnis: <b>${gleich} von 6 Zahlen gleich</b>${gleich ? ' (markiert)' : ''}.</p>
+    <p class="muted small">Das ist Chaos: Jeder Stoß vergrößert den winzigen Unterschied, nach wenigen Sekunden ist alles anders. Die Schwerkraft wirkt also – aber sie macht die Ziehung unberechenbar statt berechenbar: Man müsste Lage und Tempo jeder Kugel auf viele Stellen hinter dem Komma kennen.</p>`;
+}
+
+const sim = { running: false };
+
+function dauer(n) {
+  const j = n / ZIEHUNGEN_PRO_JAHR;
+  if (j >= 10) return `ca. ${zahl.format(Math.round(j))} Jahre`;
+  if (j >= 1) return `ca. ${j.toFixed(1).replace('.', ',')} Jahre`;
+  return `ca. ${plural(Math.max(1, Math.round(n / 2)), 'Woche', 'Wochen')}`;
+}
+
+function simStart() {
+  if (sim.running) { simStop('⏹ Angehalten.'); return; }
+  if (!tippKomplett()) return;
+  Object.assign(sim, {
+    running: true,
+    n: 0,
+    anzahl: new Array(10).fill(0),
+    mask: maskeVon(tipNums),
+    ziel: Number($('simTarget').value),
+    szZufall: tipSz === null,
+    sz: tipSz === null ? Math.floor(Math.random() * 10) : tipSz,
+    pool: Uint8Array.from({ length: 49 }, (_, i) => i + 1),
+  });
+  $('btnSim').textContent = '⏹ Stopp';
+  $('simTarget').disabled = true;
+  $('simMsg').className = 'sim-msg';
+  $('simMsg').textContent = sim.szZufall ? `Läuft … (Superzahl ${sim.sz}, zufällig gewählt)` : 'Läuft …';
+  renderSimStats();
+  requestAnimationFrame(simTick);
+}
+
+function simTick() {
+  if (!sim.running) return;
+  const { pool, mask, anzahl, ziel, sz } = sim;
+  const ende = performance.now() + 28;
+  let n = sim.n;
+  let treffer = 0;
+  outer: while (performance.now() < ende) {
+    for (let i = 0; i < 20000; i++) {
+      // 6 aus 49 per Teil-Fisher-Yates (gleichverteilt, egal wie 'pool' gerade liegt)
+      let r = 0;
+      for (let j = 0; j < 6; j++) {
+        const x = j + Math.floor(Math.random() * (49 - j));
+        const t = pool[j]; pool[j] = pool[x]; pool[x] = t;
+        r += mask[pool[j]];
+      }
+      n++;
+      if (r < 2) continue;
+      const k = klasse(r, Math.floor(Math.random() * 10) === sz);
+      if (k) {
+        anzahl[k]++;
+        if (k <= ziel) { treffer = k; break outer; }
+      }
+    }
+  }
+  sim.n = n;
+  renderSimStats();
+  if (treffer) {
+    simStop(`🎉 Geschafft: ${KLASSEN[treffer].label} nach ${zahl.format(n)} Ziehungen – das wären ${dauer(n)} Lotto (mittwochs und samstags).`);
+    $('simMsg').classList.add('done');
+  } else {
+    requestAnimationFrame(simTick);
+  }
+}
+
+function simStop(text) {
+  sim.running = false;
+  $('btnSim').textContent = "▶ Los geht's";
+  $('simTarget').disabled = false;
+  $('btnSim').disabled = !tippKomplett();
+  $('simMsg').textContent = text;
+}
+
+function renderSimStats() {
+  const einsatz = sim.n * PREIS;
+  const gewinn = sim.anzahl.reduce((s, c, k) => s + (k ? c * KLASSEN[k].quote : 0), 0);
+  const saldo = gewinn - einsatz;
+  const chips = KLASSEN.slice(1).map((kl, i) => (sim.anzahl[i + 1] ? `<span>${kl.kurz}: ${zahl.format(sim.anzahl[i + 1])}×</span>` : '')).join('');
+  $('simStats').innerHTML = `
+    <div><small>Ziehungen</small><b>${zahl.format(sim.n)}</b></div>
+    <div><small>Dauer</small><b>${dauer(sim.n)}</b></div>
+    <div><small>Einsatz</small><b>${eur(einsatz)}</b></div>
+    <div><small>Bilanz ca.</small><b class="${saldo >= 0 ? 'pos' : 'neg'}">${saldo >= 0 ? '+' : '−'}${eur(Math.abs(saldo))}</b></div>
+    <div class="wide"><small>Gewinne bisher</small><div class="sim-classes">${chips || '<span>noch keine</span>'}</div></div>`;
+}
+
+// ---------- Tabs, Theme, Start ----------
+let aktiverTab = 'tipp';
+function zeigeTab(name) {
+  if (!$('tab-' + name)) name = 'tipp';
+  aktiverTab = name;
+  for (const b of document.querySelectorAll('.tabs [role=tab]')) b.setAttribute('aria-selected', String(b.dataset.tab === name));
+  for (const p of document.querySelectorAll('.panel')) p.hidden = p.id !== 'tab-' + name;
+  write(KEY.tab, name);
+  if (!draws.length) return;
+  if (name === 'archiv') renderArchiv();
+  if (name === 'statistik') renderStatistik();
+  if (name === 'chancen') { renderVorschlag(); renderChancen(); renderNetz(); renderFritz(); }
+  if (name === 'simulator') renderSimTipp();
+}
+
+function allesNeuZeichnen() {
+  gezogeneKombis = null;
+  sichereVorschlag();
+  renderVorschlagTipp();
+  zeigeDatenInfo();
+  renderErgebnis();
+  zeigeTab(aktiverTab);
+}
+
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  $('themeToggle').textContent = t === 'dark' ? '☀️' : '🌙';
+  document.querySelector('meta[name=theme-color]').content = t === 'dark' ? '#262320' : '#f4f1ea';
+  app('theme', t); // Statusleiste der App mitfärben
+}
+
+// ---------- Android-App ----------
+function renderAppKarte() {
+  if (!APP) return;
+  $('appCard').classList.remove('hidden');
+  const an = !!app('benachrichtigungen');
+  $('btnNotify').textContent = an ? '🔕 Ausschalten' : '🔔 Einschalten';
+  $('btnNotify').classList.toggle('btn-primary', !an);
+  $('btnNotifyTest').disabled = !an;
+  $('appInfo').textContent = `${an ? '✓ Benachrichtigungen sind an.' : 'Benachrichtigungen sind aus.'} · App-Version ${app('version') || '?'}`;
+}
+// Aufrufe aus der App (Java): Status neu zeichnen, Bereich wechseln, Zurück-Taste
+window.lottoAppStatus = renderAppKarte;
+window.lottoZeigeTab = (name) => { zeigeTab(name); window.scrollTo({ top: 0 }); };
+window.lottoZurueck = () => {
+  if (aktiverTab === 'tipp') return false;
+  window.lottoZeigeTab('tipp');
+  return true;
+};
+
+function binde() {
+  $('themeToggle').addEventListener('click', () => {
+    const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    applyTheme(t);
+    try { localStorage.setItem(KEY.theme, t); } catch {}
+  });
+  document.querySelector('.tabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[role=tab]');
+    if (b) { zeigeTab(b.dataset.tab); window.scrollTo({ top: 0 }); }
+  });
+
+  $('tipInput').addEventListener('input', leseEingabe);
+  $('tipInput').addEventListener('change', () => { if (!$('tipHint').classList.contains('warn')) $('tipInput').value = sortiert(tipNums).join(' '); });
+  $('quickTip').addEventListener('click', () => { tipNums = new Set(neuerZufallstipp()); tippGeaendert(true); });
+  $('klugTip').addEventListener('click', nimmFritzTipp);
+  const nimmVorschlag = (e) => {
+    const feld = e.target.closest('.vs-feld');
+    if (!feld && !e.target.closest('#vorschlagNehmen, #vorschlagNehmen2')) return;
+    const v = vorschlaege().filter((x) => x.d > letzte().d).sort((a, b) => (a.d < b.d ? -1 : 1))[0];
+    if (!v) return;
+    const felder = felderVon(v);
+    tipNums = new Set(felder[feld ? Number(feld.dataset.feld) : 0] || felder[0]);
+    tipSz = v.sz ?? tipSz;
+    tippGeaendert(true);
+    window.lottoZeigeTab('tipp');
+  };
+  $('vorschlagNaechste').addEventListener('click', nimmVorschlag);
+  $('vorschlagBilanzLink').addEventListener('click', () => window.lottoZeigeTab('chancen'));
+  $('vorschlagTippCard').addEventListener('click', nimmVorschlag);
+  $('klugTip2').addEventListener('click', () => { nimmFritzTipp(); window.lottoZeigeTab('tipp'); });
+  $('clearTip').addEventListener('click', () => { tipNums.clear(); tipSz = null; tippGeaendert(true); });
+  $('saveTip').addEventListener('click', merkeTipp);
+  $('favList').addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    const favs = favoriten();
+    if (b.dataset.del !== undefined) {
+      favs.splice(Number(b.dataset.del), 1);
+      write(KEY.favs, favs);
+      renderFavs();
+      tippsAnApp();
+    } else if (b.dataset.load !== undefined) {
+      const f = favs[Number(b.dataset.load)];
+      if (!f) return;
+      tipNums = new Set(f.nums);
+      tipSz = f.sz;
+      tippGeaendert(true);
+    }
+  });
+  $('result').addEventListener('click', (e) => {
+    const b = e.target.closest('#yearStrip button[data-jahr]');
+    if (b) zeigeJahr(b.dataset.jahr);
+    if (e.target.closest('#btnEcht')) echteBilanzLaden();
+  });
+  // 'toggle' blubbert nicht → in der Capture-Phase abfangen
+  $('result').addEventListener('toggle', (e) => {
+    const det = e.target;
+    if (!det.matches || !det.matches('details.year') || !det.open) return;
+    const daten = [...det.querySelectorAll('.real[data-d]')].map((el) => el.dataset.d);
+    ladeQuoten(daten).then(fuelleQuoten);
+  }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') aktualisieren(false);
+  });
+
+  $('yearSelect').addEventListener('change', renderArchiv);
+  $('btnUpdate').addEventListener('click', () => aktualisieren(true));
+
+  $('statRange').addEventListener('change', renderStatistik);
+  $('heat').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-n]');
+    if (!b) return;
+    const range = zeitraum($('statRange').value);
+    const cnt = new Array(50).fill(0);
+    for (const z of range) for (const n of z.n) cnt[n]++;
+    const zuletztIdx = new Array(50).fill(-1);
+    draws.forEach((z, i) => { for (const n of z.n) zuletztIdx[n] = i; });
+    zeigeZahlInfo(Number(b.dataset.n), cnt, range.length, zuletztIdx);
+  });
+
+  $('simTip').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-act]');
+    if (!b) return;
+    if (b.dataset.act === 'quick') { tipNums = new Set(ziehe6()); tippGeaendert(true); renderSimTipp(); }
+    else { zeigeTab('tipp'); window.scrollTo({ top: 0 }); }
+  });
+  $('btnLive').addEventListener('click', liveZiehung);
+  $('btnChaos').addEventListener('click', chaosTest);
+  $('btnSim').addEventListener('click', simStart);
+
+  $('btnNotify').addEventListener('click', () => {
+    app('setBenachrichtigungen', !app('benachrichtigungen'), draws.length ? letzte().d : '');
+    setTimeout(renderAppKarte, 400);
+  });
+  $('btnNotifyTest').addEventListener('click', () => {
+    app('testBenachrichtigung');
+    $('appInfo').textContent = 'Test läuft – die Benachrichtigung kommt gleich.';
+    setTimeout(renderAppKarte, 4000);
+  });
+}
+
+async function init() {
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'light');
+  baueSchein();
+  ladeQuotenCache();
+  const t = read(KEY.tipp);
+  if (t && Array.isArray(t.nums) && t.nums.length <= 6 && t.nums.every((n) => Number.isInteger(n) && n >= 1 && n <= 49)) tipNums = new Set(t.nums);
+  if (t && gueltigeSz(t.sz)) tipSz = t.sz ?? null;
+  renderFavs();
+  binde();
+  renderAppKarte();
+  const anker = location.hash.slice(1);
+  zeigeTab($('tab-' + anker) ? anker : read(KEY.tab) || 'tipp');
+
+  try {
+    await ladeDaten();
+  } catch (e) {
+    $('loadError').textContent = `Ziehungen konnten nicht geladen werden (${e.message}). Bitte Seite neu laden.`;
+    $('loadError').classList.remove('hidden');
+    $('dataInfo').textContent = 'Keine Daten';
+    return;
+  }
+  sichereVorschlag();
+  renderVorschlagTipp();
+  zeigeDatenInfo();
+  // schon während des Ladens getippt? Dann die Eingabe auswerten statt sie zu überschreiben
+  if ($('tipInput').value.trim()) leseEingabe(); else tippGeaendert(true);
+  zeigeTab(aktiverTab);
+  aktualisieren(false);
+
+  // Offline-Cache nur im Browser – in der App liegt alles schon im Gerät
+  if (!APP && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+init();

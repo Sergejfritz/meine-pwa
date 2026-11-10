@@ -8,3 +8,5 @@ blob-report/
 .DS_Store
 # entpacktes OCR-Modell (nur die .gz-Variante gehört ins Repo)
 /deu.traineddata
+# gebaute Lotto-APK (privat, nicht im Repo)
+/build/

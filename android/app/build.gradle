@@ -1,0 +1,62 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Versionsnummer = Minuten seit 2026 → jede neue APK lässt sich über die alte installieren
+def jetzt = new Date()
+def versionsCode = (int) ((jetzt.time - Date.parse('yyyy-MM-dd', '2026-01-01').time) / 60000L)
+
+// Signatur: Schlüssel liegt passwortgeschützt im Repo, das Passwort NICHT
+// (Umgebungsvariable LOTTO_KEY_PASSWORD). Ohne Passwort entsteht nur eine Debug-APK.
+def schluesselPasswort = System.getenv('LOTTO_KEY_PASSWORD')
+
+android {
+    namespace 'de.sfritz.lotto'
+    compileSdk 35
+    buildToolsVersion '35.0.0'
+
+    defaultConfig {
+        applicationId 'de.sfritz.lotto'
+        minSdk 26
+        targetSdk 35
+        versionCode versionsCode
+        versionName "1.0.${jetzt.format('yyyyMMdd.HHmm', TimeZone.getTimeZone('Europe/Berlin'))}"
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    // Die Web-App (Ordner lotto/) wird 1:1 als App-Inhalt eingebaut – eine Quelle für beides
+    sourceSets {
+        main {
+            assets.srcDirs = ['../../lotto']
+        }
+    }
+    androidResources {
+        // Browser-Dateien (Service Worker, Web-Manifest, große Icons) braucht die App nicht
+        ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~:!sw.js:!manifest.json:!icon-512.png:!apple-touch-icon.png'
+    }
+
+    signingConfigs {
+        release {
+            storeFile file('../lotto-app.p12')
+            storeType 'pkcs12'
+            storePassword schluesselPasswort
+            keyAlias 'lotto'
+            keyPassword schluesselPasswort
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig schluesselPasswort ? signingConfigs.release : null
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
